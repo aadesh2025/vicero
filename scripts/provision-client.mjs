@@ -323,17 +323,13 @@ async function ensureAgent(org, clientName) {
       welcome_message: `Hi! I'm the ${clientName} assistant. How can I help?`,
       fallback_message:
         "I'm not sure about that one. Would you like me to pass this to the team?",
-      model_config: {
-        provider: "groq",
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.7,
-        max_tokens: 1024,
-      },
+      // No model_config on purpose: the agent keeps the platform default (llm/catalog.py
+      // DEFAULT_CHAT_MODEL). Pinning a model name here is what went stale when Groq retired it.
       // tools_enabled is what lets the agent actually call the n8n automation bound below.
       features: { tools_enabled: true, memory_enabled: true, handoff_enabled: true },
     },
   });
-  log(`  configured draft v${version.version} (groq / llama-3.3-70b-versatile, tools on)`);
+  log(`  configured draft v${version.version} (platform default model, tools on)`);
   return { agent, versionNumber: version.version, alreadyConfigured: false };
 }
 

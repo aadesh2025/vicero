@@ -74,13 +74,13 @@ async def test_version_lifecycle(client: AsyncClient) -> None:
         json={
             "system_prompt": "You are helpful.",
             "welcome_message": "Hey!",
-            "model_config": {"provider": "groq", "model": "llama-3.1-8b-instant", "temperature": 0.2},
+            "model_config": {"provider": "groq", "model": "openai/gpt-oss-20b", "temperature": 0.2},
         },
         headers=headers,
     )
     assert patch.status_code == 200
     assert patch.json()["system_prompt"] == "You are helpful."
-    assert patch.json()["model_config"]["model"] == "llama-3.1-8b-instant"
+    assert patch.json()["model_config"]["model"] == "openai/gpt-oss-20b"
 
     # Publish v1.
     published = await client.post(f"/v1/agents/{aid}/versions/1/publish", headers=headers)

@@ -165,7 +165,7 @@ class Settings(BaseSettings):
     # Summarizer provider/model — deliberately a small/fast model, NOT the agent's model
     # (so a heavy local model like qwen3:14b never gets used for background summaries).
     summary_provider: str = "groq"
-    summary_model: str = "llama-3.1-8b-instant"
+    summary_model: str = "openai/gpt-oss-20b"
 
     # --- Guardrails (docs/11) ---
     # Hard ceiling on a single visitor message. Also the LLM10 unbounded-consumption control:

@@ -72,6 +72,12 @@ class ProviderSpec:
 # Free / free-tier first (docs/02 ADR-003), then paid, then bring-your-own-endpoint.
 # --------------------------------------------------------------------------------------
 
+#: The model a new agent gets when the caller overrides nothing (`agents.service`,
+#: `db.seed`). One name, one place: the previous default lived in three files and all three
+#: went stale together. `tests/test_default_model.py` fails if this leaves the Groq list below,
+#: and its opt-in live variant checks it against Groq's own `/models`.
+DEFAULT_CHAT_MODEL = "openai/gpt-oss-120b"
+
 _GROQ = ProviderSpec(
     name="groq",
     label="Groq",
@@ -82,16 +88,14 @@ _GROQ = ProviderSpec(
     key_hint="gsk_…",
     description="Fastest free tier. The platform default.",
     models=(
-        ModelSpec("llama-3.3-70b-versatile", "Llama 3.3 70B Versatile", 128_000),
-        ModelSpec("llama-3.1-8b-instant", "Llama 3.1 8B Instant", 128_000),
-        ModelSpec("meta-llama/llama-4-scout-17b-16e-instruct", "Llama 4 Scout 17B", 128_000),
-        ModelSpec("meta-llama/llama-4-maverick-17b-128e-instruct", "Llama 4 Maverick 17B", 128_000),
-        ModelSpec("openai/gpt-oss-120b", "GPT-OSS 120B", 128_000),
+        # Verified against `GET /openai/v1/models` with a live key on 2026-09-24, every one
+        # tool-calling. The whole Llama family (3.1/3.3/4), Qwen3-32B, Kimi K2, DeepSeek R1
+        # distill and Gemma2 are gone from that list — Groq retired `llama-3.3-70b-versatile` and
+        # `llama-3.1-8b-instant` out from under the platform default (every new agent 404'd).
+        # `DEFAULT_CHAT_MODEL` must stay the first entry.
+        ModelSpec(DEFAULT_CHAT_MODEL, "GPT-OSS 120B", 128_000),
         ModelSpec("openai/gpt-oss-20b", "GPT-OSS 20B", 128_000),
-        ModelSpec("qwen/qwen3-32b", "Qwen 3 32B", 128_000),
-        ModelSpec("deepseek-r1-distill-llama-70b", "DeepSeek R1 Distill 70B", 128_000),
-        ModelSpec("moonshotai/kimi-k2-instruct", "Kimi K2 Instruct", 128_000),
-        ModelSpec("gemma2-9b-it", "Gemma 2 9B", 8_192),
+        ModelSpec("qwen/qwen3.8-27b", "Qwen 3.8 27B", 128_000),
     ),
 )
 

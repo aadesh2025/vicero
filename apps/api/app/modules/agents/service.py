@@ -25,6 +25,7 @@ from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.db.templates import AGENT_TEMPLATES, get_template
 from app.llm.base import ChatProvider
+from app.llm.catalog import DEFAULT_CHAT_MODEL
 from app.llm.registry import get_chat_provider, get_chat_provider_chain
 from app.llm.types import ChatRequest, Message, StreamEvent
 from app.models import PLAYGROUND_CHANNEL, Agent, AgentVersion, Conversation, WidgetConfig
@@ -39,7 +40,7 @@ log = get_logger("agents")
 
 DEFAULT_MODEL_CONFIG = {
     "provider": "groq",
-    "model": "llama-3.3-70b-versatile",
+    "model": DEFAULT_CHAT_MODEL,
     "temperature": 0.7,
     "top_p": 1.0,
     "max_tokens": 1024,

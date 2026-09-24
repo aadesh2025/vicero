@@ -22,7 +22,7 @@ presence_penalty, stop, tools (JSON schema), tool_choice, stream.
 
 ### Providers to implement (in this priority order)
 1. **Groq** (`GROQ_API_KEY`) — OpenAI-compatible API, very fast; DEFAULT. Models e.g.
-   `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral`, etc. (discover via `/models`).
+   e.g. `openai/gpt-oss-120b`, `openai/gpt-oss-20b` (discover via `/models` — Groq retires models without warning; see `llm/catalog.DEFAULT_CHAT_MODEL`).
 2. **Google Gemini** (`GEMINI_API_KEY`) — has a free tier; native API. Models `gemini-1.5-flash` etc.
 3. **Ollama** (`OLLAMA_BASE_URL`, default `http://ollama:11434`) — fully local/free; OpenAI-
    compatible endpoint. Models discovered from the running Ollama.

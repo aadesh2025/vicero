@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from app.core.logging import configure_logging, get_logger
 from app.db.session import SessionFactory
+from app.llm.catalog import DEFAULT_CHAT_MODEL
 from app.models import (
     Agent,
     AgentVersion,
@@ -91,7 +92,7 @@ async def seed() -> None:
             suggested_prompts=["Where is my order?", "What is your return policy?"],
             model_config_json={
                 "provider": "groq",
-                "model": "llama-3.3-70b-versatile",
+                "model": DEFAULT_CHAT_MODEL,
                 "temperature": 0.7,
                 "top_p": 1.0,
                 "max_tokens": 1024,

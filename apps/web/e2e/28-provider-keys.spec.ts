@@ -66,7 +66,7 @@ test("a provider with no key is offered in Settings but not in the builder", asy
   request,
 }) => {
   expect((await providerInfo(request, "anthropic")).configured, "no key yet").toBeFalsy();
-  const agentId = await agentOn(request, "groq", "llama-3.3-70b-versatile");
+  const agentId = await agentOn(request, "groq", "openai/gpt-oss-120b");
 
   await page.goto("/settings/credentials");
   // Listed as something you *could* connect...

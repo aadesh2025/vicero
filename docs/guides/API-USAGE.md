@@ -50,7 +50,7 @@ VER=$(curl -s "${H[@]}" http://localhost:8000/v1/agents/$AID | jq -r .draft_vers
 
 # configure the draft (model config uses the JSON key "model_config")
 curl -s "${H[@]}" -X PATCH http://localhost:8000/v1/agents/$AID/versions/$VER \
-  -d '{"model_config":{"provider":"groq","model":"llama-3.1-8b-instant"},"system_prompt":"You are helpful."}'
+  -d '{"model_config":{"provider":"groq","model":"openai/gpt-oss-20b"},"system_prompt":"You are helpful."}'
 
 # publish
 curl -s "${H[@]}" -X POST http://localhost:8000/v1/agents/$AID/versions/$VER/publish

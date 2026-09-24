@@ -21,7 +21,7 @@ import httpx
 
 BASE = os.environ.get("BF_BASE", "http://localhost:8000")
 PROVIDER = os.environ.get("PERF_PROVIDER", "groq")
-MODEL = os.environ.get("PERF_MODEL", "llama-3.1-8b-instant")
+MODEL = os.environ.get("PERF_MODEL", "openai/gpt-oss-20b")
 N_API = int(os.environ.get("PERF_N_API", "30"))
 N_LLM = int(os.environ.get("PERF_N_LLM", "8"))
 

@@ -38,6 +38,43 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Live bug fixed: the platform default model was retired, so every new agent was silently broken (2026-09-24).**
+  Groq retired `llama-3.3-70b-versatile` (the default in `agents.service.DEFAULT_MODEL_CONFIG` and
+  `db.seed`) and `llama-3.1-8b-instant` (`settings.summary_model`, used by memory summaries and CRM
+  extraction). Both 404 with `model_not_found`. The effect on a visitor: an agent created with no
+  overrides answered every message with its fallback message. Found while testing four demo agents,
+  not by CI — the fake provider never 404s. Agents pinned to another model (the two existing demo
+  agents were already on `qwen/qwen3.8-27b`) were unaffected.
+  - **Verified before choosing** (`GET /openai/v1/models` with the live key, plus a real tool-calling
+    request to each candidate): Groq now serves `openai/gpt-oss-120b`, `openai/gpt-oss-20b`,
+    `openai/gpt-oss-safeguard-20b`, `qwen/qwen3.8-27b`, `llama-prompt-guard-2-{22m,86m}`, plus speech/TTS
+    models. **New defaults: chat `openai/gpt-oss-120b`, summary `openai/gpt-oss-20b`.** Both tool-call
+    correctly; both are on the same 8,000 tokens/min free-tier cap as qwen. The L2 (`prompt-guard-2-86m`) and
+    L3 (`gpt-oss-safeguard-20b`) guard models were already on the live list.
+  - **One source of truth:** `llm/catalog.DEFAULT_CHAT_MODEL` now feeds `agents.service` and `db.seed`
+    (it was three separate literals that went stale together). The Groq catalog list was rewritten to
+    the live lineup; it had also kept Llama 4, Qwen3-32B, Kimi K2, DeepSeek-R1-distill and Gemma2, none of
+    which Groq serves any more. `scripts/provision-client.mjs` no longer pins a model at all — a
+    provisioned client inherits the platform default.
+  - **Sweep:** every other reference was updated — `.env.example`, `docs/ENV.md`, `docs/06`,
+    `docs/guides/API-USAGE.md`, `infra/perf/measure.py`, the web fallback in `agent-mapping.ts`, and the
+    test/e2e fixtures. **Deliberately left:** historical records (this file, `DECISIONS.md`, the docs/11
+    and docs/12 measurements, the session-log skill, and the `CLAUDE.md` §10b sentence "prompt-only
+    grounding fabricates 12/15 on `llama-3.1-8b-instant`") — they describe what was measured on that
+    model and must not be rewritten. OpenRouter's `...llama-3.3-70b-instruct:free` and Cerebras'
+    `llama-3.3-70b` entries in the catalog are other vendors' ids; not checked against those vendors.
+  - **Tests:** `tests/test_default_model.py`. Offline (always on): defaults resolve to the Groq catalog,
+    and a zero-override agent is created on the default. Live (opt-in, `RUN_LIVE_LLM_TESTS=1`): asks
+    Groq's `/models` whether the default, summary, L2 and L3 models exist, and sends a real message
+    through a fresh zero-override agent asserting it does **not** return the fallback. No model name is
+    hardcoded in the test. Mutation-checked: pointing the default back at `llama-3.3-70b-versatile`
+    fails both live tests and passes the offline ones (as designed — offline cannot know what a vendor
+    retired). Nothing runs the live tier automatically; it belongs in a periodic job or a pre-deploy step.
+  - **⚠️ Not re-measured:** every grounding/fabrication, red-team and distress number in docs/11 and
+    docs/12 was taken on Llama models. `gpt-oss-120b` is a different model with reasoning; the
+    2026-08-02/03 no-context A/B (see the `session-log` skill) has not been re-run on it. Do that before
+    trusting those numbers for any agent on the new default.
+
 - **docs/14 (Knowledge Pipeline v2) audit — what is done and what is left (2026-09-24).** Checked
   against the code, config and commits, not only the doc (which is dated 2026-08-17). Headline:
   **built and tested, but everything Docling is OFF** — `DOCLING_ENABLED=false`, structural

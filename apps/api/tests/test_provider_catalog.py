@@ -143,7 +143,7 @@ async def test_providers_report_whether_this_org_can_run_them(client: AsyncClien
     # Needs an endpoint we cannot guess, so it is not usable until configured.
     assert by_name["custom"]["configured"] is False
     # Catalog metadata rides along for the picker.
-    assert by_name["groq"]["available_models"][0]["id"] == "llama-3.3-70b-versatile"
+    assert by_name["groq"]["available_models"][0]["id"] == "openai/gpt-oss-120b"
     assert by_name["openai"]["api_key_url"]
 
 

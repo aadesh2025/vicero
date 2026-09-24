@@ -36,7 +36,7 @@ export function versionToDraft(
     },
     model: {
       provider: (mc.provider as Provider) ?? "groq",
-      model: (mc.model as string) ?? "llama-3.3-70b-versatile",
+      model: (mc.model as string) ?? "openai/gpt-oss-120b",
       temperature: num(mc.temperature, 0.7),
       topP: num(mc.top_p, 1),
       maxTokens: num(mc.max_tokens, 1024),

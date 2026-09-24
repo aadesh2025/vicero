@@ -27,7 +27,7 @@ async def test_providers_catalog(client: AsyncClient) -> None:
     names = {p["name"] for p in resp.json()}
     assert {"groq", "gemini", "openai", "anthropic"} <= names
     groq = next(p for p in resp.json() if p["name"] == "groq")
-    assert groq["free"] is True and "llama-3.3-70b-versatile" in groq["models"]
+    assert groq["free"] is True and "openai/gpt-oss-120b" in groq["models"]
 
 
 async def test_credentials_crud_and_masking(client: AsyncClient) -> None:

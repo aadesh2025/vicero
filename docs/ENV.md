@@ -272,7 +272,9 @@ to RRF ordering, logged, never an error and never an empty result set.
 - `MEMORY_WINDOW_MESSAGES` (default `12`) — how many recent turns stay verbatim in the prompt.
 - `MEMORY_SUMMARY_THRESHOLD` (default `24`) — once a conversation exceeds this many messages,
   older turns are folded into `conversation.memory_summary`.
-- `SUMMARY_PROVIDER` / `SUMMARY_MODEL` (default `groq` / `llama-3.1-8b-instant`) — the small,
+- `RUN_LIVE_LLM_TESTS` (test-only, unset by default) — `1` lets `tests/test_default_model.py` call Groq's `/models` and a real
+  chat to prove the platform default, summary and guard models still exist. Needs a real `GROQ_API_KEY`.
+- `SUMMARY_PROVIDER` / `SUMMARY_MODEL` (default `groq` / `openai/gpt-oss-20b`) — the small,
   fast model used for background memory summaries. Deliberately independent of the agent's own
   model so a heavy local model (e.g. qwen3:14b) is never used for summaries. Falls back to the
   fake provider when the provider has no key (CLAUDE §7).

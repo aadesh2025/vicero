@@ -76,7 +76,7 @@ export async function createPublishedAgent(
   // Set the model provider (defaults to groq already; explicit for clarity), then publish.
   await request.patch(`${API}/v1/agents/${agent.id}/versions/${agent.draft_version}`, {
     headers: auth(account),
-    data: { model_config: { provider: opts.provider ?? "groq", model: "llama-3.1-8b-instant" } },
+    data: { model_config: { provider: opts.provider ?? "groq", model: "openai/gpt-oss-20b" } },
   });
   const pub = await request.post(`${API}/v1/agents/${agent.id}/versions/${agent.draft_version}/publish`, {
     headers: auth(account),

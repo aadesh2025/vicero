@@ -26,7 +26,7 @@ function version(overrides: Record<string, unknown> = {}): ApiVersion {
     welcome_message: "Hi!",
     fallback_message: "Not sure.",
     suggested_prompts: [],
-    model_config: { provider: "groq", model: "llama-3.1-8b-instant" },
+    model_config: { provider: "groq", model: "openai/gpt-oss-20b" },
     rag_config: {},
     features: {},
     created_at: "2026-07-01T00:00:00Z",
@@ -55,7 +55,7 @@ describe("versionToDraft", () => {
       version({
         model_config: {
           provider: "groq",
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           stop: ["END"],
           fallbacks: [{ provider: "gemini", model: "gemini-1.5-flash" }],
         },
@@ -81,7 +81,7 @@ describe("draftToPatch", () => {
       version({
         model_config: {
           provider: "groq",
-          model: "llama-3.1-8b-instant",
+          model: "openai/gpt-oss-20b",
           temperature: 0.3,
           presence_penalty: 0.5,
           stop: ["END"],

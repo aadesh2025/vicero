@@ -183,8 +183,8 @@ describe("ModelTab model list", () => {
     listProviders.mockResolvedValue([
       provider({ name: "groq", configured: true, key_source: "org", free: true }),
     ]);
-    listProviderModels.mockResolvedValue(models(["llama-3.3-70b-versatile"]));
-    seedDraft("groq", "llama-3.3-70b-versatile");
+    listProviderModels.mockResolvedValue(models(["openai/gpt-oss-120b"]));
+    seedDraft("groq", "openai/gpt-oss-120b");
     renderTab();
 
     await waitFor(() => expect(listProviderModels).toHaveBeenCalledWith("groq"));
@@ -196,7 +196,7 @@ describe("ModelTab model list", () => {
     listProviders.mockResolvedValue([
       provider({ name: "groq", configured: true, key_source: "org", free: true }),
     ]);
-    listProviderModels.mockResolvedValue(models(["llama-3.3-70b-versatile"]));
+    listProviderModels.mockResolvedValue(models(["openai/gpt-oss-120b"]));
     seedDraft("groq", "mixtral-8x7b-32768");
     renderTab();
 

@@ -48,7 +48,7 @@ async def test_openai_compatible_chat() -> None:
         return httpx.Response(
             200,
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "openai/gpt-oss-120b",
                 "choices": [{"message": {"content": "hi there"}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 5, "completion_tokens": 2},
             },

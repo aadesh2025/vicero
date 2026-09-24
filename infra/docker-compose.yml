@@ -129,6 +129,16 @@ services:
       # container comes up on a flaky or offline network too.
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      # Webhook signature verification. BotForge signs every call to an n8n webhook
+      # (HMAC-SHA256 of "<ts>.<raw body>", integrations/n8n_client.py); each workflow's first
+      # Code node recomputes it with this secret and answers 401 on a mismatch. Code nodes are
+      # sandboxed from both env vars and `crypto` by default in n8n 2.x, so both are opened up here.
+      # The secret is interpolated from the shell or infra/.env (NOT the root .env) - it must equal the
+      # root .env value. Empty => every workflow rejects every call (fails closed), never accepts.
+      # Tradeoff: any workflow author on this n8n can read its env; it is BotForge-operated and staff-authored.
+      N8N_WEBHOOK_SIGNING_SECRET: ${N8N_WEBHOOK_SIGNING_SECRET:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
     ports:
       # Host port is configurable because 5678 is often already taken — on the build machine
       # by an unrelated n8n. Container port stays 5678, so N8N_BASE_URL is the only other

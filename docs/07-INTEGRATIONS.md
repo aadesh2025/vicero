@@ -31,6 +31,38 @@
 - BotForge emits **outbound webhooks** (see §4) that n8n workflows subscribe to via Webhook
   nodes (e.g., on `handoff.requested`, create a ticket).
 
+### Webhook signature verification — REQUIRED for every n8n workflow BotForge calls
+BotForge signs every call to an n8n webhook, but signing only protects a workflow that **checks** the
+signature. An unverified webhook can be called by anyone who learns its URL, and that call bypasses the
+agent, RBAC, budget limits and any input validation entirely. So:
+
+- **Every workflow bound as an n8n tool must verify the signature before doing anything.** The reference
+  implementation is the first three nodes of every JSON in `infra/n8n/`: **Webhook** (option `rawBody: true`)
+  → **Verify BotForge signature** (Code) → **Signature valid?** (IF; the false branch is a **Respond to
+  Webhook** with HTTP **401**). Do not reinvent it; copy those nodes.
+- **Scheme** (`integrations/n8n_client.sign()` / `verify_callback()` — the workflow mirrors the same
+  rules): `X-BotForge-Signature` = hex `HMAC-SHA256(secret, "<X-BotForge-Timestamp>." + raw request body)`.
+  Compare in constant time, over the **raw bytes** (re-serialising the parsed JSON changes spacing and
+  escaping and breaks the MAC), and reject a timestamp more than **300 s** from now (replay window, same as
+  the callback verifier).
+- **Fail closed.** No secret configured, missing headers, stale timestamp, unavailable raw body or a bad MAC
+  all answer 401. A workflow must never fall through to "accept" because something is unset.
+- **The n8n container must be given the secret.** `N8N_WEBHOOK_SIGNING_SECRET` (must equal BotForge's) plus
+  `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — n8n 2.x blocks both `$env`
+  and `require('crypto')` in Code nodes by default. The dev compose sets all three; **a production n8n
+  needs them too** (`docker-compose.prod.yml` has no n8n service — an external n8n must be configured the
+  same way). Tradeoff: with env access on, any workflow author on that n8n can read its environment, so the
+  instance must be BotForge-operated and its workflows staff-authored.
+- **Provisioning enforces it.** `scripts/provision-client.mjs` clones `TEMPLATE — Starter Automation` per
+  client and **refuses to clone a template without the `Verify BotForge signature` node**, so a client
+  workflow cannot be created unsigned by following the normal path. A workflow built by hand in the n8n UI
+  is *not* covered by that check — see RISK-REGISTER R15, which stays open until every workflow bound to a
+  tool has been confirmed verified.
+- **Callbacks** (async mode, n8n → BotForge) are the mirror image and are already verified server-side
+  (`verify_callback`).
+- Pinned by `apps/api/tests/test_n8n_workflows_signed.py`: every workflow JSON under `infra/n8n/` must
+  carry the verification chain and no secret or runtime state.
+
 ### n8n client responsibilities (`integrations/n8n_client.py`)
 - `list_workflows()`, `get_workflow(id)`, `trigger_webhook(url, payload, signed=True)`,
   `verify_callback(signature, body)`. Timeouts, retries with backoff, structured logging.

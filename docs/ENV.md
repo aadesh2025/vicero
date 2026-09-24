@@ -125,7 +125,7 @@ serves photos from token-bearing URLs we deliberately never persist (see ADR-036
 | `N8N_BASE_URL` | n8n REST/webhook base (default `http://n8n:5678`) | no |
 | `N8N_HOST_PORT` | host port the bundled n8n binds (default `5678`); must agree with `N8N_BASE_URL`. **Compose-only** — read from the shell or `infra/.env`, not from the root `.env` (which is passed to containers via `env_file` and so never reaches `${...}` interpolation) | no |
 | `N8N_API_KEY` | n8n public API auth — needs the workflow read/list/create/update/activate scopes | yes (from n8n UI) |
-| `N8N_WEBHOOK_SIGNING_SECRET` | sign BotForge→n8n calls | generate |
+| `N8N_WEBHOOK_SIGNING_SECRET` | sign BotForge→n8n calls; **n8n workflows verify it** (docs/07 "Webhook signature verification"). Must also be in `infra/.env` (compose interpolation) and reach the n8n container, or every call is rejected | generate |
 
 `N8N_HOST_PORT` exists because 5678 is often already taken — on the build machine by an
 unrelated n8n belonging to another project. BotForge must not create or activate workflows in

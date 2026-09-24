@@ -6,22 +6,42 @@
         "httpMethod": "POST",
         "path": "botforge-create-ticket",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "c2a2c2d2-0001-4001-8001-000000000001",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [420, 300],
+      "position": [
+        420,
+        300
+      ],
       "webhookId": "botforge-create-ticket"
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
-            { "id": "1", "name": "ticket_id", "value": "={{ 'TICKET-' + Math.floor(Math.random() * 90000 + 10000) }}", "type": "string" },
-            { "id": "2", "name": "status", "value": "open", "type": "string" },
-            { "id": "3", "name": "subject", "value": "={{ $json.body?.args?.subject || 'New request' }}", "type": "string" }
+            {
+              "id": "1",
+              "name": "ticket_id",
+              "value": "={{ 'TICKET-' + Math.floor(Math.random() * 90000 + 10000) }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "status",
+              "value": "open",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "subject",
+              "value": "={{ $json.body?.args?.subject || 'New request' }}",
+              "type": "string"
+            }
           ]
         },
         "options": {}
@@ -30,7 +50,10 @@
       "name": "Build Ticket",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [700, 300]
+      "position": [
+        1480,
+        300
+      ]
     },
     {
       "parameters": {
@@ -42,12 +65,130 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [980, 300]
+      "position": [
+        1760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// BotForge signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-botforge-signature'] || '');\nconst ts = String(h['x-botforge-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
+      },
+      "id": "f2073469-f25d-52a2-8370-37bd5f2306aa",
+      "name": "Verify BotForge signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.verified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3bbb7432-ef52-54b8-a779-d6476d71c3bf",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "33a02310-012c-5f89-9c3e-262ebccd4641",
+      "name": "Reject 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        520
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Build Ticket", "type": "main", "index": 0 }]] },
-    "Build Ticket": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify BotForge signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ticket": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify BotForge signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Build Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "settings": {}
 }

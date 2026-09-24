@@ -444,6 +444,22 @@ async function ensureWorkflow(clientName, orgSlug) {
   }
   const full = await n8n("GET", `/api/v1/workflows/${template.id}`);
 
+  // Signature verification is not optional. BotForge signs every call to an n8n webhook, but a
+  // workflow only benefits if it *checks* the signature; without it anyone who learns the webhook
+  // URL can call the automation directly, bypassing the agent, RBAC and budget limits. Every client
+  // workflow is a clone of this template, so refuse to clone one that does not verify.
+  // (docs/07-INTEGRATIONS.md "Webhook signature verification"; RISK-REGISTER R15.)
+  if (!full.nodes.some((node) => node.name === "Verify BotForge signature")) {
+    throw new ProvisionError(
+      `The template "${TEMPLATE_WORKFLOW_NAME}" has no "Verify BotForge signature" node, so every ` +
+        `client cloned from it would get an unauthenticated webhook.
+` +
+        `  Re-import infra/n8n/template-starter-automation.json (it ships with verification) — see
+` +
+        `  infra/n8n/README.md.`
+    );
+  }
+
   // Each client needs its **own** webhook path. Cloning the template verbatim would point
   // every client's tool at one shared URL, so whichever workflow n8n resolved first would
   // answer everyone — a cross-client data leak, not just a mix-up.

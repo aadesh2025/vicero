@@ -1,0 +1,176 @@
+{
+  "name": "DEMO — Harbor Table Bistro reservations",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-harbor-reservations",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "demo-harbor-reservations"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// BotForge signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-botforge-signature'] || '');\nconst ts = String(h['x-botforge-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
+      },
+      "id": "a0000000-0000-4000-8000-000000000004",
+      "name": "Verify BotForge signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.verified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000005",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// DEMO FIXTURE - every name, id, price, doctor, slot and order in this workflow is fictional demo data.\n// State (bookings, counters) lives in n8n workflow static data and is NOT part of this export.\nconst body = $input.first().json.body || {};\nconst a = body.args || {};\nconst S = $getWorkflowStaticData('global');\nS.bookings = S.bookings || {};\nS.counter = S.counter || 0;\nconst need = (fields) => fields.filter((f) => a[f] === undefined || a[f] === null || String(a[f]).trim() === '');\nconst bad = (error, extra = {}) => [{ json: { ok: false, error, ...extra } }];\nconst nextId = (prefix) => { S.counter += 1; return prefix + '-' + String(1000 + S.counter); };\nconst isDate = (s) => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s));\nconst isTime = (s) => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\n\nconst OPEN = 11, CLOSE = 22, SEATS = 40, MAX_PARTY = 12;\nconst used = (date, time) => Object.values(S.bookings).filter((b) => b.status === 'confirmed' && b.date === date && b.time === time).reduce((n, b) => n + b.party_size, 0);\nconst slotsFor = (date, size) => { const out = []; for (let h = OPEN; h < CLOSE; h++) { const t = String(h).padStart(2, '0') + ':00'; if (SEATS - used(date, t) >= size) out.push(t); } return out; };\nswitch (a.action) {\n  case 'check_availability': {\n    const m = need(['date', 'time', 'party_size']); if (m.length) return bad('missing fields: ' + m.join(', '));\n    if (!isDate(a.date) || !isTime(a.time)) return bad('date must be YYYY-MM-DD and time HH:MM (24h)');\n    const size = Number(a.party_size); if (!(size >= 1 && size <= MAX_PARTY)) return bad('party_size must be 1-' + MAX_PARTY + ' (larger groups: call the restaurant)');\n    const h = Number(a.time.slice(0, 2)); if (h < OPEN || h >= CLOSE) return bad('closed at that time', { hours: '11:00-22:00 daily', available_times: slotsFor(a.date, size) });\n    const left = SEATS - used(a.date, a.time);\n    return [{ json: { ok: true, available: left >= size, seats_left: left, available_times: slotsFor(a.date, size) } }];\n  }\n  case 'book_table': {\n    const m = need(['name', 'phone', 'date', 'time', 'party_size']); if (m.length) return bad('missing fields: ' + m.join(', '));\n    if (!isDate(a.date) || !isTime(a.time)) return bad('date must be YYYY-MM-DD and time HH:MM (24h)');\n    const size = Number(a.party_size); if (!(size >= 1 && size <= MAX_PARTY)) return bad('party_size must be 1-' + MAX_PARTY);\n    const h = Number(a.time.slice(0, 2)); if (h < OPEN || h >= CLOSE) return bad('closed at that time', { hours: '11:00-22:00 daily' });\n    if (SEATS - used(a.date, a.time) < size) return bad('no availability at that time', { available_times: slotsFor(a.date, size) });\n    const id = nextId('HTB');\n    S.bookings[id] = { id, name: a.name, phone: a.phone, date: a.date, time: a.time, party_size: size, notes: a.notes || null, status: 'confirmed' };\n    return [{ json: { ok: true, confirmation_id: id, name: a.name, date: a.date, time: a.time, party_size: size, status: 'confirmed', message: 'Table held for 15 minutes past the booking time.' } }];\n  }\n  case 'lookup_booking': {\n    const b = S.bookings[a.confirmation_id]; if (!b) return bad('no booking found for that confirmation id');\n    return [{ json: { ok: true, ...b } }];\n  }\n  case 'cancel_booking': {\n    const b = S.bookings[a.confirmation_id]; if (!b) return bad('no booking found for that confirmation id');\n    b.status = 'cancelled';\n    return [{ json: { ok: true, confirmation_id: b.id, status: 'cancelled' } }];\n  }\n  default: return bad('unknown action', { valid_actions: ['check_availability', 'book_table', 'lookup_booking', 'cancel_booking'] });\n}"
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "name": "Automation logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "Reject 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify BotForge signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify BotForge signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Automation logic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Automation logic": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

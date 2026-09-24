@@ -1,0 +1,176 @@
+{
+  "name": "DEMO — Luxe Glow Salon bookings",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "demo-luxeglow-bookings",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "demo-luxeglow-bookings"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// BotForge signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-botforge-signature'] || '');\nconst ts = String(h['x-botforge-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
+      },
+      "id": "a0000000-0000-4000-8000-000000000004",
+      "name": "Verify BotForge signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.verified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000005",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// DEMO FIXTURE - every name, id, price, doctor, slot and order in this workflow is fictional demo data.\n// State (bookings, counters) lives in n8n workflow static data and is NOT part of this export.\nconst body = $input.first().json.body || {};\nconst a = body.args || {};\nconst S = $getWorkflowStaticData('global');\nS.bookings = S.bookings || {};\nS.counter = S.counter || 0;\nconst need = (fields) => fields.filter((f) => a[f] === undefined || a[f] === null || String(a[f]).trim() === '');\nconst bad = (error, extra = {}) => [{ json: { ok: false, error, ...extra } }];\nconst nextId = (prefix) => { S.counter += 1; return prefix + '-' + String(1000 + S.counter); };\nconst isDate = (s) => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s));\nconst isTime = (s) => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\n\nconst MENU = { haircut: { price: 600, minutes: 45 }, hair_coloring: { price: 2800, minutes: 120 }, facial: { price: 1500, minutes: 60 }, manicure: { price: 700, minutes: 45 }, spa_massage: { price: 2200, minutes: 60 } };\nconst ADDONS = { deep_conditioning: 400, head_massage: 300, gel_polish: 350 };\nconst HOURS = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];\nconst taken = (date, time) => Object.values(S.bookings).some((b) => b.status === 'confirmed' && b.date === date && b.time === time);\nswitch (a.action) {\n  case 'get_quote': {\n    const m = need(['service']); if (m.length) return bad('missing fields: service');\n    const svc = MENU[a.service]; if (!svc) return bad('unknown service', { services: Object.keys(MENU) });\n    const adds = Array.isArray(a.add_ons) ? a.add_ons : [];\n    const unknown = adds.filter((x) => !(x in ADDONS)); if (unknown.length) return bad('unknown add-ons: ' + unknown.join(', '), { add_ons: Object.keys(ADDONS) });\n    const total = svc.price + adds.reduce((n, x) => n + ADDONS[x], 0);\n    return [{ json: { ok: true, service: a.service, base_price_inr: svc.price, add_ons: adds, total_inr: total, duration_minutes: svc.minutes + adds.length * 10 } }];\n  }\n  case 'book_appointment': {\n    const m = need(['name', 'phone', 'service', 'date', 'time']); if (m.length) return bad('missing fields: ' + m.join(', '));\n    if (!MENU[a.service]) return bad('unknown service', { services: Object.keys(MENU) });\n    if (!isDate(a.date) || !isTime(a.time)) return bad('date must be YYYY-MM-DD and time HH:MM (24h)');\n    if (!HOURS.includes(a.time)) return bad('salon bookings run 10:00-18:00 on the hour', { open_slots: HOURS.filter((t) => !taken(a.date, t)) });\n    if (taken(a.date, a.time)) return bad('slot already taken', { open_slots: HOURS.filter((t) => !taken(a.date, t)) });\n    const adds = Array.isArray(a.add_ons) ? a.add_ons : [];\n    const unknownAdds = adds.filter((x) => !(x in ADDONS)); if (unknownAdds.length) return bad('unknown add-ons: ' + unknownAdds.join(', '), { add_ons: Object.keys(ADDONS) });\n    const price = MENU[a.service].price + adds.reduce((n, x) => n + ADDONS[x], 0);\n    const id = nextId('LGS');\n    S.bookings[id] = { id, name: a.name, phone: a.phone, service: a.service, add_ons: adds, stylist: a.stylist || 'any available', date: a.date, time: a.time, price_inr: price, status: 'confirmed' };\n    return [{ json: { ok: true, booking_id: id, service: a.service, add_ons: adds, date: a.date, time: a.time, stylist: a.stylist || 'any available', price_inr: price, status: 'confirmed' } }];\n  }\n  case 'get_booking': {\n    const b = S.bookings[a.booking_id]; if (!b) return bad('no booking found for that id');\n    return [{ json: { ok: true, ...b } }];\n  }\n  default: return bad('unknown action', { valid_actions: ['get_quote', 'book_appointment', 'get_booking'] });\n}"
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "name": "Automation logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "Reject 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify BotForge signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify BotForge signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Automation logic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Automation logic": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

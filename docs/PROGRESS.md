@@ -38,6 +38,37 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **n8n webhook signatures are now verified, and the demo workflows live in the repo (2026-09-24, RISK-REGISTER R15).**
+  BotForge signed every call to an n8n webhook, but no workflow checked it: an unsigned `curl` to a
+  workflow URL ran the automation, bypassing the agent, RBAC and budgets.
+  - **Verification** (`infra/n8n/*.json`): `Webhook (rawBody)` -> `Verify BotForge signature` (Code) ->
+    `Signature valid?` (IF) -> automation | `401`. Same scheme as `n8n_client.sign()/verify_callback()`:
+    hex HMAC-SHA256 of `"<ts>." + raw body`, constant-time, 300 s window, **fails closed** (no secret,
+    missing header, no raw body => 401). Applied to the four demo workflows, the provisioning template
+    and both example workflows.
+  - **What n8n 2.x needed:** Code nodes cannot read `$env` or `require('crypto')` by default, so the dev
+    compose n8n service now sets `N8N_WEBHOOK_SIGNING_SECRET`, `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and
+    `NODE_FUNCTION_ALLOW_BUILTIN=crypto`. Compose interpolates from `infra/.env`, not the root `.env`, so the
+    secret is in both (drift => every call 401, i.e. closed). Prod compose has no n8n service; the
+    requirement is written up in docs/07 and `infra/n8n/README.md`.
+  - **Verified live** against all four demo workflows: an 8-case attack matrix each (no headers, wrong MAC,
+    no timestamp, 10-min replay, future timestamp, tampered body, wrong secret, **empty secret**) = all 401;
+    a request signed by BotForge's own `sign()` with a non-ASCII body = accepted and the automation ran;
+    and a real agent turn (BotForge signing, n8n verifying) worked. Then all 7 repo JSONs were imported
+    into n8n and hit signed/unsigned.
+  - **Enforcement, not just docs:** `provision-client.mjs` refuses to clone a template without the verify
+    node; `tests/test_n8n_workflows_signed.py` pins the structure of every JSON under `infra/n8n/`, runs
+    the verifier's real JavaScript under Node against Python `sign()`, and checks no secret/state is
+    exported (mutation-checked: unwiring the gate fails it).
+  - **Not covered:** a workflow hand-built in the n8n UI is unverified and BotForge does not inspect nodes
+    at bind time; there is no production n8n yet. R15 stays open for both.
+  - **Demo workflows exported** to `infra/n8n/demo-niches/` (Harbor Table Bistro, CityCare Clinic, Luxe Glow
+    Salon, Threadline Fabrics) from the live n8n with `staticData` (the test bookings) stripped; the
+    fictional seed data that remains is marked `// DEMO FIXTURE`. `scripts/import-n8n-workflows.mjs`
+    recreates/updates, activates and org-tags them (both paths tested, including recreate-after-delete);
+    the rebuild-from-nothing steps are in `infra/n8n/README.md`. n8n's own database had been empty once
+    today (no owner, stale `N8N_API_KEY`), which is why.
+
 - **Live bug fixed: the platform default model was retired, so every new agent was silently broken (2026-09-24).**
   Groq retired `llama-3.3-70b-versatile` (the default in `agents.service.DEFAULT_MODEL_CONFIG` and
   `db.seed`) and `llama-3.1-8b-instant` (`settings.summary_model`, used by memory summaries and CRM

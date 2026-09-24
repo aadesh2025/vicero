@@ -49,7 +49,7 @@ def _targets(wf: dict[str, Any], source: str, output: int) -> list[str]:
 
 def test_the_workflow_directory_is_not_empty() -> None:
     # A wrong path would make every parametrised test below vanish and pass vacuously.
-    assert len(WORKFLOWS) >= 3, [p.name for p in WORKFLOWS]
+    assert len(WORKFLOWS) >= 7, [p.name for p in WORKFLOWS]
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: str(p.relative_to(N8N_DIR)))

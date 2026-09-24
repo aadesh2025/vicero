@@ -48,12 +48,13 @@ duplicated across them; agent-specific files are thin pointers with no protocol 
 
 ## Using it
 
-Point the agent at `SKILL.md` and name the mode:
+Point the agent at `SKILL.md` (`<skill dir>` below is wherever you put this directory) and name the mode. In
+Claude Code, `/engineering-verification` followed by the same words works once it is installed.
 
-- `Follow skills/engineering-verification/SKILL.md, mode 1 (investigation), on this repository.`
-- `Follow skills/engineering-verification/SKILL.md, mode 2 (verification). Do not change application code
-  unless a failure is proven a regression.`
-- `Follow skills/engineering-verification/SKILL.md, mode 3 (feature safety), before implementing: <feature>.`
+- `Follow <skill dir>/SKILL.md, mode 1 (investigation), on this repository.`
+- `Follow <skill dir>/SKILL.md, mode 2 (verification). Do not change application code unless a failure is
+  proven a regression.`
+- `Follow <skill dir>/SKILL.md, mode 3 (feature safety), before implementing: <feature>.`
 - Scope a pass: `..., mode 2, scoped to commits <a>..<b>.`
 
 Expected outputs: an investigation report, a verification report ending in `PASS`, `PASS WITH FOLLOW-UP` or
@@ -62,23 +63,30 @@ what was observed from what was inferred and lists what was not run.
 
 ## Installation
 
-Copy the `engineering-verification/` directory into the repository, or a shared location, and keep its internal
-structure: `SKILL.md` links to `references/` and `templates/` by relative path.
+Put this directory in the repository, or a shared location, and keep its internal structure: `SKILL.md` links to
+`references/` and `templates/` by relative path.
 
-**Claude Code (adapter provided in this repository).** Project skills are directories under
-`.claude/skills/<name>/` with a `SKILL.md` that has `name` and `description` frontmatter; this repository
-already uses that layout. The adapter `.claude/skills/engineering-verification/SKILL.md` carries the same `name`
-and `description` and tells the agent to read the canonical protocol here. Invoke with
-`/engineering-verification`. To use the skill in another repository, copy this whole directory to
-`<that repo>/.claude/skills/engineering-verification/`; the canonical `SKILL.md` already has valid frontmatter,
-so no adapter is needed there.
+**Claude Code.** Project skills are directories under `.claude/skills/<name>/` with a `SKILL.md` that has
+`name` and `description` frontmatter, and `SKILL.md` here already has both, so no adapter is needed:
+
+```
+# per project (commit it so the team gets it)
+git clone https://github.com/aadesh2025/engineering-verification-skill .claude/skills/engineering-verification
+
+# or personal, available in every repository (Windows: %USERPROFILE%\.claude\skills\)
+git clone https://github.com/aadesh2025/engineering-verification-skill ~/.claude/skills/engineering-verification
+```
+
+Then invoke `/engineering-verification`. Delete the cloned `.git` folder if you want to commit the skill into
+your own repository rather than track this one. A repository that keeps the canonical copy elsewhere can add a
+thin `.claude/skills/engineering-verification/SKILL.md` that repeats the `description` and tells the agent to
+read the canonical `SKILL.md`; it must contain no protocol text.
 
 **Other agents (no adapter provided).** The skill and rule formats of Codex, Gemini CLI, Cursor, OpenCode and
-similar tools are not present or verifiable in this repository, so none are provided and none are guessed. The
-protocol is plain Markdown: place the directory in the repository and add a pointer to it in the instruction
-file that tool reads (check its documentation for the name and format), or paste the pointer into the session.
-If a tool has its own skill or rule format, write a thin file in that format that points at `SKILL.md`; do not
-copy protocol text into it.
+similar tools are not verified here, so none are provided and none are guessed. The protocol is plain Markdown:
+place the directory in the repository and add a pointer to it in the instruction file that tool reads (check
+its documentation for the name and format), or paste the pointer into the session. If a tool has its own skill
+or rule format, write a thin file in that format that points at `SKILL.md`; do not copy protocol text into it.
 
 ## Portability
 
@@ -98,9 +106,16 @@ illustrative, never mandatory.
   must allow it.
 - It does not cover redesigns, framework migrations or dependency-upgrade projects.
 
+## License
+
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0); see `LICENSE`. In plain terms,
+from Creative Commons: you may share and adapt this material with attribution, for non-commercial purposes.
+Copyright (c) 2026 Aadesh (aadesh2025). The `LICENSE` file is the authoritative text.
+
 ## Version
 
-**engineering-verification v1.0.0** is the frozen baseline.
+**engineering-verification v1.0.1.** v1.0.0 is the frozen protocol baseline; v1.0.1 changes no protocol
+behavior: it adds the `LICENSE` and makes this README independent of where the directory is placed.
 
 - The universal skill answers "what should an AI coding agent do?". Facts about a particular repository (its
   commands, layout, rules, decisions) belong in that repository's own instructions, never in this skill. Do not

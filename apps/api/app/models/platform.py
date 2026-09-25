@@ -123,6 +123,35 @@ class Quota(Base, UUIDPrimaryKey):
     resets_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class OrgMessageUsage(Base):
+    """Per-org message counter for metered plans (docs/18 §7, ADR-088).
+
+    A separate table rather than columns on `Quota`: `Quota` is token/request-shaped, is not
+    unique per org, and other code reads it — reshaping it here would change what those readers
+    see. One row per metered org; `legacy` orgs have none (unlimited, nothing to count).
+
+    `messages_used` moves only through the single atomic UPDATE in `app/billing/usage.py`.
+    """
+
+    __tablename__ = "org_message_usage"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    messages_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    #: Visitor messages saved but not answered because the plan ran out — the upgrade argument.
+    unanswered_messages: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    #: Lifecycle emails already sent, so a re-run of the sweep never sends one twice.
+    emails_sent: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default="{}", nullable=False
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class FeatureFlag(Base, UUIDPrimaryKey, TimestampMixin):
     """Platform-wide feature flag, toggled by platform staff (docs/08 §17)."""
 

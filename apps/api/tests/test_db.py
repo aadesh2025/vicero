@@ -33,6 +33,8 @@ EXPECTED_TABLES = {
     # docs/17 Phase 4 follow-up (workflow testing, ADR-081): the workflow-shaped twin of the
     # pair above, closing the WORKFLOWS_PUBLISH test-failure gate.
     "workflow_tests", "workflow_test_runs",
+    # docs/18 (self-serve trial, ADR-088): the per-org message counter.
+    "org_message_usage",
 }
 
 

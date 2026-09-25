@@ -9,9 +9,9 @@ from typing import Any
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, validates
 
-from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKey
+from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKey, normalize_email
 
 _UUID = PgUUID(as_uuid=True)
 
@@ -20,6 +20,10 @@ class User(Base, UUIDPrimaryKey, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
+    #: The address with cosmetic variants collapsed (case, Gmail dots, `+tag`) — what "one trial
+    #: per person" is checked against. Indexed, deliberately not UNIQUE: legacy rows could collide
+    #: and a constraint failing mid-migration would strand the deploy. See modules/auth/policy.py.
+    email_normalized: Mapped[str | None] = mapped_column(String(320), index=True)
     email_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     password_hash: Mapped[str | None] = mapped_column(String(255))  # null for oauth-only
     full_name: Mapped[str | None] = mapped_column(String(255))
@@ -33,13 +37,21 @@ class User(Base, UUIDPrimaryKey, TimestampMixin, SoftDeleteMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
+    @validates("email")
+    def _keep_normalized_in_step(self, _key: str, value: str) -> str:
+        """Every path that sets an email — signup, OAuth, seed, a future script — gets its
+        normalised form for free, so the one-trial-per-person check cannot be bypassed by a code
+        path that forgot to fill it in."""
+        self.email_normalized = normalize_email(value)
+        return value
+
 
 class OAuthAccount(Base, UUIDPrimaryKey):
     __tablename__ = "oauth_accounts"
     __table_args__ = (UniqueConstraint("provider", "provider_account_id"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    provider: Mapped[str] = mapped_column(String(32), nullable=False)  # google|github
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)  # google|github|facebook
     provider_account_id: Mapped[str] = mapped_column(String(255), nullable=False)
     access_token_enc: Mapped[str | None] = mapped_column(String)
     refresh_token_enc: Mapped[str | None] = mapped_column(String)
@@ -107,7 +119,15 @@ class Organization(Base, UUIDPrimaryKey, TimestampMixin, SoftDeleteMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(1024))
-    plan: Mapped[str] = mapped_column(String(32), default="free", nullable=False)  # free|pro|enterprise
+    #: `trial` (self-serve signups) | `legacy` (everyone provisioned before self-serve — unlimited).
+    #: Defaults to `legacy` on purpose: only the signup path writes `trial`, so a path that
+    #: forgets to set a plan can never lock a client out. `trial_expired` is computed, not stored
+    #: (app/core/plans.py). Every limit lives there; nothing else reads this column.
+    plan: Mapped[str] = mapped_column(
+        String(32), default="legacy", server_default="legacy", nullable=False
+    )
+    trial_started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    trial_ends_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     #: Detect names/emails/phones customers share in chat and file them in the CRM.
     #: Org-wide rather than per-agent: a client thinks about their business's CRM, not

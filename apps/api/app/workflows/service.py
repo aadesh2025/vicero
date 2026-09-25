@@ -31,6 +31,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.chat import variables as chat_variables
 from app.chat.assembly import compose_system_prompt
 from app.chat.budget import AgentBudget, default_budget
@@ -403,6 +404,15 @@ async def _execute_and_persist(
     """
     org = await session.get(Organization, run.organization_id)
     assert org is not None
+    # Runtime entitlement check (docs/18 §9): the CRUD endpoints refuse a trial org, but a run
+    # can still be queued for one — a workflow created before a downgrade, a resume of an old
+    # run, a Celery retry. Nothing executes on a plan that excludes workflows.
+    if not usage.feature_allowed(org, "workflows"):
+        run.status = "failed"
+        run.error = "plan_limit: workflows are not included in this plan"
+        run.completed_at = dt.datetime.now(tz=dt.UTC)
+        await session.flush()
+        return WorkflowRunResult(status="failed", variables=dict(run.variables or {}), error=run.error)
     budget = _budget_from_dict(run.budget)
     tool_executor = await _tool_executor_for(session, org, workflow.agent_id)
     agent_executor = await _agent_executor_for(session, org)
@@ -528,6 +538,7 @@ async def create_workflow(
     session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID | None, data: schemas.CreateWorkflowRequest
 ) -> schemas.WorkflowOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     if agent_id is not None:
         agent = await session.get(Agent, agent_id)
         if agent is None or agent.organization_id != ctx.org.id:
@@ -561,6 +572,7 @@ async def update_workflow(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, data: schemas.UpdateWorkflowRequest
 ) -> schemas.WorkflowOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     if data.name is not None:
         workflow.name = data.name
@@ -583,6 +595,7 @@ async def create_version(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, data: schemas.CreateWorkflowVersionRequest
 ) -> schemas.WorkflowVersionOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     errors = validate_graph(data.graph)
     if errors:
@@ -628,6 +641,7 @@ async def submit_for_review(
     here would be a new, undiscussed product rule rather than "reuse the pattern" (see ADR-080).
     """
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     await _get_workflow(session, ctx, workflow_id)
     v = await _get_version(session, workflow_id, version)
     if v.status != "draft":
@@ -644,6 +658,7 @@ async def publish_version(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, version: int
 ) -> schemas.WorkflowOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_PUBLISH)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     v = await _get_version(session, workflow_id, version)
     # docs/17 Phase 3 publish gate, closed for workflows here (ADR-081) — local import to avoid
@@ -674,6 +689,7 @@ async def rollback(
     roll back onto, and rolling forward again afterwards is just another `publish_version` call.
     """
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_PUBLISH)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     v = await _get_version(session, workflow_id, version)
     if v.status != "published":
@@ -692,6 +708,7 @@ async def diff_versions(
     of authoring/reviewing, not a publish action, the same reasoning `run_workflow_test` already
     uses. Pure computation over the two stored `graph` JSON blobs; see `app.workflows.diff`."""
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     await _get_workflow(session, ctx, workflow_id)
     a = await _get_version(session, workflow_id, version_a)
     b = await _get_version(session, workflow_id, version_b)
@@ -734,6 +751,7 @@ async def run_workflow_now(
     `run_workflow_test` below, on a separate endpoint.
     """
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     if workflow.current_version_id is None:
         raise AppError("workflows.not_published", "This workflow has no published version.", 400)
@@ -753,6 +771,7 @@ async def run_workflow_test(
     the Agent Playground already makes.
     """
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     workflow = await _get_workflow(session, ctx, workflow_id)
     version = await _latest_workflow_version(session, workflow_id)
     return await _create_and_dispatch_run(session, ctx, workflow, version, data, is_test=True)
@@ -790,6 +809,7 @@ async def resume_workflow_run(
     session: AsyncSession, ctx: OrgContext, run_id: uuid.UUID, data: schemas.ResumeWorkflowRequest
 ) -> schemas.WorkflowRunOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     run = await _get_run(session, ctx, run_id)
     return await resume_workflow_run_unchecked(session, run, data)
 

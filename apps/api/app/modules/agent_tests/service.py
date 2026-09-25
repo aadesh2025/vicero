@@ -268,6 +268,9 @@ async def run_agent_tests(
     session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, data: schemas.RunAgentTestsRequest
 ) -> list[schemas.AgentTestRunOut]:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    from app.modules.agents.service import check_playground_allowed
+
+    await check_playground_allowed(session, ctx)
     from app.modules.agents.service import _get_agent, _latest_version
 
     agent = await _get_agent(session, ctx, agent_id)

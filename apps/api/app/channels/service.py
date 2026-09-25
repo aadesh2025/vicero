@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.channels import schemas
 from app.channels.base import BaseChannel, InboundMessage, get_channel
 from app.chat.inbound import InboundTurn
@@ -123,6 +124,8 @@ async def update_channel(
     session: AsyncSession, ctx: OrgContext, channel_id: uuid.UUID, data: schemas.UpdateChannelRequest
 ) -> schemas.ChannelOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    if data.enabled:
+        usage.require_verified_email_to_go_live(ctx.org, ctx.user)
     channel = await _get_channel(session, ctx, channel_id)
     adapter = get_channel(channel.type) or BaseChannel()
     if data.name is not None:
@@ -150,6 +153,8 @@ async def set_enabled(
     session: AsyncSession, ctx: OrgContext, channel_id: uuid.UUID, enabled: bool
 ) -> schemas.ChannelOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    if enabled:
+        usage.require_verified_email_to_go_live(ctx.org, ctx.user)
     channel = await _get_channel(session, ctx, channel_id)
     channel.enabled = enabled
     adapter = get_channel(channel.type) or BaseChannel()

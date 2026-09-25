@@ -160,6 +160,7 @@ async def playground_chat(
     session: AsyncSession = Depends(get_session),
     ctx: OrgContext = Depends(current_org),
 ) -> StreamingResponse | dict[str, Any]:
+    await service.check_playground_allowed(session, ctx)
     if data.stream:
         return StreamingResponse(
             service.playground_stream(session, ctx, agent_id, data),

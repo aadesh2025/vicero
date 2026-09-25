@@ -27,6 +27,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.chat.budget import AgentBudget, default_budget
 from app.core import rbac
 from app.core.errors import AppError
@@ -214,6 +215,7 @@ async def create_workflow_test(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, data: schemas.CreateWorkflowTestRequest
 ) -> schemas.WorkflowTestOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     test = WorkflowTest(
         organization_id=ctx.org.id, workflow_id=workflow_id, name=data.name, description=data.description,
         input_variables=data.input_variables, scripted_node_outputs=data.scripted_node_outputs.model_dump(),
@@ -241,6 +243,7 @@ async def update_workflow_test(
     data: schemas.UpdateWorkflowTestRequest,
 ) -> schemas.WorkflowTestOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     test = await _get_test(session, ctx, workflow_id, test_id)
     if data.name is not None:
         test.name = data.name
@@ -277,6 +280,7 @@ async def run_workflow_tests(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, data: schemas.RunWorkflowTestsRequest
 ) -> list[schemas.WorkflowTestRunOut]:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
+    await usage.require_feature(session, ctx.org, "workflows")
     from app.workflows.service import _get_workflow, _latest_workflow_version
 
     workflow = await _get_workflow(session, ctx, workflow_id)

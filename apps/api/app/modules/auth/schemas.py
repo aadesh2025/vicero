@@ -103,3 +103,24 @@ class SessionOut(BaseModel):
 
 class OAuthAuthorizeResponse(BaseModel):
     authorize_url: str
+
+
+class OAuthPendingResponse(BaseModel):
+    """The provider gave us no verified email. Nothing was created; collect one and verify it."""
+
+    needs_email: bool = True
+    pending_token: str
+    provider: str
+
+
+class OAuthEmailRequest(BaseModel):
+    pending_token: str
+    email: EmailStr
+
+
+class OAuthEmailVerifyRequest(BaseModel):
+    token: str
+
+
+class OAuthExchangeRequest(BaseModel):
+    code: str

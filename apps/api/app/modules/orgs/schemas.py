@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -135,6 +135,25 @@ class TransferOwnershipRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class PlanStatusOut(BaseModel):
+    """The org's plan as the dashboard needs it (docs/18 §8). Limits come from `core.plans`."""
+
+    plan: str
+    status: Literal["trial", "trial_expired", "legacy"]
+    trial_ends_at: dt.datetime | None
+    days_left: int | None
+    expired_reason: Literal["time", "messages"] | None
+    messages_used: int
+    messages_limit: int | None
+    messages_remaining: int | None
+    #: Visitor messages saved but not answered because the plan ran out.
+    unanswered_messages: int
+    agents_used: int
+    max_agents: int | None
+    can_create_agent: bool
+    features: dict[str, bool]
 
 
 ASSIGNABLE = set(ASSIGNABLE_ROLES)

@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.chat import variables
 from app.chat.agent_trace import persist_agent_steps
 from app.chat.assembly import compose_system_prompt
@@ -23,6 +24,7 @@ from app.core import rbac
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.core.plans import plan_limit
 from app.db.templates import AGENT_TEMPLATES, get_template
 from app.llm.base import ChatProvider
 from app.llm.catalog import DEFAULT_CHAT_MODEL
@@ -226,6 +228,7 @@ def _seed_from_template(template_id: str | None) -> dict[str, Any]:
 
 async def create_agent(session: AsyncSession, ctx: OrgContext, data: schemas.CreateAgentRequest) -> schemas.AgentOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_new_agent_slot(session, ctx.org)
     seed = _seed_from_template(data.template_id)  # validates before anything is written
     agent = Agent(
         organization_id=ctx.org.id,
@@ -273,6 +276,7 @@ async def update_agent(
     session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, data: schemas.UpdateAgentRequest
 ) -> schemas.AgentOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_agents_writable(session, ctx.org)
     agent = await _get_agent(session, ctx, agent_id)
     if data.name is not None:
         agent.name = data.name
@@ -293,6 +297,7 @@ async def delete_agent(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UU
 
 async def duplicate_agent(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID) -> schemas.AgentOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_new_agent_slot(session, ctx.org)
     source = await _get_agent(session, ctx, agent_id)
     src_version = await _latest_version(session, source.id)
     clone = Agent(
@@ -358,6 +363,7 @@ async def _draft_from_latest(session: AsyncSession, agent_id: uuid.UUID, user_id
 
 async def create_version(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID) -> schemas.VersionOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_agents_writable(session, ctx.org)
     await _get_agent(session, ctx, agent_id)
     return _version_out(await _draft_from_latest(session, agent_id, ctx.user.id))
 
@@ -460,6 +466,7 @@ async def update_version(
     data: schemas.UpdateVersionRequest,
 ) -> schemas.VersionOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_agents_writable(session, ctx.org)
     await _get_agent(session, ctx, agent_id)
 
     # Backward compatibility: appearance used to live at `persona.widget`. It now has its
@@ -484,6 +491,8 @@ async def update_version(
 
 async def publish_version(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, number: int) -> schemas.AgentOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_PUBLISH)
+    await usage.require_agents_writable(session, ctx.org)
+    usage.require_verified_email_to_go_live(ctx.org, ctx.user)
     agent = await _get_agent(session, ctx, agent_id)
     version = await _get_version(session, agent_id, number)
     # docs/17 Phase 3 publish gate (ADR-079) — local import to avoid a circular import:
@@ -505,6 +514,8 @@ async def publish_version(session: AsyncSession, ctx: OrgContext, agent_id: uuid
 
 async def rollback(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, number: int) -> schemas.AgentOut:
     rbac.require_permission(ctx.role, rbac.AGENTS_PUBLISH)
+    await usage.require_agents_writable(session, ctx.org)
+    usage.require_verified_email_to_go_live(ctx.org, ctx.user)
     agent = await _get_agent(session, ctx, agent_id)
     version = await _get_version(session, agent_id, number)
     if not version.is_published:
@@ -676,6 +687,22 @@ async def _playground_tooling(
     if specs and executor is not None and provider.supports_tools():
         return specs, executor
     return [], None
+
+
+async def check_playground_allowed(session: AsyncSession, ctx: OrgContext) -> None:
+    """Dashboard test chat: refused on an expired trial, capped per day on a live one.
+
+    Called by the router **before** a streaming response starts. Raised from inside the stream
+    generator instead, the status line would already be on the wire and the client would see a
+    truncated 200 rather than a 402 (the same constraint public/service.resolve_turn documents).
+    """
+    ent = await usage.load_entitlements(session, ctx.org)
+    if ent.is_expired:
+        raise plan_limit("agents", "Your free trial has ended. Upgrade to keep testing your agent.")
+    if not await usage.playground_allowed(ctx.org.id, ent):
+        raise plan_limit(
+            "playground", "You've reached today's limit for testing in the dashboard. Try again tomorrow."
+        )
 
 
 async def playground_stream(

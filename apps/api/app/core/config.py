@@ -288,6 +288,27 @@ class Settings(BaseSettings):
     google_client_secret: str | None = None
     github_client_id: str | None = None
     github_client_secret: str | None = None
+    facebook_client_id: str | None = None
+    facebook_client_secret: str | None = None
+
+    # --- Self-serve signup + free trial (docs/18, ADR-088) ---
+    # Master switch. On: signing up provisions one 10-day trial workspace and non-staff users
+    # may own one. Off: the previous staff-provisioned-only behaviour, untouched — also the
+    # operator's kill switch if signups are being abused. Plan *limits* are not settings; they
+    # live in app/core/plans.py so there is exactly one place to read them.
+    self_serve_enabled: bool = True
+    # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
+    signups_per_ip_per_day: int = 3
+    # Refuse throwaway-mailbox domains (modules/auth/policy.py) so one person cannot mint
+    # unlimited trials. On by default; turn off for an internal deployment.
+    block_disposable_emails: bool = True
+    # Failed password logins per email before that email is locked out for the window below.
+    login_lockout_failures: int = 10
+    login_lockout_window: int = 900  # seconds
+    # Per-org ceiling on public chat messages per minute, so one bot cannot burn a whole
+    # trial in seconds. Counted per organization, unlike the per-IP limit on the route.
+    org_chat_rate_limit: int = 30
+    org_chat_rate_window: int = 60  # seconds
 
     # --- Test-only switches (never enable in production) ---
     # Lets a non-staff user create an organization. BotForge is provisioned per client, so

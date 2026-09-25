@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.core import rbac
 from app.core.config import settings
 from app.core.crypto import encrypt
@@ -21,7 +22,7 @@ from app.core.ssrf import is_blocked_host
 from app.integrations.n8n_client import N8nClient, get_client
 from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
-from app.models import Agent, AgentVersion, MCPServer, Tool, ToolRun
+from app.models import Agent, AgentVersion, MCPServer, Organization, Tool, ToolRun
 from app.modules.orgs.deps import OrgContext
 from app.tools import schemas
 from app.tools.base import ToolContext, ToolResult
@@ -68,6 +69,7 @@ async def _get_tool(session: AsyncSession, ctx: OrgContext, tool_id: uuid.UUID) 
 
 async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.CreateToolRequest) -> schemas.ToolOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
     description = data.description
     input_schema = data.input_schema
     config = data.config
@@ -130,6 +132,7 @@ async def update_tool(
     session: AsyncSession, ctx: OrgContext, tool_id: uuid.UUID, data: schemas.UpdateToolRequest
 ) -> schemas.ToolOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
     tool = await _get_tool(session, ctx, tool_id)
     if data.description is not None:
         tool.description = data.description
@@ -199,7 +202,17 @@ async def build_tooling(
     features = version.features or {}
     if not features.get("tools_enabled"):
         return [], None
+    # Runtime entitlement check, independent of the CRUD gates above: an agent that somehow has
+    # tools attached (created before a downgrade, imported, or by a bug) must still not run
+    # them on a plan that excludes tool calling (docs/18 §9).
+    org = await session.get(Organization, org_id)
+    if org is not None and not usage.feature_allowed(org, "tool_calling"):
+        log.info("tooling_skipped_plan", org_id=str(org_id), agent_id=str(agent.id))
+        return [], None
     specs, by_name = await resolve_agent_tools(session, org_id, agent.id, include_mcp=include_mcp)
+    if org is not None and not usage.feature_allowed(org, "n8n"):
+        by_name = {k: t for k, t in by_name.items() if t.type != "n8n"}
+        specs = [sp for sp in specs if sp.name in by_name]
     if not specs:
         return [], None
 
@@ -285,6 +298,7 @@ async def test_tool(
     session: AsyncSession, ctx: OrgContext, tool_id: uuid.UUID, data: schemas.TestToolRequest
 ) -> schemas.TestToolResponse:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
     tool = await _get_tool(session, ctx, tool_id)
     tool_ctx = await _tool_context_for(session, ctx, tool)
     t0 = time.perf_counter()
@@ -377,6 +391,7 @@ def workflow_visible_to_org(tags: set[str], name: str, org_slug: str) -> bool:
 
 async def list_n8n_workflows(session: AsyncSession, ctx: OrgContext) -> list[schemas.N8nWorkflowOut]:
     rbac.require_permission(ctx.role, rbac.READ)
+    await usage.require_feature(session, ctx.org, "n8n")
     client = get_client()
     workflows = await client.list_workflows()
     out: list[schemas.N8nWorkflowOut] = []
@@ -439,6 +454,7 @@ async def bind_n8n_workflow(
     session: AsyncSession, ctx: OrgContext, data: schemas.BindN8nRequest
 ) -> schemas.ToolOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "n8n")
     client = get_client()
     webhook_url = data.webhook_url
     workflow_name = data.workflow_name
@@ -513,6 +529,7 @@ async def create_mcp_server(
     a `Tool` row of type `mcp` still has to be created (POST /v1/tools), and even then it is
     only usable in a turn once the agentic runtime is on for this org (docs/17 §2)."""
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
     if data.transport == "stdio":
         # A stdio server is a command run on the API host. Any org role with TOOLS_MANAGE
         # (including the client `editor` role) could otherwise execute arbitrary code there.
@@ -574,6 +591,7 @@ async def test_mcp_server_connection(
     """Connect, list the server's tools, and disconnect. Never raises — a bad connection is a
     normal test result, not a 5xx."""
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
     server = await _get_mcp_server(session, ctx, server_id)
     try:
         tools = await mcp_list_tools(await mcp_resolve_server_config(session, server))

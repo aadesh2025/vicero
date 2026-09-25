@@ -16,14 +16,17 @@ from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.chat import attention, guard_models, guardrails, policy_guard, variables
 from app.chat.assembly import build_messages, compose_system_prompt
 from app.chat.budget import agentic_loop_enabled, turn_budget
 from app.chat.handoff import trigger_handoff, wants_handoff
 from app.chat.pii import build_allowlist
 from app.chat.runtime import TurnResult, run_turn
+from app.core.audit import write_audit
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.ratelimit import limiter
 from app.llm.fake import RefusalProvider
 from app.llm.types import StreamEvent
 from app.models import Agent, AgentVersion, Contact, Conversation, Message, Organization
@@ -58,6 +61,10 @@ class InboundTurn:
         self.message = message
         self.result = TurnResult()
         self.handed_off = False
+        #: The plan is out (trial over / messages spent), so the bot stayed silent. The visitor's
+        #: message is saved and the owner can still answer from the inbox; nothing is shown to
+        #: the visitor — no error, no "upgrade", no quota text (docs/18 §8).
+        self.silenced = False
         self.assistant_message: Message | None = None
 
     async def events(self) -> AsyncIterator[StreamEvent]:
@@ -85,6 +92,24 @@ class InboundTurn:
             conv.last_message_at = dt.datetime.now(tz=dt.UTC)
             await session.flush()
             return
+
+        # Plan gate (docs/18 §7-8) — the one choke point every visitor path goes through: the
+        # widget over HTTP/SSE/WebSocket and every messaging channel. It sits *after* the
+        # visitor's message is persisted (the owner must still see it) and *before* anything
+        # that costs money or emits text, including the canned handoff reply below.
+        gate_org = await self._org()
+        ent = await usage.load_entitlements(session, gate_org) if gate_org else None
+        if ent is not None and not ent.bot_replies:
+            await self._stay_silent(ent.expired_reason or "messages")
+            return
+        if ent is not None and ent.is_metered:
+            allowed, _ = await limiter.hit(
+                f"rl:org-chat:{org_id}", settings.org_chat_rate_limit, settings.org_chat_rate_window
+            )
+            if not allowed:  # one bot must not burn a whole trial in seconds
+                log.warning("org_chat_rate_limited", org_id=str(org_id))
+                await self._stay_silent(None)
+                return
 
         # Keyword handoff: the visitor is asking for a human.
         features = self.version.features or {}
@@ -210,6 +235,17 @@ class InboundTurn:
             yield StreamEvent(type="message", message_id=str(msg.id))
             return
 
+        # Reserve the question + answer pair atomically, just before the reply is generated.
+        # The early read above is a courtesy that avoids paying for guards on an org that is
+        # already out; this UPDATE is the authority, so two visitors racing for the last
+        # messages cannot both get through (billing/usage.py).
+        reserved = False
+        if ent is not None and ent.max_messages is not None and ent.is_metered:
+            if not await usage.reserve(session, org_id, ent.max_messages):
+                await self._stay_silent("messages")
+                return
+            reserved = True
+
         provider_name = (self.version.model_config_json or {}).get("provider", "fake")
         provider = await _resolve_provider(
             session,
@@ -261,6 +297,11 @@ class InboundTurn:
                 yield ev
             latency_ms = int((time.perf_counter() - t0) * 1000)
             self.assistant_message = await _finalize_turn(session, conv, self.result, latency_ms, self.message)
+            if reserved and self.result.error:
+                # The model never produced the reply we reserved for (the visitor got the
+                # agent's canned fallback line). Give that one back; the visitor's own message
+                # still counts.
+                await usage.refund(session, org_id, 1)
         except (asyncio.CancelledError, GeneratorExit):
             # Same fix as conversations/service.py::chat_events, for the same reason — both
             # exceptions, since a dropped stream ends either way (see that comment)
@@ -277,6 +318,21 @@ class InboundTurn:
                 await _enqueue_finalize_turn(conv, self.result, latency_ms, self.message)
             raise
         yield StreamEvent(type="message", message_id=str(self.assistant_message.id))
+
+    async def _stay_silent(self, reason: str | None) -> None:
+        """Save-and-stay-quiet: mark the turn silenced, count the unanswered message, audit once."""
+        conv = self.conversation
+        self.silenced = True
+        conv.last_message_at = dt.datetime.now(tz=dt.UTC)
+        await self.session.flush()
+        if reason is None:
+            return
+        unanswered = await usage.record_unanswered(self.session, conv.organization_id)
+        if unanswered == 1:  # the first time this org hit its limit
+            await write_audit(
+                self.session, conv.organization_id, None, "plan.limit_hit",
+                target_type="org", target_id=str(conv.organization_id), meta={"reason": reason},
+            )
 
     async def _org(self) -> Organization | None:
         """The conversation's org. One PK lookup, usually served from the identity map."""

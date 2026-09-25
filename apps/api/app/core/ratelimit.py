@@ -59,6 +59,20 @@ class RateLimiter:
         return True, 0
 
 
+    async def count(self, key: str, window: int) -> int:
+        """Current hits in the window without adding one — for lockouts that count *failures*
+        only, where every attempt must not tick the counter."""
+        client = await self._redis_client()
+        if client is not None:
+            try:
+                value = await client.get(key)  # type: ignore[attr-defined]
+                return int(value or 0)
+            except Exception as exc:
+                log.warning("ratelimit_redis_error", error=str(exc))
+        now = time.monotonic()
+        return len([t for t in self._mem.get(key, []) if now - t < window])
+
+
 limiter = RateLimiter(settings.redis_url)
 
 

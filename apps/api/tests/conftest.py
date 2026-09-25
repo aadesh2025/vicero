@@ -89,6 +89,50 @@ def _allow_self_serve_orgs() -> AsyncIterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def _self_serve_off_by_default() -> AsyncIterator[None]:
+    """Keep the suite on the staff-provisioned model it was written against.
+
+    Production defaults `SELF_SERVE_ENABLED` on (docs/18): signup then provisions a metered
+    trial workspace. Nearly every test file signs up a throwaway user and POSTs /v1/orgs for an
+    unmetered tenant, and would otherwise get a second, trial-limited workspace. The self-serve
+    behaviour has its own files (`test_self_serve_*.py`) that turn this on explicitly.
+    """
+    from app.core.config import settings
+
+    previous = settings.self_serve_enabled
+    settings.self_serve_enabled = False
+    yield
+    settings.self_serve_enabled = previous
+
+
+@pytest.fixture
+def self_serve() -> AsyncIterator[None]:
+    """Opt a test into production behaviour: self-serve signup on, the test bootstrap off.
+
+    Requested by name, so it runs after the autouse defaults above and overrides them.
+    """
+    from app.core.config import settings
+
+    saved = (
+        settings.self_serve_enabled,
+        settings.allow_self_serve_orgs,
+        settings.signups_per_ip_per_day,
+        settings.org_chat_rate_limit,
+    )
+    settings.self_serve_enabled = True
+    settings.allow_self_serve_orgs = False
+    settings.signups_per_ip_per_day = 100_000  # tests sign up dozens of users from one "IP"
+    settings.org_chat_rate_limit = 100_000
+    yield
+    (
+        settings.self_serve_enabled,
+        settings.allow_self_serve_orgs,
+        settings.signups_per_ip_per_day,
+        settings.org_chat_rate_limit,
+    ) = saved
+
+
+@pytest.fixture(autouse=True)
 def _clear_email_outbox() -> AsyncIterator[None]:
     get_email_backend().outbox.clear()
     yield
@@ -106,4 +150,7 @@ def _reset_rate_limiter() -> None:
 
     limiter._mem.clear()
     limiter._redis = None
-    limiter._checked = False
+    # In-memory only. Per-email/per-IP limits and login lockouts now key on real addresses, and a
+    # shared Redis would carry their counters from one test run into the next (a lockout in run
+    # N failing a login in run N+1). The Redis path is unit-tested in test_ratelimit.py.
+    limiter._checked = True

@@ -10,14 +10,24 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing.usage import load_entitlements, unanswered_messages
 from app.core import rbac
 from app.core.audit import write_audit
 from app.core.config import settings
 from app.core.email import EmailMessage, queue_email
 from app.core.email_templates import invitation_email
 from app.core.errors import AppError
+from app.core.plans import PLANS, SELF_SERVE_PLAN, get_entitlements, plan_limit
 from app.core.security import generate_opaque_token, hash_token
-from app.models import AuditLog, Invitation, Membership, Organization, User
+from app.models import (
+    Agent,
+    AuditLog,
+    Invitation,
+    Membership,
+    Organization,
+    OrgMessageUsage,
+    User,
+)
 from app.modules.orgs import schemas
 from app.modules.orgs.deps import OrgContext
 
@@ -89,31 +99,152 @@ async def _active_membership(
 
 
 # ── Org CRUD ──────────────────────────────────────────────────────────────────
+async def _owned_workspace_count(session: AsyncSession, user_id: uuid.UUID) -> int:
+    stmt = (
+        select(func.count())
+        .select_from(Membership)
+        .join(Organization, Organization.id == Membership.organization_id)
+        .where(
+            Membership.user_id == user_id,
+            Membership.role == "owner",
+            Membership.status == "active",
+            Organization.deleted_at.is_(None),
+        )
+    )
+    return int((await session.execute(stmt)).scalar_one())
+
+
+def _workspace_name(user: User) -> str:
+    base = (user.full_name or "").strip().split(" ")[0] or user.email.partition("@")[0]
+    return f"{base}'s workspace"[:255]
+
+
+async def provision_trial_workspace(
+    session: AsyncSession, user: User, name: str | None = None
+) -> Organization:
+    """One workspace, one owner membership, one usage row and a trial clock — in the caller's
+    transaction, so a failure anywhere leaves no half-provisioned account (docs/18 §3).
+
+    The trial length comes from the plan table; nothing here knows what "10" is.
+    """
+    spec = PLANS[SELF_SERVE_PLAN]
+    assert spec.trial_days is not None
+    now = _now()
+    ends = now + dt.timedelta(days=spec.trial_days)
+    display = name or _workspace_name(user)
+    org = Organization(
+        name=display,
+        slug=await _unique_slug(session, display),
+        plan=SELF_SERVE_PLAN,
+        trial_started_at=now,
+        trial_ends_at=ends,
+        created_by=user.id,
+        # The owner's own address is one the agent may share, or output redaction would strip it
+        # from replies (same reason operator provisioning seeds it).
+        public_contacts=[user.email],
+    )
+    session.add(org)
+    await session.flush()
+    session.add(Membership(organization_id=org.id, user_id=user.id, role="owner", status="active"))
+    session.add(OrgMessageUsage(organization_id=org.id))
+    await _write_audit(session, org.id, user.id, "org.created", target_type="org", target_id=str(org.id))
+    await _write_audit(
+        session, org.id, user.id, "plan.trial_started", target_type="org", target_id=str(org.id),
+        meta={"trial_ends_at": ends.isoformat()},
+    )
+    return org
+
+
+async def has_pending_invitation(session: AsyncSession, email: str) -> bool:
+    stmt = select(Invitation.id).where(
+        Invitation.email == email.lower(),
+        Invitation.accepted_at.is_(None),
+        Invitation.expires_at > _now(),
+    )
+    return (await session.execute(stmt.limit(1))).scalar_one_or_none() is not None
+
+
+async def ensure_self_serve_workspace(session: AsyncSession, user: User) -> Organization | None:
+    """Give a new self-serve user their workspace — once, and only when it is theirs to get.
+
+    A no-op when self-serve is off, when they already own a workspace, and when they hold a
+    pending invitation: an invited teammate is joining a client's org and must not also spawn a
+    stray trial workspace of their own.
+    """
+    if not settings.self_serve_enabled or user.is_staff:
+        return None
+    if await _owned_workspace_count(session, user.id) > 0:
+        return None
+    if await has_pending_invitation(session, user.email):
+        return None
+    return await provision_trial_workspace(session, user)
+
+
 async def create_org(session: AsyncSession, user: User, name: str) -> schemas.OrgOut:
     """Create an organization.
 
-    BotForge is run as one organization per client, provisioned for them — not a self-serve
-    product where anyone spins one up. **Staff only, with no first-org exception**: that
-    exception previously made the whole product self-serve, since a stranger could sign up on
-    the public form and be handed a free workspace by the create-first-org screen. Enforced
-    server-side because hiding the button doesn't stop a direct API call.
+    Three cases, in order:
+
+    * **Staff**, or the test bootstrap switch: an unmetered (`legacy`) workspace — how an
+      operator provisions a client, unchanged.
+    * **Self-serve on**: a non-staff user may own **one** workspace (the limit is read from the
+      trial plan); a second gets a 402 `plan_limit`. Signup normally created it already, so this
+      serves a user who has none (e.g. their invitation lapsed).
+    * **Self-serve off**: staff-only, as before. Enforced server-side because hiding the button
+      doesn't stop a direct API call.
 
     Invitations are unaffected: `accept_invitation` adds a `Membership` to an org that already
-    exists and never comes through here, so an invited client signs up and joins as before.
+    exists and never comes through here.
     """
-    if not user.is_staff and not settings.allow_self_serve_orgs:
+    if user.is_staff or settings.allow_self_serve_orgs:
+        org = Organization(name=name, slug=await _unique_slug(session, name), created_by=user.id)
+        session.add(org)
+        await session.flush()
+        session.add(Membership(organization_id=org.id, user_id=user.id, role="owner", status="active"))
+        await _write_audit(session, org.id, user.id, "org.created", target_type="org", target_id=str(org.id))
+        return _org_out(org, "owner")
+    if not settings.self_serve_enabled:
         raise AppError(
             "orgs.create_forbidden",
             "Organization creation is staff-only. Ask your BotForge contact to set one up "
             "for you.",
             403,
         )
-    org = Organization(name=name, slug=await _unique_slug(session, name), created_by=user.id)
-    session.add(org)
-    await session.flush()
-    session.add(Membership(organization_id=org.id, user_id=user.id, role="owner", status="active"))
-    await _write_audit(session, org.id, user.id, "org.created", target_type="org", target_id=str(org.id))
+    limit = get_entitlements(SELF_SERVE_PLAN).max_workspaces
+    if limit is not None and await _owned_workspace_count(session, user.id) >= limit:
+        raise plan_limit("workspaces", "Your plan includes one workspace. Upgrade to add more.")
+    org = await provision_trial_workspace(session, user, name)
     return _org_out(org, "owner")
+
+
+async def plan_status(session: AsyncSession, ctx: OrgContext) -> schemas.PlanStatusOut:
+    """Everything the dashboard needs to draw the trial banner, meter and locked states."""
+    now = _now()
+    ent = await load_entitlements(session, ctx.org, now=now)
+    agents = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(Agent)
+                .where(Agent.organization_id == ctx.org.id, Agent.deleted_at.is_(None))
+            )
+        ).scalar_one()
+    )
+    return schemas.PlanStatusOut(
+        plan=ctx.org.plan,
+        status=ent.status,
+        trial_ends_at=ent.trial_ends_at,
+        days_left=ent.days_left(now),
+        expired_reason=ent.expired_reason,
+        messages_used=ent.messages_used,
+        messages_limit=ent.meter_limit,
+        messages_remaining=ent.messages_remaining,
+        unanswered_messages=await unanswered_messages(session, ctx.org.id),
+        agents_used=agents,
+        max_agents=ent.max_agents,
+        can_create_agent=ent.agents_writable and (ent.max_agents is None or agents < ent.max_agents),
+        features={f: ent.allows(f) for f in ("workflows", "n8n", "tool_calling")},
+    )
 
 
 async def list_orgs(session: AsyncSession, user: User) -> list[schemas.OrgOut]:

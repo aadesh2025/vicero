@@ -60,3 +60,18 @@ class SoftDeleteMixin:
     deleted_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+def normalize_email(email: str) -> str:
+    """Collapse the cosmetic variants of one mailbox into one comparable string.
+
+    Lowercase always; `+tag` stripped for every domain; dots removed **only** for Gmail, where
+    they are genuinely insignificant. Used for "one trial per person" (`users.email_normalized`),
+    never for the address we send to. It lives here, not in the auth module, because the `User`
+    model keeps the column in step itself and models may depend on nothing but this file.
+    """
+    local, _, domain = email.strip().lower().partition("@")
+    if domain in {"gmail.com", "googlemail.com"}:
+        domain = "gmail.com"
+        local = local.replace(".", "")
+    return f"{local.split('+', 1)[0]}@{domain}"

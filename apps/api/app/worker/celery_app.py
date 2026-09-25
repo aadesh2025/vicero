@@ -30,5 +30,11 @@ celery_app.conf.update(
             "task": "webhooks.sweep_pending",
             "schedule": settings.webhook_sweep_interval_seconds,
         },
+        "trial-lifecycle-sweep": {
+            # Free-trial emails (3 days / 1 day left, ended, 80% / 100% of messages). Idempotent:
+            # each is claimed atomically per workspace, so running more often is harmless.
+            "task": "trial.sweep",
+            "schedule": 3600.0,
+        },
     },
 )

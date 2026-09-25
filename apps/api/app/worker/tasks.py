@@ -233,3 +233,18 @@ async def _run_sweep() -> int:
 def sweep_pending_webhooks_task() -> int:
     """Periodic (Celery beat) safety-net: re-enqueue due `pending` webhook deliveries."""
     return _run(_run_sweep())
+
+
+async def _run_trial_sweep() -> dict[str, int]:
+    from app.worker.trial import sweep
+
+    async with SessionFactory() as session:
+        sent = await sweep(session)
+        await session.commit()
+        return sent
+
+
+@celery_app.task(name="trial.sweep")  # type: ignore[untyped-decorator]
+def trial_sweep_task() -> dict[str, int]:
+    """Hourly (Celery beat): send each free-trial lifecycle email that is due, once (docs/18 §8)."""
+    return _run(_run_trial_sweep())

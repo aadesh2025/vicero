@@ -1,4 +1,4 @@
-"""The four transactional emails BotForge sends, as (subject, text, html) triples.
+"""The transactional emails BotForge sends, as (subject, text, html) triples.
 
 Deliberately f-strings over a templating engine: four emails don't justify a Jinja
 dependency or a template loader, and a reviewer can see the whole email in one place.
@@ -110,5 +110,77 @@ def magic_link_email(link: str, token: str) -> tuple[str, str, str]:
         cta_label="Sign in",
         link=link,
         footer="If you didn't request this link, you can ignore this email.",
+    )
+    return subject, text, html
+
+
+# ── Free-trial lifecycle (docs/18 §8) ─────────────────────────────────────────
+# One function, one copy block per notice kind, so the whole set can be read (and reworded) in
+# one place. The visitor never sees any of this — these go to the workspace owner only.
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
+def trial_notice_email(
+    kind: str,
+    *,
+    org_name: str,
+    link: str,
+    days_left: int = 0,
+    used: int = 0,
+    limit: int = 0,
+    unanswered: int = 0,
+) -> tuple[str, str, str]:
+    left = _plural(days_left, "day")
+    missed = (
+        f" {_plural(unanswered, 'visitor message')} arrived that nobody answered."
+        if unanswered
+        else ""
+    )
+    if kind == "trial_day7":
+        subject = f"Your {_BRAND} trial ends in {left}"
+        heading = f"{left.capitalize()} left in your free trial"
+        body = (
+            f"Your free trial of {org_name} ends in {left}. After that your agent stops "
+            "replying to visitors, though everything you've built stays safe. Upgrade any "
+            "time to keep it running."
+        )
+    elif kind == "trial_day9":
+        subject = f"Last day of your {_BRAND} trial"
+        heading = f"Your trial ends in {left}"
+        body = (
+            f"Your free trial of {org_name} ends in {left}. Once it does, your agent stops "
+            "answering visitors. Upgrade now so there's no gap."
+        )
+    elif kind == "trial_ended":
+        subject = f"Your {_BRAND} free trial has ended"
+        heading = "Your free trial has ended"
+        body = (
+            f"{org_name}'s agent has stopped replying to visitors. Nothing was deleted."
+            f"{missed} Upgrade to switch it back on."
+        )
+    elif kind == "messages_80":
+        subject = f"You've used 80% of your {_BRAND} trial messages"
+        heading = "80% of your trial messages are used"
+        body = (
+            f"{org_name} has used {used} of {limit} trial messages. When they run out your "
+            "agent stops replying, so upgrade before then to avoid missing visitors."
+        )
+    elif kind == "messages_100":
+        subject = f"You've used all your {_BRAND} trial messages"
+        heading = "You've used all your trial messages"
+        body = (
+            f"{org_name} has used all {limit} trial messages, so your agent has stopped "
+            f"replying to visitors. Nothing was deleted.{missed} Upgrade to switch it back on."
+        )
+    else:
+        raise ValueError(f"unknown trial notice {kind!r}")
+    text = f"{heading}\n\n{body}\n\nUpgrade: {link}"
+    html = _shell(
+        heading=heading,
+        paragraph=body,
+        cta_label="Upgrade",
+        link=link,
+        footer=f"You're receiving this because you own the {org_name} workspace on {_BRAND}.",
     )
     return subject, text, html

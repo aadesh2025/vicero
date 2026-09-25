@@ -63,6 +63,14 @@ async def get_org(ctx: OrgContext = Depends(org_context)) -> schemas.OrgOut:
     return _org_out(ctx.org, ctx.role)
 
 
+@router.get("/{org_id}/plan", response_model=schemas.PlanStatusOut)
+async def get_plan(
+    session: AsyncSession = Depends(get_session), ctx: OrgContext = Depends(org_context)
+) -> schemas.PlanStatusOut:
+    """Trial status, usage meter and feature locks for the dashboard. Any member may read it."""
+    return await service.plan_status(session, ctx)
+
+
 @router.patch("/{org_id}", response_model=schemas.OrgOut)
 async def update_org(
     data: schemas.UpdateOrgRequest,

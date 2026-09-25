@@ -15,7 +15,7 @@ export function DocsNav() {
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-4 px-4 md:px-6">
         <Link href="/docs" className="flex items-center gap-2" aria-label="BotForge documentation">
           <Logo />
-          <span className="hidden text-sm text-faint sm:inline">docs</span>
+          <span className="hidden text-sm text-muted sm:inline">docs</span>
         </Link>
 
         <div className="ml-auto flex items-center gap-1">

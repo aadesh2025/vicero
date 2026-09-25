@@ -13,7 +13,7 @@ export function EnvReference() {
 
   return (
     <div className="not-prose my-8">
-      <p className="mb-4 text-sm text-faint">
+      <p className="mb-4 text-sm text-muted">
         {total} variables in {sections.length} sections. Generated from{" "}
         <code className="font-mono">.env.example</code> — names and comments only.
       </p>

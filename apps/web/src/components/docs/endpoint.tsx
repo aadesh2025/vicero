@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
 import type { HttpMethod, Operation } from "@/lib/docs/openapi";
 
+/** The pill background is the plain card surface, not a tint of the method colour: amber text
+ *  on an amber wash measured 4.39:1, under AA, and the border already carries the colour. */
 /** Method colours reuse the app's existing status palette rather than introducing new
  *  tokens: green reads as safe, amber as a change, red as destructive — which is exactly
  *  what these methods mean. */
 const METHOD_STYLE: Record<HttpMethod, string> = {
-  get: "border-success/40 bg-success/10 text-success",
-  post: "border-info/40 bg-info/10 text-info",
-  put: "border-warn/40 bg-warn/10 text-warn",
-  patch: "border-warn/40 bg-warn/10 text-warn",
-  delete: "border-error/40 bg-error/10 text-error",
+  get: "border-success/40 bg-surface text-success",
+  post: "border-info/40 bg-surface text-info",
+  put: "border-warn/40 bg-surface text-warn",
+  patch: "border-warn/40 bg-surface text-warn",
+  delete: "border-error/40 bg-surface text-error",
 };
 
 export function MethodPill({ method }: { method: HttpMethod }) {
@@ -71,7 +73,7 @@ export function EndpointGroup({
         className="mb-2 scroll-mt-20 font-display text-lg font-semibold capitalize text-text"
       >
         {tag.replace(/-/g, " ")}
-        <span className="ml-2 font-sans text-sm font-normal text-faint">
+        <span className="ml-2 font-sans text-sm font-normal text-muted">
           {operations.length}
         </span>
       </h2>

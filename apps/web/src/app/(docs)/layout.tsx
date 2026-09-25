@@ -20,7 +20,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       <DocsNav />
       {children}
       <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-[1400px] flex-col gap-2 px-4 py-8 text-sm text-faint sm:flex-row sm:items-center md:px-6">
+        <div className="mx-auto flex max-w-[1400px] flex-col gap-2 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center md:px-6">
           <p>BotForge — build, deploy and operate AI agents.</p>
           <nav className="flex gap-4 sm:ml-auto">
             <Link href="/docs" className="transition-colors hover:text-text">

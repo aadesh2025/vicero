@@ -11,7 +11,7 @@ export function EndpointReference() {
 
   return (
     <div className="not-prose my-8">
-      <p className="mb-4 text-sm text-faint">
+      <p className="mb-4 text-sm text-muted">
         {total} operations across {groups.length} tags, including <code>admin</code> and{" "}
         <code>mcp</code>, which the public reference omits.
       </p>

@@ -50,7 +50,7 @@ export default async function ApiReferencePage() {
 
       <aside className="hidden xl:sticky xl:top-20 xl:block xl:self-start">
         <nav aria-label="Resources" className="text-sm">
-          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
             Resources
           </h2>
           <ul className="flex flex-col gap-1 border-l border-border">

@@ -39,7 +39,7 @@ export function Toc({ entries }: { entries: TocEntry[] }) {
 
   return (
     <nav aria-label="On this page" className="text-sm">
-      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-faint">
+      <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
         On this page
       </h2>
       <ul className="flex flex-col gap-1 border-l border-border">

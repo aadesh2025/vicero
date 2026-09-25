@@ -4,7 +4,7 @@ import { forward, setRefreshCookie } from "../_bff";
 // POST /api/auth/signup → same custody as login: refresh token → httpOnly cookie.
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { status, data } = await forward("/v1/auth/signup", body);
+  const { status, data } = await forward("/v1/auth/signup", body, request);
   if (status >= 400 || !data || typeof data !== "object") {
     return NextResponse.json(data ?? { error: { code: "auth.failed", message: "Signup failed" } }, { status });
   }

@@ -55,6 +55,12 @@ name: botforge-prod
 x-api-env: &api-env
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-botforge}
   REDIS_URL: redis://redis:6379/0
+  # Who may tell the API a visitor's real address (X-Forwarded-For; app/core/clientip.py): the
+  # Docker networks, i.e. Caddy and the web container. Without this every visitor is one address
+  # and every per-IP limit (signup, login, magic link, reset) is one shared bucket. Caddy sets the
+  # header itself from the connection it accepted, so a value sent by a client is overwritten.
+  # Never widen this to a public range.
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
   N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
   # Explicit, and it must match the `uploads` volume mount on api + worker below. The default

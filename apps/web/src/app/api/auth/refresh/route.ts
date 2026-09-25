@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   let status: number;
   let data: unknown;
   try {
-    ({ status, data } = await forward("/v1/auth/refresh", { refresh_token: refresh }));
+    ({ status, data } = await forward("/v1/auth/refresh", { refresh_token: refresh }, request));
   } catch {
     // The API is unreachable (restarting, network blip). That says nothing about whether the
     // refresh token is still good, so keep the cookie and let the client try again.

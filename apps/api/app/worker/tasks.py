@@ -235,6 +235,21 @@ def sweep_pending_webhooks_task() -> int:
     return _run(_run_sweep())
 
 
+@celery_app.task(name="disposable.refresh", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
+def refresh_disposable_list_task(self: object) -> int:
+    """Weekly (Celery beat): refresh the maintained throwaway-domain list into Redis (ADR-091).
+
+    A failed download leaves the previous copy in place and is retried, then left for next week.
+    """
+    from app.modules.auth import disposable
+
+    try:
+        return _run(disposable.refresh())
+    except Exception as exc:
+        log.warning("disposable_refresh_failed", error=str(exc))
+        raise self.retry(countdown=900, exc=exc) from exc  # type: ignore[attr-defined]
+
+
 async def _run_trial_sweep() -> dict[str, int]:
     from app.worker.trial import sweep
 

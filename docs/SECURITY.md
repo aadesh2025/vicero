@@ -131,7 +131,7 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
   becomes verified with the squatter's password still valid. Pre-existing behaviour, not widened by this work.
 - ✅ **One trial per person**: `users.email_normalized` (lowercase, `+tag` stripped, Gmail dots removed) is checked at
   signup; disposable domains are refused (`BLOCK_DISPOSABLE_EMAILS`); `SIGNUPS_PER_IP_PER_DAY` caps new accounts per
-  IP (behind a proxy the API must see the real client IP). The uniqueness check is app-level, not a DB constraint,
+  IP (the API learns the real address through `TRUSTED_PROXIES`, §11). The uniqueness check is app-level, not a DB constraint,
   so pre-existing duplicates can never break a migration.
 - ✅ **Plan enforcement is server-side**: 402 `plan_limit` on the API and runtime checks in `build_tooling` and
   workflow execution, so a tool or workflow that somehow exists on a trial org still never runs. The UI only explains.
@@ -143,3 +143,19 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
   exercised with mocked provider responses only. Do this by hand once credentials exist (docs/18-SELF-SERVE-PLAN.md §7).
 - ⚠️ OAuth `state`, exchange codes and the in-memory rate-limit fallback are process-local (as before); move them to
   Redis before running more than one API process.
+
+## 11. Client IP behind a proxy (ADR-092) and exposed dev ports (ADR-093) — verified 2026-09-25
+- ✅ **Real client address.** The API believes `X-Forwarded-For` only when the TCP peer is in `TRUSTED_PROXIES`, reads the
+  chain from the right skipping its own proxies, and ignores the header from every other peer. A caller cannot pick its
+  own address by prepending or by sending the header directly (`tests/test_client_ip.py`: a different forwarded IP gets
+  a separate limit; a spoofed header from an untrusted peer does not lift the limit, on the route limiter and on the
+  signup cap). The web BFF forwards the visitor's `X-Forwarded-For` and `User-Agent`; Caddy sets the header itself.
+- ⚠️ **Operator responsibility:** `TRUSTED_PROXIES` must cover what sits directly in front of the API and web app and
+  nothing public. Too narrow ⇒ one shared bucket per proxy; too wide ⇒ spoofable. With no identifiable client (plain
+  local dev) the per-client signup cap steps aside and the session/audit IP is recorded as unknown.
+- ✅ **Dev Postgres/Redis are loopback-only** and the Postgres password is required, not defaulted. Verified: the new
+  password connects on loopback; the old default (`botforge`) is rejected; connections to the machine's Ethernet and
+  hotspot addresses on `5750` are refused, as is Redis on `6379`.
+- ⚠️ Still bound to all interfaces in the dev compose file: `api` (8000), `web` (3001), `n8n` (5679), `ollama` (11435).
+  Redis still has no password (loopback-only for now). k8s manifests not audited.
+

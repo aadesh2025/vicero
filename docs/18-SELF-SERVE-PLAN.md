@@ -170,7 +170,7 @@ focused `pytest`, and the full suite at the end (≈18 min on this machine — b
 
 **Email** — magic links, verification and the trial emails need a real relay: `EMAIL_BACKEND=smtp` plus
 `SMTP_HOST/PORT/USER/PASS/FROM` (see `docs/ENV.md`). Run **Celery beat** alongside the worker
-(`celery -A app.worker.celery_app beat`), or the hourly `trial.sweep` never fires.
+(`celery -A app.worker.celery_app beat`), or the hourly `trial.sweep` and the weekly `disposable.refresh` (the maintained throwaway-domain list, ADR-091) never fire; seed it once with `celery -A app.worker.celery_app call disposable.refresh`. Set `TRUSTED_PROXIES` to the proxies in front of the API (the compose files do; ADR-092).
 
 **Upgrade page** — set `NEXT_PUBLIC_UPGRADE_EMAIL` / `NEXT_PUBLIC_UPGRADE_WHATSAPP` and rebuild the web app.
 

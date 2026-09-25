@@ -99,8 +99,11 @@ provider's authorize call answers `501 auth.oauth_not_configured` and the login 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SELF_SERVE_ENABLED` | `true` | Signup provisions one 10-day trial workspace and a non-staff user may own one. `false` = staff-provisioned only (the pre-S1 behaviour) and the kill switch for abuse. Turn it **off** for the keyless E2E API so other specs keep bootstrapping their own tenants. |
-| `SIGNUPS_PER_IP_PER_DAY` | `3` | New self-serve accounts per client IP per 24h. `0` disables. Behind a proxy make sure the API sees the real client IP. |
-| `BLOCK_DISPOSABLE_EMAILS` | `true` | Refuse throwaway-mailbox domains at signup / magic link. |
+| `SIGNUPS_PER_IP_PER_DAY` | `3` | New self-serve accounts per client IP per 24h. `0` disables. Needs the client's real address: see `TRUSTED_PROXIES`. When the client can't be identified (local dev) the cap steps aside rather than pooling everyone. |
+| `TRUSTED_PROXIES` | `127.0.0.1,::1` | Comma-separated IPs/CIDRs of reverse proxies whose `X-Forwarded-For` the API believes (ADR-092). The compose files add Docker's private range (`172.16.0.0/12`). Read from the right; ignored from any other peer. **Never a public range.** |
+| `BLOCK_DISPOSABLE_EMAILS` | `true` | Refuse signups whose domain is on the throwaway list (a soft signal — email verification is the control; fails open). |
+| `DISPOSABLE_LIST_URL` | `…/disposable-email-domains/…/disposable_email_blocklist.conf` | Source of the maintained throwaway-domain list, refreshed weekly by Celery beat into Redis (`disposable.refresh`). The short built-in list is the offline fallback (ADR-091). |
+| `DISPOSABLE_MX_CHECK_ENABLED` / `DISPOSABLE_MX_TIMEOUT` | `true` / `2.0` | Look up a new address's mail servers and *record* (never block on) missing or throwaway ones. Time-bounded, fail-open. |
 | `LOGIN_LOCKOUT_FAILURES` | `10` | Failed password logins per email before lockout. |
 | `LOGIN_LOCKOUT_WINDOW` | `900` | Lockout window, seconds. |
 | `ORG_CHAT_RATE_LIMIT` | `30` | Public chat messages per minute per metered organization; excess is dropped silently and not counted. |

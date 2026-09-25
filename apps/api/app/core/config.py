@@ -297,11 +297,27 @@ class Settings(BaseSettings):
     # operator's kill switch if signups are being abused. Plan *limits* are not settings; they
     # live in app/core/plans.py so there is exactly one place to read them.
     self_serve_enabled: bool = True
+    # Reverse proxies allowed to tell us a visitor's real address in `X-Forwarded-For` (comma-separated
+    # IPs / CIDRs; see app/core/clientip.py). The header is ignored from any other peer. The default is
+    # this machine, which covers the web app running beside the API in dev; when both run in Docker
+    # add the compose network (the compose files do). Never put a public range here.
+    trusted_proxies: str = "127.0.0.1,::1"
     # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
     signups_per_ip_per_day: int = 3
     # Refuse throwaway-mailbox domains (modules/auth/policy.py) so one person cannot mint
     # unlimited trials. On by default; turn off for an internal deployment.
     block_disposable_emails: bool = True
+    # Where the maintained throwaway-domain list comes from (refreshed weekly by Celery beat into
+    # Redis; the short built-in set in modules/auth/policy.py is the offline fallback). A soft signal
+    # only — email verification is the real control (modules/auth/disposable.py, ADR-091).
+    disposable_list_url: str = (
+        "https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/"
+        "main/disposable_email_blocklist.conf"
+    )
+    # Look up a new address's mail servers and *record* (never block on) ones that don't exist or
+    # belong to a listed throwaway service. Time-bounded and fail-open.
+    disposable_mx_check_enabled: bool = True
+    disposable_mx_timeout: float = 2.0
     # Failed password logins per email before that email is locked out for the window below.
     login_lockout_failures: int = 10
     login_lockout_window: int = 900  # seconds

@@ -18,6 +18,77 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-093: The dev Postgres and Redis are published on loopback only, and the Postgres password is no longer a default
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** `infra/docker-compose.yml` published `5750→5432` (Postgres) and `6379` (Redis) with a bare
+  `host:container` mapping, which binds every interface — on this machine the LAN and the Windows hotspot. Postgres
+  did require a password from outside the container (`pg_hba`: `scram-sha-256` for non-loopback), but it was the
+  compose default `botforge`, which the compose file, `.env.example` and CI all printed; the dev database accepted
+  it. Redis has no password at all. (The first report called this "no password"; the accurate statement is "a
+  guessable default".)
+- **Decision:** Publish both as `127.0.0.1:…` (containers still reach each other over the compose network; only
+  host-side tools use the published port). `POSTGRES_PASSWORD` is now `${POSTGRES_PASSWORD:?…}` — required, no default —
+  in the dev compose file as the prod file already did; `.env.example` ships a placeholder that says how to generate a
+  value. On this machine the role was rotated in place (`ALTER USER`, since the volume keeps the old one) and the new
+  value lives only in the git-ignored root `.env` (`POSTGRES_PASSWORD` and inside `DATABASE_URL`).
+- **Alternatives considered:** a Redis `requirepass` (deferred: needs `REDIS_URL` updates in every consumer and the
+  Celery broker; loopback binding removes the exposure it would guard against on a dev box); keeping a default and
+  documenting it (rejected — it is the whole problem).
+- **Consequences:** Every running consumer of the old password had to be recreated (api, worker, beat). A fresh clone
+  must set `POSTGRES_PASSWORD` before `make up`. CI is unchanged (its own throw-away service containers). **Not
+  changed, still bound to all interfaces:** the compose `api` (8000), `web` (3001), `n8n` (5679) and `ollama` (11435)
+  mappings — dev servers a LAN peer can reach; worth the same treatment. The k8s manifests were not audited.
+
+### ADR-092: The client's real IP comes from `X-Forwarded-For` only when the TCP peer is a configured trusted proxy
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** The web BFF calls the API server-side, so the API saw the BFF's address for every visitor: every
+  per-IP control (signup cap, login/magic/reset limits) counted the whole site as one client. The signup cap
+  (`SIGNUPS_PER_IP_PER_DAY`, added in ADR-088) then locked out all web signups after three a day — it happened on dev
+  during verification (Redis key `rl:signup-ip:127.0.0.1`), and the same masking hid every real client IP from the
+  audit trail (all sessions were `127.0.0.1`, user agent `node`).
+- **Decision:** `app/core/clientip.resolve_client()`: read `X-Forwarded-For` **only** when the TCP peer is in
+  `TRUSTED_PROXIES` (IPs/CIDRs; default loopback; the compose files add Docker's private range); walk the chain
+  **from the right**, skipping our own proxies, and take the first address that is not one — text a client prepends
+  sits to the left and can never be chosen. From any other peer the header is ignored. If there is no usable address
+  (a trusted proxy that forwarded nothing — plain local dev; or a loopback peer) the client is **unknown**: the
+  general limiter still keys on the peer so nothing is unlimited, but the per-client signup cap **steps aside**
+  rather than pooling everyone into one bucket (and session/audit IP is recorded as unknown, not as a proxy's
+  address). The BFF forwards the incoming `X-Forwarded-For` and `User-Agent` (`clientHeaders`); in production Caddy
+  sets that header from the connection it accepted, overwriting anything a client sent.
+- **Alternatives considered:** trust the header unconditionally (lets any direct caller pick a fresh "IP" per request
+  and walk past every limit); trust the *left*-most entry (the client controls it); Starlette's `ProxyHeadersMiddleware`
+  (single-hop, and it would rewrite `request.client` for every consumer, including ones that want the raw peer).
+- **Consequences:** `TRUSTED_PROXIES` must include whatever sits directly in front of the API and web app (Caddy, the
+  web container); left too narrow, per-IP controls fall back to one shared bucket for everyone behind the proxy, left
+  too wide (a public range) they can be spoofed — never widen it to a public range. Fails open on the signup cap in dev
+  by design. `test_signups_per_ip_per_day_are_capped` now identifies its visitor by forwarded address.
+
+### ADR-091: Throwaway-email detection is a maintained list plus a soft MX signal — verification stays the control
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** The hand-written 45-domain list (ADR-088) cannot keep up with rotating throwaway services, and a real
+  signup (`…@idwager.com`) got straight through it.
+- **Decision:** (1) The domains come from the open-source `disposable-email-domains` blocklist
+  (`DISPOSABLE_LIST_URL`), fetched weekly by Celery beat (`disposable.refresh`) and swapped into a Redis set atomically;
+  a download outside 1 000–500 000 domains, or any HTTP error, is refused and leaves the previous copy in place. The
+  short built-in set stays as the offline fallback. Sub-domains of a listed domain match. (2) An **MX heuristic** looks
+  up a new address's mail servers (2 s, off-loop, fail-open) and *records* `email_risk` (`no_mail_server` /
+  `mx_on_listed_domain`) on the signup's audit row and in the log — it never blocks. (3) Only a direct list hit
+  refuses a signup, and only while `BLOCK_DISPOSABLE_EMAILS` is on. Everything fails open: no Redis, no feed, no DNS =
+  "not known to be disposable".
+- **Alternatives considered:** the `disposable-email-domains` PyPI package (a dependency + lockfile change, and only as
+  fresh as the last release — the scheduled fetch is fresher); blocking on the MX heuristic (a legitimate small domain
+  can have odd DNS; a false refusal costs a customer, a false pass costs at most 500 messages).
+- **Consequences:** **Measured, and worth knowing: neither layer catches `idwager.com`.** The live list (8 981 domains,
+  fetched 2026-09-25) does not contain it, and its mail servers (`mail.wallywatts.com`, `mail.wabblywabble.com`) are not
+  listed either, so the heuristic returns nothing. A list is a moving target; email verification is the control, and the
+  tightening that would actually bound the cost is to require a verified address before the widget answers on a trial
+  (not done — a product decision). The first refresh needs the worker+beat running (or
+  `celery -A app.worker.celery_app call disposable.refresh`); until then only the seed applies. GitHub's raw host was
+  unreachable from this Windows host (TLS reset) but reachable from inside the containers.
+
 ### ADR-090: Sign-in hardening for self-serve — verified-only OAuth linking, mailbox-proven Facebook email, one-time redirect codes
 - **Date:** 2026-09-25
 - **Status:** accepted

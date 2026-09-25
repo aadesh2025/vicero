@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.clientip import resolve_client
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.ratelimit import rate_limit
@@ -22,7 +23,10 @@ router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
 
 def _ctx(request: Request) -> tuple[str | None, str | None]:
-    return request.headers.get("user-agent"), (request.client.host if request.client else None)
+    # The client's real address, or None when it can't be told from a proxy (see core/clientip.py):
+    # per-client counters — the signup cap — then skip instead of pooling everyone into one bucket.
+    client = resolve_client(request)
+    return request.headers.get("user-agent"), (client.ip if client.known else None)
 
 
 @router.post("/signup", response_model=schemas.AuthResponse, dependencies=[Depends(rate_limit("auth-signup"))])

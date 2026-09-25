@@ -5,7 +5,7 @@ import { forward, setRefreshCookie } from "../_bff";
 // httpOnly cookie, and returns only { access_token, user } to the client.
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { status, data } = await forward("/v1/auth/login", body);
+  const { status, data } = await forward("/v1/auth/login", body, request);
   if (status >= 400 || !data || typeof data !== "object") {
     return NextResponse.json(data ?? { error: { code: "auth.failed", message: "Login failed" } }, { status });
   }

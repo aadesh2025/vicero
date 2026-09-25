@@ -8,14 +8,18 @@ services:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-botforge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-botforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (not "botforge")}
       POSTGRES_DB: ${POSTGRES_DB:-botforge}
     ports:
       # Same reason as N8N_HOST_PORT below: 5432 is routinely already taken on a dev machine by
       # another project's Postgres, and BotForge must not be pointed at that one — it would
       # migrate someone else's database. Container port stays 5432, so DATABASE_URL is the only
       # other thing to line up. Default keeps the canonical setup unchanged.
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      #
+      # Loopback only. A bare "host:container" mapping publishes on every interface, which put the
+      # dev database on the LAN / hotspot. Other containers reach it over the compose network and
+      # are unaffected; only host-side tools (alembic, pytest, psql) use this published port.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -27,7 +31,8 @@ services:
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      # Loopback only, for the same reason as Postgres above — and Redis has no password.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -42,8 +47,12 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:-botforge}@postgres:5432/${POSTGRES_DB:-botforge}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
       REDIS_URL: redis://redis:6379/0
+      # Proxies whose X-Forwarded-For the API believes (app/core/clientip.py): loopback plus Docker's
+      # private networks, which covers the web container and the host-side port mapping. The web
+      # app has no proxy of its own in dev, so per-client counters see the client as "unknown" here.
+      TRUSTED_PROXIES: 127.0.0.1,::1,172.16.0.0/12
       N8N_BASE_URL: http://n8n:5678
       OLLAMA_BASE_URL: http://ollama:11434
     ports:
@@ -65,7 +74,7 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:-botforge}@postgres:5432/${POSTGRES_DB:-botforge}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       # Internal address only; the service publishes no host port (docs/14 §9).
@@ -87,7 +96,7 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:-botforge}@postgres:5432/${POSTGRES_DB:-botforge}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ../apps/api:/app

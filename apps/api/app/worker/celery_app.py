@@ -30,6 +30,11 @@ celery_app.conf.update(
             "task": "webhooks.sweep_pending",
             "schedule": settings.webhook_sweep_interval_seconds,
         },
+        "disposable-list-refresh": {
+            # The maintained throwaway-email domain list, weekly (modules/auth/disposable.py).
+            "task": "disposable.refresh",
+            "schedule": 7 * 86400.0,
+        },
         "trial-lifecycle-sweep": {
             # Free-trial emails (3 days / 1 day left, ended, 80% / 100% of messages). Idempotent:
             # each is claimed atomically per workspace, so running more often is harmless.

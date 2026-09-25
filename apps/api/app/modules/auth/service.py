@@ -25,6 +25,7 @@ from app.core.email_templates import (
     verification_email,
 )
 from app.core.errors import AppError
+from app.core.logging import get_logger
 from app.core.plans import get_entitlements
 from app.core.ratelimit import limiter
 from app.core.security import (
@@ -45,8 +46,10 @@ from app.models import (
     Session,
     User,
 )
-from app.modules.auth import policy, schemas
+from app.modules.auth import disposable, policy, schemas
 from app.modules.auth.oauth import OAuthUser
+
+log = get_logger("auth")
 
 VERIFY_TTL = dt.timedelta(hours=24)
 RESET_TTL = dt.timedelta(hours=2)
@@ -144,7 +147,7 @@ async def _guard_new_account(session: AsyncSession, email: str, ip: str | None) 
     """One trial per person, and not from a throwaway mailbox or one network in bulk."""
     if not settings.self_serve_enabled:
         return
-    if settings.block_disposable_emails and policy.is_disposable_email(email):
+    if settings.block_disposable_emails and await disposable.is_listed(email.rpartition("@")[2]):
         raise AppError(
             "auth.email_not_allowed", "Please sign up with a permanent email address.", 400
         )
@@ -173,9 +176,15 @@ async def _after_new_account(session: AsyncSession, user: User, method: str) -> 
 
     org = await ensure_self_serve_workspace(session, user)
     if org is not None:
+        meta: dict[str, Any] = {"method": method}
+        # Soft signal, recorded and never acted on here (modules/auth/disposable.py): a domain
+        # with no mail servers, or mail servers on a listed throwaway service.
+        signal = await disposable.mx_signal(user.email.rpartition("@")[2])
+        if signal:
+            meta["email_risk"] = signal
+            log.warning("signup_email_risk", user_id=str(user.id), domain=user.email.rpartition("@")[2], signal=signal)
         await write_audit(
-            session, org.id, user.id, "auth.signup", target_type="user", target_id=str(user.id),
-            meta={"method": method},
+            session, org.id, user.id, "auth.signup", target_type="user", target_id=str(user.id), meta=meta,
         )
     return org
 
@@ -568,10 +577,12 @@ async def oauth_request_email(session: AsyncSession, pending_token: str, email: 
     claims = _unsign(pending_token, "oauth_pending")
     email = email.lower()
     await _throttle_email("oauth-email", email)
-    if settings.self_serve_enabled and settings.block_disposable_emails and policy.is_disposable_email(email):
-        raise AppError(
-            "auth.email_not_allowed", "Please use a permanent email address.", 400
-        )
+    if (
+        settings.self_serve_enabled
+        and settings.block_disposable_emails
+        and await disposable.is_listed(email.rpartition("@")[2])
+    ):
+        raise AppError("auth.email_not_allowed", "Please use a permanent email address.", 400)
     proof = _sign(
         {
             "provider": claims["provider"],

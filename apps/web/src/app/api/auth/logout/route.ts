@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
   if (refresh) {
     try {
-      await forward("/v1/auth/logout", { refresh_token: refresh });
+      await forward("/v1/auth/logout", { refresh_token: refresh }, request);
     } catch {
       /* best-effort revoke */
     }

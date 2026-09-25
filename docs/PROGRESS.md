@@ -38,6 +38,12 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Client IP, throwaway-email list and dev exposure fixes (2026-09-25, ADR-091/092/093).** The BFF now forwards the
+  visitor's `X-Forwarded-For`/`User-Agent` and the API believes it only from `TRUSTED_PROXIES` (read from the right;
+  spoofed headers ignored), so per-IP limits are per visitor — the shared-bucket bug that blocked dev signups is fixed and
+  the stuck Redis key deleted. Throwaway-email domains now come from the maintained `disposable-email-domains` list,
+  refreshed weekly by beat, plus a fail-open MX signal that only records; neither catches `idwager.com`. The dev
+  Postgres/Redis are published on loopback only and the Postgres password is required and was rotated.
 - **Self-serve signup, 10-day free trial and plan limits — Phase S1 (2026-09-25, ADR-088, ADR-090, docs/18).**
   Anyone can now sign up (Google, Facebook, email magic link, email + password) and gets exactly one workspace
   on a 10-day trial: 500 messages (1 visitor message or 1 AI reply each), one agent, no workflows / n8n / tool

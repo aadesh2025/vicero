@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import HTTPException, Request, status
 
+from app.core.clientip import resolve_client
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -86,7 +87,7 @@ def rate_limit(scope: str, limit: int | None = None, window: int | None = None) 
     async def _dep(request: Request) -> None:
         lim = limit or settings.auth_rate_limit
         win = window or settings.auth_rate_window
-        ip = request.client.host if request.client else "unknown"
+        ip = resolve_client(request).ip
         allowed, retry_after = await limiter.hit(f"rl:{scope}:{ip}", lim, win)
         if not allowed:
             raise HTTPException(

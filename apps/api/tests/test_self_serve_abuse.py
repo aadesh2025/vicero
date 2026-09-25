@@ -96,9 +96,15 @@ async def test_signups_per_ip_per_day_are_capped(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "signups_per_ip_per_day", 2)
+    # Identified by the address the proxy forwards (the API ignores the header from anyone else, and
+    # cannot tell visitors apart without it — tests/test_client_ip.py).
+    visitor = {"X-Forwarded-For": "203.0.113.5"}
     for _ in range(2):
-        await signup(client)
-    third = await client.post("/v1/auth/signup", json={"email": unique_email(), "password": STRONG})
+        ok = await client.post("/v1/auth/signup", json={"email": unique_email(), "password": STRONG}, headers=visitor)
+        assert ok.status_code == 200
+    third = await client.post(
+        "/v1/auth/signup", json={"email": unique_email(), "password": STRONG}, headers=visitor
+    )
     assert third.status_code == 429
     assert third.json()["error"]["code"] == "auth.signup_rate_limited"
 

@@ -1,0 +1,68 @@
+---
+title: Introduction
+description: BotForge is a platform for building AI agents that answer from your own content, run across every channel you use, and hand over to a human when they should.
+group: Overview
+order: 1
+---
+
+BotForge lets you build a chatbot that actually knows your business. You give an agent a
+persona and a model, point it at your documents, and put it on your website or in the
+messaging apps your customers already use. When it cannot help, it hands the conversation
+to a person.
+
+The goal is a live, knowledge-grounded chatbot embedded on your site in about fifteen
+minutes, using free-tier models, without writing code.
+
+## What you get
+
+**Agents.** A chatbot is an *agent*: a persona, a system prompt, a model and its settings,
+and a set of switches for what it is allowed to do. Agents are versioned — you edit a
+draft, test it, and publish when it is right. If a published version misbehaves, roll back.
+
+**Knowledge and citations.** Upload PDFs, Word documents, spreadsheets, Markdown or plain
+text, or point at a URL. BotForge extracts, splits and embeds the content, then retrieves
+the relevant passages at answer time and cites them. An agent grounded this way says "I
+don't know" instead of inventing something.
+
+**Channels.** One `<script>` tag puts the chat widget on your site. The same agent can also
+answer on Telegram, WhatsApp, Slack, Discord, Instagram and Facebook Messenger, with every
+conversation landing in one inbox.
+
+**Human handoff.** Your team works from a shared inbox. They can take over a conversation
+mid-thread, reply as themselves, and hand it back to the agent. Conversations carry notes,
+tags and the contact's history.
+
+**Automations.** Agents can call tools: look something up, hit an HTTP endpoint, or trigger
+an [n8n](https://n8n.io) workflow. Results come back into the conversation.
+
+**Everything measured.** Conversations, resolution rate, handoff rate, latency, tokens and
+cost per agent and per provider, the questions that got asked most, and the ones nobody
+could answer.
+
+## How the pieces fit
+
+<Callout type="note" title="The shape of a turn">
+A visitor sends a message. BotForge finds the relevant passages in your knowledge base,
+assembles them with your system prompt and the recent conversation, and streams the model's
+answer back token by token — calling tools along the way if the agent is allowed to. The
+turn is recorded with its citations, token usage and cost.
+</Callout>
+
+An **organization** is your workspace. It holds your agents, knowledge bases, channels,
+contacts and team. Everything is scoped to it: data from one organization is never visible
+from another.
+
+Inside an organization, people have **roles** — owner, admin, editor, viewer or operator —
+that decide who can change an agent, who can publish it, and who can only work the inbox.
+
+## Where to go next
+
+- **[Quickstart](/docs/quickstart)** — from nothing to an embedded agent.
+- **[Core concepts](/docs/concepts)** — the vocabulary, in one page.
+- **[API authentication](/docs/api/authentication)** — if you would rather drive it in code.
+
+## What this documentation assumes
+
+It assumes you have a BotForge account and can sign in. It does not assume you write
+Python or TypeScript: everything in the guides can be done from the dashboard, and the API
+sections are there for when you want to automate it.

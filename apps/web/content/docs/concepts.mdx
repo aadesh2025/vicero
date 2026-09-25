@@ -1,0 +1,111 @@
+---
+title: Core concepts
+description: The vocabulary BotForge uses, and what each thing actually is.
+group: Overview
+order: 3
+---
+
+## Organization
+
+Your workspace. It owns everything else: agents, knowledge bases, channels, contacts,
+conversations, API keys and team members.
+
+Isolation between organizations is enforced at the database query layer, not in the
+interface. A request for an object belonging to another organization returns **404**, never
+another tenant's data — the object may as well not exist.
+
+You can belong to more than one organization. The switcher in the top bar decides which one
+you are working in, and every API call carries that choice as an `X-Org-Id` header.
+
+## Roles
+
+Five roles, from most to least capable:
+
+| Role | Can do |
+|---|---|
+| `owner` | Everything, including deleting the organization and transferring ownership |
+| `admin` | Everything except ownership transfer and deleting the organization |
+| `editor` | Build and edit agents, knowledge and tools — but **not publish** |
+| `operator` | Work the inbox, view analytics |
+| `viewer` | Read only |
+
+The split that matters in practice is `editor` versus `admin`: an editor can change
+anything about an agent but cannot push it live. That is deliberate, and it is how a client
+can build their own agent while you keep the final say on what customers see.
+
+There is a separate, orthogonal flag for BotForge platform staff, which has nothing to do
+with your organization's roles.
+
+## Agent
+
+A chatbot. An agent is mostly a container — the substance lives in its **versions**.
+
+## Agent version
+
+An immutable snapshot of everything that decides how an agent behaves: system prompt,
+persona, model and its parameters, RAG settings, which tools are enabled, handoff rules.
+
+At any moment an agent has a **draft** you are editing and, once you have published at
+least once, a **published** version that visitors talk to. Publishing promotes the draft.
+Rolling back re-publishes an earlier version.
+
+The playground always runs the draft. Widgets and channels always run the published
+version.
+
+## Knowledge base
+
+A collection of documents an agent can search. Documents are extracted, split into
+**chunks**, and each chunk is embedded as a vector so it can be found by meaning rather
+than by keyword.
+
+Retrieval is hybrid: semantic similarity *and* keyword matching, combined. That matters for
+things like product codes and error strings, which embeddings alone are bad at.
+
+## RAG
+
+Retrieval-augmented generation: before answering, BotForge searches your knowledge base and
+puts the best-matching chunks into the prompt. The answer comes back with **citations**
+pointing at the documents used.
+
+The point is not that it makes answers longer. It is that a grounded agent can decline —
+if nothing relevant was retrieved, it has nothing to paraphrase.
+
+## Conversation and message
+
+A conversation is one continuous thread with one visitor, on one channel. Messages belong
+to it, each carrying its role (visitor, agent or operator), its citations, and what it
+cost.
+
+Agents remember recent messages within a conversation, and summarise older ones once a
+thread gets long.
+
+## Channel
+
+Somewhere an agent can be reached: the web widget, Telegram, WhatsApp, Slack, Discord,
+Instagram or Facebook Messenger. One agent can serve several channels at once, and every
+conversation lands in the same inbox regardless of where it came from.
+
+## Contact
+
+A person, assembled across channels. When the same human talks to you on the widget and
+later on WhatsApp, BotForge links those conversations to one contact where it can.
+
+## Tool
+
+Something an agent can *do* rather than say. Built-in tools cover the date and time,
+arithmetic, searching the knowledge base and requesting a handoff. You can add your own:
+an HTTP endpoint, or an n8n workflow bound as a tool.
+
+Every tool call is logged with its inputs, outputs, latency and any error.
+
+## Handoff
+
+The moment a conversation stops being the agent's. It can be triggered by the visitor
+asking, by the agent deciding, or by a rule you set. The conversation appears in the
+**Inbox**; an operator takes over, replies as a person, and can hand back when done.
+
+## API key
+
+A `bf_`-prefixed credential for calling the API from your own code, scoped to one
+organization. Shown once when created. See
+[API authentication](/docs/api/authentication).

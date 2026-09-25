@@ -1,0 +1,112 @@
+---
+title: Streaming
+description: The SSE and WebSocket event contract for chat.
+group: API
+order: 3
+---
+
+Chat can be answered in one piece or streamed token by token. Streaming is what makes a
+reply feel immediate — first token typically arrives in under half a second, while the
+whole answer takes several.
+
+## One-shot
+
+```bash
+curl -X POST https://YOUR_API_HOST/v1/agents/$AGENT_ID/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Org-Id: $ORG_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"What are your opening hours?","stream":false}'
+```
+
+Returns the complete reply with its `conversation_id`, `message_id`, `content`,
+`citations`, `tool_runs` and `usage`.
+
+Continue a conversation by passing the `conversation_id` back in the next request.
+
+## Server-Sent Events
+
+Set `"stream": true` and read the response as an event stream:
+
+```bash
+curl -N -X POST https://YOUR_API_HOST/v1/agents/$AGENT_ID/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Org-Id: $ORG_ID" \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Hi","stream":true}'
+```
+
+Each event is a `data:` line carrying one JSON object with a `type`.
+
+## Event types
+
+| `type` | Carries | Meaning |
+|---|---|---|
+| `conversation` | `conversation_id` | Sent first. Store it to continue the thread |
+| `token` | `delta` | One fragment of the reply. Append them in order |
+| `tool_call` | `tool_call` | The agent decided to use a tool |
+| `tool_result` | `tool_result` | What the tool returned |
+| `citations` | `citations` | The knowledge-base passages the answer used |
+| `replace` | `delta` | **Discard what you have rendered** and show this instead |
+| `message` | `message_id` | The reply has been persisted |
+| `usage` | `usage` | Token counts for the turn |
+| `done` | `finish_reason` | The stream is complete |
+| `error` | `error` | The turn failed |
+
+### Handling `replace`
+
+`replace` is the one that catches people out.
+
+A reply is streamed as it is generated, but some safety checks can only run on the finished
+text. When one of those fires after streaming has begun, BotForge sends `replace` with the
+corrected reply. A client that has been appending `token` events **must discard everything
+it rendered for this turn** and display the `delta` from `replace` instead.
+
+Buffering every reply until it could be checked would cost first-token latency on every
+single turn to defend against something rare. The correction is sent after the fact
+instead — which only works if your client honours it.
+
+```js
+let text = "";
+for await (const event of stream) {
+  switch (event.type) {
+    case "conversation": conversationId = event.conversation_id; break;
+    case "token":        text += event.delta; render(text); break;
+    case "replace":      text = event.delta;  render(text); break;   // not +=
+    case "citations":    showCitations(event.citations); break;
+    case "error":        showError(event.error); break;
+    case "done":         finish(); break;
+  }
+}
+```
+
+## WebSocket
+
+For bidirectional chat — which the widget uses, because an operator taking over needs to
+push messages to the visitor without the visitor asking for anything:
+
+```
+wss://YOUR_API_HOST/v1/agents/{agent_id}/chat/ws?token=<access_token>
+```
+
+The same event objects arrive as WebSocket frames. The access token goes in the query
+string because the browser WebSocket API cannot set headers.
+
+There is also a listen-only socket the widget uses to receive operator replies on an
+existing conversation.
+
+## Public (widget) streaming
+
+The same contract applies to the public endpoint, with the public key in the path and no
+token:
+
+```
+POST /v1/public/agents/{public_key}/chat
+WS   /v1/public/agents/{public_key}/ws
+```
+
+## Reconnecting
+
+If a stream drops mid-turn, the reply is not lost — the turn finishes server-side and the
+message is persisted. Fetch the conversation's messages to pick up what you missed rather
+than re-sending the question, which would ask the agent twice.

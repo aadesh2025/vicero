@@ -1,0 +1,90 @@
+---
+title: Quickstart
+description: Create an agent, give it something to read, and put it on your site.
+group: Overview
+order: 2
+---
+
+Five steps, start to finish. Everything here happens in the dashboard — no code until the
+last step, which is one `<script>` tag.
+
+## 1. Create an agent
+
+From **Agents**, click **New agent**. Pick a template if one fits what you are building, or
+start blank. A new agent begins as an unpublished **draft**.
+
+Give it a name your team will recognise. The name is internal; what visitors see is the
+display name on the **Persona** tab.
+
+## 2. Give it a persona
+
+Open the agent and work through the **Persona** tab:
+
+- **Display name and avatar** — what appears at the top of the chat.
+- **System prompt** — the instruction the model reads before every conversation. Say what
+  the agent is for, what it should not do, and what to do when it doesn't know.
+- **Welcome message** and **suggested prompts** — the first thing a visitor sees.
+- **Fallback message** — what it says when it has nothing.
+
+On the **Model** tab, pick a provider and model. Groq is the default and is free to start
+with. Leave temperature low (around 0.2–0.4) for a support agent: high temperature makes an
+agent that improvises, which is the opposite of what you want near your customers.
+
+<Callout type="warn" title="A provider needs its key">
+An agent can only use a provider your workspace has a key for. Pointing an agent at a
+provider with no key configured is an outage, not a slow fallback — the turn fails. Add
+keys under **Settings → Provider keys**.
+</Callout>
+
+## 3. Add knowledge
+
+Go to **Knowledge** and create a knowledge base, then add documents — upload PDFs, Word
+files, spreadsheets, Markdown or text, or paste a URL.
+
+Each document is queued, extracted, split into chunks and embedded. Watch the status column
+until it reads **ready**. A document stuck on *processing* usually means the embedding
+provider is unreachable; *failed* will tell you why.
+
+Then, back on the agent's **Knowledge** tab, switch RAG on and select the knowledge base.
+
+## 4. Test it in the playground
+
+The agent's **Playground** runs the *draft*, not the published version, so you can break
+things safely. Ask it the questions your customers actually ask. Check that:
+
+- answers cite a document, rather than sounding plausible and citing nothing,
+- it declines gracefully when you ask something outside its knowledge,
+- the tone matches what you wrote in the system prompt.
+
+When it holds up, click **Publish**. Publishing promotes the draft to the live version.
+
+## 5. Put it on your site
+
+On the **Channels** tab, set the widget's colour, position and launcher text, then copy the
+embed snippet. Paste it just before `</body>`:
+
+```html
+<script
+  src="https://YOUR_WEB_HOST/widget.js"
+  data-agent="pk_your_agent_public_key"
+  data-api="https://YOUR_API_HOST"
+  defer
+></script>
+```
+
+`data-agent` is the agent's public key. It is safe in client-side HTML — it grants access
+to that one published agent's public chat and nothing else.
+
+Reload your site. A launcher bubble appears in the corner.
+
+<Callout type="tip" title="The agent must be published">
+The widget loads its configuration from the published version. A draft-only agent shows
+nothing.
+</Callout>
+
+## What to do next
+
+- **[Install the widget](/docs/widget/install)** — theming, the JavaScript SDK, CORS.
+- **[Connect a channel](/docs/channels/overview)** — Telegram, WhatsApp, Slack and the rest.
+- **[Human handoff](/docs/inbox/handoff)** — so a person can step in.
+- **[Automations with n8n](/docs/automations/n8n)** — let the agent do things, not just say them.

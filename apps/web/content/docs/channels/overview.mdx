@@ -1,0 +1,70 @@
+---
+title: Channels
+description: Put the same agent on Telegram, WhatsApp, Slack, Discord, Instagram and Messenger.
+group: Deploy
+order: 2
+---
+
+A channel is somewhere an agent can be reached. One agent can serve several at once, and
+every conversation — whatever its origin — lands in the same [inbox](/docs/inbox/handoff).
+
+| Channel | What you need |
+|---|---|
+| **Web widget** | Nothing — [the embed snippet](/docs/widget/install) |
+| **Telegram** | A bot token from [@BotFather](https://t.me/botfather) |
+| **WhatsApp** | A Meta Cloud API phone number ID and token, or a Twilio account |
+| **Slack** | A Slack app with a bot token and signing secret |
+| **Discord** | A Discord application's bot token and public key |
+| **Instagram** | A connected Instagram professional account and page token |
+| **Facebook Messenger** | A Facebook Page access token |
+
+<Callout type="warn" title="Channels need your own credentials">
+Every channel except the web widget requires credentials you create with that platform.
+BotForge does not supply them, and a channel without its credentials stays disabled.
+</Callout>
+
+## Connecting one
+
+1. **Channels → Add channel**, and pick the platform.
+2. Paste the credentials. They are encrypted before they are stored and masked whenever
+   they are read back — you will never see the full value again after saving.
+3. Choose which agent answers on this channel.
+4. BotForge gives you a **webhook URL**. Register it with the platform, so its messages
+   reach you.
+5. Enable the channel.
+
+Send yourself a message to confirm it works before you tell anyone the number.
+
+## How inbound messages are verified
+
+Every inbound webhook is verified before it is processed:
+
+- **Meta platforms** (WhatsApp, Instagram, Messenger) — a verify-token handshake on setup,
+  then an HMAC signature on every message.
+- **Slack** — request signing with your signing secret.
+- **Discord** — Ed25519 interaction signature.
+- **Telegram** — a per-channel secret embedded in the webhook path.
+
+An unsigned or wrongly-signed request is rejected. Webhook endpoints are also rate-limited
+per source.
+
+## Enabling and disabling
+
+A channel can be disabled without deleting it. Disabling stops it answering while keeping
+its credentials and its conversation history — the right move when something is going wrong
+and you want it to stop *now*.
+
+## One agent, many channels
+
+The same published agent version answers everywhere. That is usually what you want: the
+answer to "what is your refund policy" should not depend on whether the customer used
+WhatsApp or your website.
+
+Where behaviour genuinely should differ, use a second agent and point the channel at that
+one instead.
+
+## Contacts across channels
+
+When the same person reaches you on more than one channel, BotForge links those
+conversations to a single **contact** where it can identify them. Your operators see one
+history rather than three strangers who happen to ask the same question.

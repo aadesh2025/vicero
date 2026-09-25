@@ -1,0 +1,75 @@
+---
+title: Rate limits
+description: What is throttled, at what rate, and how to behave when you hit it.
+group: API
+order: 4
+---
+
+Public surfaces are rate-limited per source address. Exceeding a limit returns **429** with
+a `Retry-After` header saying how many seconds to wait.
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 23
+```
+
+## Default limits
+
+These are defaults. A self-hosted deployment can change them, so read `Retry-After` rather
+than hard-coding the numbers below.
+
+| Surface | Limit |
+|---|---|
+| Auth routes — signup, login, password reset, magic link, email verification, OAuth exchange | 30 requests / 60s per IP |
+| Public widget chat (`/v1/public/agents/{key}/chat`) | 60 requests / 60s per IP |
+| Channel webhooks (Telegram, Meta, Slack, Discord) | 120 requests / 60s per source |
+| n8n callback (`/v1/tools/n8n/callback`) | 120 requests / 60s per source |
+| Invitation preview | 30 requests / 60s per IP |
+
+Authenticated API routes are not throttled per request in the same way. They are bounded by
+your organization's plan limits instead — message counts, agent counts, and which features
+are available.
+
+## Plan limits
+
+Separate from rate limiting, and they fail differently. When an organization exhausts its
+plan's message allowance, the agent **stops replying rather than erroring**: the
+conversation is routed to the human inbox with a badge explaining why.
+
+That choice is deliberate. A visitor should never see an API error because you hit a quota
+— they should get a person.
+
+Calls that would exceed a plan limit return **402** with a `plan_limit` code.
+
+## Behaving well
+
+**Read `Retry-After`.** It is the actual answer. Retrying immediately after a 429 makes the
+problem worse and, on a shared IP, makes it worse for someone else.
+
+**Back off exponentially** on `429` and `5xx`, with jitter:
+
+```js
+async function withRetry(fn, attempts = 5) {
+  for (let i = 0; i < attempts; i++) {
+    const res = await fn();
+    if (res.status !== 429 && res.status < 500) return res;
+    const retryAfter = Number(res.headers.get("Retry-After"));
+    const wait = retryAfter
+      ? retryAfter * 1000
+      : Math.min(2 ** i * 500, 30_000) * (0.5 + Math.random());
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  throw new Error("giving up after repeated rate limiting");
+}
+```
+
+**Never retry a `4xx` other than `429`.** Nothing about the request will have changed.
+
+## Behind a proxy
+
+Limits are per client IP. If your requests reach BotForge through a proxy, the deployment
+must be configured to trust that proxy's forwarded headers — otherwise every visitor counts
+as one client and a single busy customer exhausts the limit for everyone.
+
+This matters most for the widget, where the "client" is a real visitor's browser. If you
+self-host, see [Self-hosting](/docs/self-hosting/install).

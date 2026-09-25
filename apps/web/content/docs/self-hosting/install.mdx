@@ -1,0 +1,124 @@
+---
+title: Self-hosting
+description: Run BotForge on your own infrastructure with Docker Compose.
+group: Reference
+order: 2
+---
+
+BotForge runs as a small set of containers: the API, the web app, a background worker,
+PostgreSQL with `pgvector`, and Redis. Optionally n8n for automations and Ollama for local
+models and embeddings.
+
+## What you need
+
+- **Docker** and Docker Compose.
+- **A machine with at least 4 GB of RAM.** Running local embeddings needs more — closer to
+  8 GB.
+- **At least one LLM provider key.** Groq has a free tier and is the default.
+
+## Configure
+
+Copy the example environment file and fill it in:
+
+```bash
+cp .env.example .env
+```
+
+Three values you must set before anything works:
+
+| Variable | Why |
+|---|---|
+| `SECRET_KEY` | Signs tokens **and** derives the key that encrypts stored credentials |
+| `POSTGRES_PASSWORD` | No default — compose refuses to start without it |
+| `GROQ_API_KEY` | Or another provider. Without one, every chat turn fails |
+
+Generate secrets with something that is actually random:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+<Callout type="danger" title="SECRET_KEY is not just a signing key">
+The encryption key for stored provider credentials and channel tokens is derived from
+`SECRET_KEY`. Changing it does not merely log everyone out — it makes every stored
+credential undecryptable, and they must all be re-entered. Set it once, back it up, and
+treat rotating it as a migration rather than a config change.
+</Callout>
+
+## Start it
+
+```bash
+cd infra && docker compose up -d
+```
+
+Then run the migrations:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+The web app is on port 3000 and the API on 8000 by default.
+
+## First run
+
+1. Open the web app and sign up. The first account is yours.
+2. Create an organization.
+3. Add a provider key under **Settings → Provider keys**.
+4. Follow the [quickstart](/docs/quickstart).
+
+## Local models and embeddings
+
+Ollama runs models on your own hardware, which keeps document content off third-party
+services:
+
+```bash
+docker compose exec ollama ollama pull nomic-embed-text
+```
+
+Then set `EMBEDDING_PROVIDER=ollama` and `EMBEDDING_MODEL=nomic-embed-text`.
+
+<Callout type="warn" title="Embedding dimensions are baked into the schema">
+The embedding column is 768-dimensional. A model with a different dimension needs a
+database migration, not just a changed variable — and switching embedding models means
+re-embedding everything you have already ingested, because vectors from two models are not
+comparable.
+</Callout>
+
+Local *chat* models are possible but slow on typical hardware — tens of seconds per turn is
+normal. Use a hosted provider for chat and Ollama for embeddings unless you have a GPU.
+
+## Behind a reverse proxy
+
+In production, terminate TLS at a reverse proxy. The shipped production compose file uses
+Caddy with automatic certificates; set `DOMAIN`, `API_DOMAIN` and `ACME_EMAIL`.
+
+Two things to get right:
+
+- **`CORS_ORIGINS`** must list every site that embeds the widget. In production there is no
+  localhost wildcard.
+- **`TRUSTED_PROXIES`** must contain your proxy's address, or the API sees the proxy as the
+  client for every request and per-IP rate limits count all your visitors as one.
+
+## n8n
+
+The dev compose file includes an n8n service, or you can point at an existing instance with
+`N8N_BASE_URL`. Set `N8N_WEBHOOK_SIGNING_SECRET` and verify the signature in any workflow
+that does real work. See [automations](/docs/automations/n8n).
+
+## Backups
+
+Back up two things: the PostgreSQL database and the uploads volume. The database alone is
+not enough — original documents live on disk, and losing them means you cannot re-ingest.
+
+The production compose file includes a nightly `pg_dump` with configurable retention.
+
+## Upgrading
+
+```bash
+docker compose pull
+docker compose up -d
+docker compose exec api alembic upgrade head
+```
+
+Migrations run forward. Take a database backup before upgrading — that is the only rollback
+that reliably exists.

@@ -1,0 +1,97 @@
+---
+title: Automations with n8n
+description: Let an agent do things, not just say them — by calling an n8n workflow as a tool.
+group: Operate
+order: 2
+---
+
+An agent that can only talk is half a product. Tools let it act: create a ticket, look up
+an order, send an email, write to your CRM. BotForge connects to
+[n8n](https://n8n.io) so those actions are workflows you can build visually rather than
+code someone has to maintain.
+
+The integration runs both ways:
+
+1. **BotForge → n8n** — the agent calls a workflow as a tool, via the workflow's webhook.
+2. **n8n → BotForge** — a workflow calls back into BotForge over the REST API to post a
+   message, update a conversation, or read analytics.
+
+## Bind a workflow as a tool
+
+A BotForge-callable workflow starts with a **Webhook** node. For a synchronous tool it ends
+with a **Respond to Webhook** node returning JSON. Activate the workflow so its production
+webhook registers.
+
+Then, in the dashboard: **Automations** → pick the workflow → **Bind as tool** → choose the
+agent and the mode.
+
+| Mode | Behaviour |
+|---|---|
+| **sync** | BotForge posts to the webhook and feeds the response JSON straight back to the model in the same turn. Use it when the work takes a second or two. |
+| **async** | The workflow does long-running work and posts a signed result back when it is finished. Use it for anything that might take longer than a visitor will wait. |
+
+Finally, enable **Tools** on the agent. When the model decides the tool is relevant, it
+calls it and uses the result in its answer.
+
+If your workflow does not appear in the list, you can bind it directly by pasting its
+webhook URL.
+
+<Callout type="danger" title="Treat webhook URLs as secrets">
+Binding by pasting a URL bypasses the visibility rules that govern the workflow list.
+Anyone with a workflow's webhook URL can bind it.
+</Callout>
+
+## What BotForge sends
+
+Every outbound tool call is a signed `POST` to the workflow's webhook:
+
+```json
+{
+  "args": { },
+  "mode": "sync",
+  "run_id": "…",
+  "conversation_id": "…",
+  "callback_url": "… (async only)"
+}
+```
+
+Two headers come with it:
+
+- `X-BotForge-Signature` — HMAC-SHA256 of `"{timestamp}.{body}"`
+- `X-BotForge-Timestamp`
+
+**Verify the signature in any workflow that does real work.** Without it, the webhook URL
+is the only thing standing between a stranger and your ticketing system. BotForge will
+refuse to bind a workflow that does not verify, when the operator has enabled that
+requirement.
+
+## Async results
+
+An async workflow posts its result back to `POST /v1/tools/n8n/callback`:
+
+```json
+{ "run_id": "…", "output": { }, "status": "ok" }
+```
+
+signed with the same secret. That resolves the pending tool run.
+
+## Calling BotForge from n8n
+
+For the other direction, create a BotForge API key under **Settings → API keys** and call
+the REST API from an HTTP Request node. See
+[API authentication](/docs/api/authentication).
+
+BotForge also emits **outbound webhooks** — `message.created`, `handoff.requested`,
+`conversation.closed` and others — which an n8n Webhook node can receive to trigger a flow.
+See [Webhooks](/docs/api/webhooks).
+
+## When it does not work
+
+| Symptom | Usual cause |
+|---|---|
+| Workflows do not appear in Automations | The workspace has no n8n API key configured, or the base URL is wrong. Bind by webhook URL instead. |
+| The tool call returns an error | The workflow is not **Active**, or a sync workflow has no *Respond to Webhook* node. |
+| An async callback is rejected | The signature or `run_id` does not match. Sign with the same secret BotForge sends. |
+
+Every tool call is logged under the agent's **Tools** tab with its inputs, output, latency
+and error — start there, then check the n8n execution log.

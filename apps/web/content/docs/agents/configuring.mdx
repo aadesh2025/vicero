@@ -1,0 +1,90 @@
+---
+title: Configuring an agent
+description: Persona, model settings, versions, and publishing safely.
+group: Build
+order: 1
+---
+
+## Persona
+
+The **system prompt** is the single most consequential field in BotForge. It is read before
+every conversation and it decides what the agent is.
+
+A prompt that works tends to say four things:
+
+1. **Who the agent is and who it serves** — "You answer questions from customers of Acme
+   about their orders."
+2. **What it must not do** — topics to refuse, promises it cannot make, the fact that it
+   must not invent policy.
+3. **What to do when it does not know** — name the escape hatch: say so, and offer a human.
+4. **Tone** — in a sentence, not a paragraph.
+
+Alongside it: **display name** and **avatar** (what visitors see), a **welcome message**,
+**suggested prompts** to give people a way in, and a **fallback message**.
+
+<Callout type="warn" title="A prompt is not a security control">
+Anything that must not happen needs to be enforced in configuration, not requested in
+prose. A system prompt is an instruction to a model that is trying to be helpful — it is
+persuadable, and a determined visitor will persuade it. Use the blocked-topics and
+guardrail settings for the things that actually matter.
+</Callout>
+
+## Model settings
+
+| Setting | What it does | Suggested |
+|---|---|---|
+| **Provider / model** | Which LLM answers | Groq to start — fast and free-tier |
+| **Temperature** | Randomness | `0.2`–`0.4` for support; higher only for creative work |
+| **Max tokens** | Cap on reply length | Enough for a complete answer, not an essay |
+| **Top-p** | Nucleus sampling | Leave alone unless you know why |
+| **Stop sequences** | Force an early stop | Rarely needed |
+
+Temperature is the one people get wrong. A support agent at `0.9` will phrase the same
+policy three different ways to three customers, and one of those phrasings will be wrong.
+
+Provider keys live under **Settings → Provider keys**, and can be set per organization or
+per agent. An agent pointed at a provider with no key configured fails its turns outright.
+
+## Toggles
+
+Per agent, you control whether it can:
+
+- search the knowledge base (**RAG**),
+- call **tools**,
+- keep **memory** across a conversation,
+- hand off to a **human**.
+
+Turning off what an agent does not need is worth doing. Each capability is an additional
+way for a turn to go wrong, and an agent that cannot call tools cannot be talked into
+calling one.
+
+## Versions
+
+Every agent has a **draft** you edit, and — once published — a **live** version visitors
+talk to. They are independent: editing the draft never changes what customers see.
+
+- **Playground** always runs the draft.
+- **Widgets and channels** always run the published version.
+- **Publish** promotes the current draft.
+- **Rollback** re-publishes an earlier version.
+
+This is why publishing is a separate permission. An `editor` can change everything about an
+agent and still not affect a single customer until an `admin` or `owner` agrees.
+
+## Testing before you publish
+
+Use the playground, and be adversarial about it:
+
+- Ask something the knowledge base does not cover. Does it decline, or invent?
+- Ask for something it should refuse. Does the refusal hold when you push twice?
+- Ask an ordinary question. Is the answer cited?
+- Ask in the sloppy way real customers write — no punctuation, half a sentence.
+
+You can also save these as **tests** on the agent and re-run them before each publish, so a
+prompt change that quietly breaks an old answer shows up before your customers find it.
+
+## Templates and duplication
+
+**Templates** give you a starting configuration for a common role. **Duplicate** copies an
+existing agent — the fastest way to try a significantly different prompt without risking
+the one that works.

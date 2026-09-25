@@ -1,0 +1,109 @@
+---
+title: API authentication
+description: Two ways in — a dashboard session, or a bf_ API key for server-to-server calls.
+group: API
+order: 1
+---
+
+The BotForge REST API is served under `/v1`. Everything is JSON.
+
+There are two ways to authenticate. Use an **API key** for anything running on a server;
+use the **session tokens** only for something acting on behalf of a signed-in person.
+
+## API keys (server-to-server)
+
+Create one under **Settings → API keys**. The key is shown **once** — store it before you
+close the dialog, because BotForge keeps only a hash and cannot show it to you again.
+
+Keys are prefixed `bf_`. Either header works:
+
+```bash
+curl https://YOUR_API_HOST/v1/agents -H 'X-API-Key: bf_live_xxx'
+curl https://YOUR_API_HOST/v1/agents -H 'Authorization: Bearer bf_live_xxx'
+```
+
+A key resolves its own organization, so you do not send `X-Org-Id` with it.
+
+### Scopes
+
+Each key carries a scope:
+
+| Scope | Can |
+|---|---|
+| `read` | Read everything the creator can read |
+| `write` | Read and modify, but not publish or manage the organization |
+| `admin` | Everything short of deleting the organization |
+
+Two things to know about how scopes resolve:
+
+- **A key can never exceed the person who created it.** An `admin` scope minted by an
+  `editor` behaves as an editor. Least privilege is enforced at creation, not at the call.
+- **`admin` scope never means `owner`.** No API key can delete your organization or
+  transfer ownership, regardless of who created it.
+
+### Revoking
+
+**Revoke** disables a key immediately and permanently; **delete** removes the record.
+Revoke the moment a key might have leaked — keys carry a `last_used_at` so you can see
+whether anyone is still using it before you break something.
+
+<Callout type="danger" title="Keys are bearer credentials">
+Anyone holding the string can act as it. Keep them out of client-side code, out of git,
+and out of URLs — a key in a query string ends up in logs and proxy caches.
+</Callout>
+
+## Session tokens (dashboard)
+
+Signing in returns a short-lived **access token** and a long-lived **refresh token**:
+
+```bash
+curl -X POST https://YOUR_API_HOST/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"me@acme.com","password":"…"}'
+```
+
+```json
+{ "access_token": "…", "refresh_token": "…", "user": { } }
+```
+
+Send the access token as `Authorization: Bearer <access_token>`. It expires after about
+fifteen minutes; exchange the refresh token at `POST /v1/auth/refresh` for a new pair.
+
+**Refresh tokens rotate.** Each exchange invalidates the one you used and issues a new one,
+so a stolen refresh token is usable only until the legitimate client next refreshes — at
+which point one of the two stops working and you have a signal that something is wrong.
+Always store the token you get back.
+
+### Choosing the organization
+
+A person can belong to several organizations, so session-authenticated requests must say
+which one they mean:
+
+```bash
+curl https://YOUR_API_HOST/v1/agents \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "X-Org-Id: $ORG_ID"
+```
+
+Get the list from `GET /v1/orgs`. Omitting the header on an org-scoped route is an error,
+not a default.
+
+## Other sign-in methods
+
+`POST /v1/auth/signup`, OAuth with Google, GitHub or Facebook, magic links, password reset
+and email verification are all under `/v1/auth`. They are rate-limited per source address.
+
+## Public endpoints
+
+The widget talks to `/v1/public/agents/{public_key}/…` with no token at all — the public
+key in the path is the credential, and it grants access to one published agent's chat.
+Channel webhooks are verified by signature rather than by token.
+
+These are the only unauthenticated routes that touch your data, and both are rate-limited.
+
+## Next
+
+- [Errors](/docs/api/errors) — the response envelope and what the codes mean.
+- [Streaming](/docs/api/streaming) — SSE and WebSocket events.
+- [Rate limits](/docs/api/rate-limits).
+- [Endpoint reference](/docs/api/reference) — every route, generated from the API itself.

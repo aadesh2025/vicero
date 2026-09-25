@@ -1,0 +1,126 @@
+---
+title: Errors
+description: One envelope, stable machine-readable codes, and what each status means.
+group: API
+order: 2
+---
+
+Every error, from every endpoint, has the same shape:
+
+```json
+{
+  "error": {
+    "code": "agents.not_found",
+    "message": "Agent not found.",
+    "details": null
+  }
+}
+```
+
+- **`code`** — stable and machine-readable. Branch on this.
+- **`message`** — for a human. It may be reworded between releases; do not match on it.
+- **`details`** — present when there is structure worth sending, such as which field failed
+  validation. Absent otherwise.
+
+Stack traces are never returned in production.
+
+## Status codes
+
+| Status | Meaning | What to do |
+|---|---|---|
+| `400` | The request is malformed or the operation is not valid in this state | Read `code` — it says which |
+| `401` | Missing, expired or invalid credentials | Refresh the token, or check the API key |
+| `403` | Authenticated, but not allowed | The role or scope is insufficient — this will not change on retry |
+| `404` | No such object **in this organization** | See below |
+| `409` | Conflict with existing state | Usually a duplicate |
+| `422` | Validation failed | `details` names the field |
+| `429` | Rate limited | Back off — see [rate limits](/docs/api/rate-limits) |
+| `5xx` | Our problem | Retry with backoff; if it persists, it is not you |
+
+<Callout type="note" title="404 is also how isolation is enforced">
+Asking for an object that belongs to a different organization returns `404`, not `403`.
+This is deliberate: a `403` would confirm the object exists, which is itself a leak. From
+outside your organization, everything in another one is indistinguishable from nothing.
+</Callout>
+
+## Code families
+
+Codes are namespaced by the area they come from. There are around 95 of them; these are
+the ones you will actually meet.
+
+### `auth.*`
+
+| Code | Meaning |
+|---|---|
+| `auth.not_authenticated` | No credentials were sent |
+| `auth.invalid_credentials` | Wrong email or password |
+| `auth.invalid_token` | The access token is malformed or expired |
+| `auth.invalid_api_key` | The `bf_` key is unknown, revoked or expired |
+| `auth.account_inactive` | The account is disabled |
+| `auth.email_taken` | Already registered |
+| `auth.weak_password` | Does not meet the policy |
+
+### `org.*`
+
+| Code | Meaning |
+|---|---|
+| `org.missing_header` | An org-scoped route was called without `X-Org-Id` |
+| `org.forbidden` | Your role in this organization does not permit this |
+| `org.not_found` | No such organization, or you are not a member |
+
+### Resource families
+
+`agents.*`, `kb.*`, `conversations.*`, `tools.*`, `channels.*`, `inbox.*`, `workflows.*`,
+`contacts.*`, `webhooks.*`, `apikeys.*`, `credentials.*` each follow the same pattern:
+`*.not_found` for a missing object, plus codes for the states that are specific to them —
+`agents.no_version` when an agent has never been published, `workflows.not_paused` when you
+resume a run that is not waiting, `channels.bad_signature` on a webhook that fails
+verification.
+
+### `llm.*`
+
+| Code | Meaning |
+|---|---|
+| `llm.provider_unavailable` | The provider could not be reached, or no key is configured |
+| `llm.provider_error` | The provider rejected the request |
+| `llm.unknown_provider` | The agent names a provider that does not exist |
+
+`llm.provider_unavailable` is worth handling explicitly. It is the one that fires when a
+provider key is missing — and the symptom is that every turn fails, not that answers get
+worse.
+
+## Validation errors
+
+`422` carries the offending fields:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed.",
+    "details": [
+      { "loc": ["body", "temperature"], "msg": "Input should be less than or equal to 2", "type": "less_than_equal" }
+    ]
+  }
+}
+```
+
+## Handling them
+
+```js
+const res = await fetch(url, { headers });
+if (!res.ok) {
+  const { error } = await res.json();
+  switch (error.code) {
+    case "auth.invalid_token":
+      return refreshAndRetry();
+    case "llm.provider_unavailable":
+      return degradeGracefully();     // do not retry in a loop; the key is missing
+    default:
+      throw new Error(`${error.code}: ${error.message}`);
+  }
+}
+```
+
+Retry `429` and `5xx` with backoff. Do not retry `4xx` — nothing about the request will
+have changed.

@@ -1,0 +1,77 @@
+---
+title: Outbound webhooks
+description: Receive signed events when something happens in BotForge.
+group: API
+order: 5
+---
+
+Register an endpoint and BotForge will POST to it when things happen — a message arrives, a
+conversation closes, a document finishes ingesting, a visitor asks for a human.
+
+## Registering
+
+**Settings → Webhooks**, or `POST /v1/webhooks`. You give a URL and choose which events you
+want. BotForge gives you a **signing secret**, shown once.
+
+## The event catalog
+
+| Event | Fires when |
+|---|---|
+| `message.created` | Any message is added to a conversation — visitor, agent or operator |
+| `conversation.created` | A new conversation starts |
+| `conversation.closed` | A conversation is closed |
+| `handoff.requested` | A conversation needs a human |
+| `handoff.resolved` | A human handed it back |
+| `document.ready` | A knowledge-base document finished ingesting and is searchable |
+| `document.failed` | Ingestion failed |
+| `tool.run` | A tool was called |
+| `usage.threshold` | Usage crossed a configured threshold |
+
+`GET /v1/webhooks/events` returns this list from the live API.
+
+## Verifying the signature
+
+Every delivery carries `X-BotForge-Signature`, an HMAC-SHA256 over the request body using
+your endpoint secret.
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verify(rawBody, signature, secret) {
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  // Length-check first: timingSafeEqual throws on a mismatch rather than returning false.
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+Two things that are easy to get wrong:
+
+- **Verify against the raw body**, before any JSON parsing. Re-serializing changes
+  whitespace and key order, and the signature will never match.
+- **Compare in constant time.** A plain `===` on a signature leaks, one byte at a time, how
+  much of a guess was right.
+
+<Callout type="danger" title="An unverified endpoint is a public endpoint">
+Your webhook URL will end up in logs, in someone's browser history, and in a screenshot.
+Anything that acts on a delivery without verifying the signature can be driven by anyone
+who has seen the URL.
+</Callout>
+
+## Retries
+
+A delivery is considered successful on any `2xx`. Anything else is retried with
+exponential backoff, and a periodic sweep re-enqueues deliveries lost to downtime — so an
+endpoint that was down for an hour receives what it missed rather than nothing.
+
+Because of that, **handle duplicates**. At-least-once delivery means you will eventually
+receive the same event twice; key on the event's id and make your handler idempotent.
+
+Delivery history, including the response you returned, is visible per endpoint in the
+dashboard and at `GET /v1/webhooks/{endpoint_id}/deliveries`.
+
+## Testing
+
+`POST /v1/webhooks/{endpoint_id}/test` sends a sample delivery, signed the same way as a
+real one — the fastest way to check your verification code before you depend on it.

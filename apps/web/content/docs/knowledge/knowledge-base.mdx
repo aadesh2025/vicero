@@ -1,0 +1,90 @@
+---
+title: Knowledge and RAG
+description: Upload your content, and have the agent answer from it — with citations.
+group: Build
+order: 2
+---
+
+An agent with no knowledge base answers from whatever the model happens to know, which for
+your business is nothing. A knowledge base is how you fix that.
+
+## Creating one
+
+**Knowledge → New knowledge base.** Name it after what is in it — teams end up with
+several ("Product docs", "Policies", "FAQ") and an agent can search more than one.
+
+## Adding documents
+
+Three ways in:
+
+- **Upload a file** — PDF, Word, spreadsheet, CSV, Markdown or plain text.
+- **Add a URL** — BotForge fetches and extracts the page.
+- **Paste text** — for the things that live in someone's head rather than a file.
+
+Each document then moves through a pipeline: extract → chunk → embed → ready. The status
+column tells you where it is.
+
+| Status | Meaning |
+|---|---|
+| `queued` | Waiting for a worker |
+| `processing` | Being extracted and embedded |
+| `ready` | Searchable |
+| `failed` | Something went wrong — the row explains what |
+
+<Callout type="note" title="Processing is not instant">
+A long PDF takes a while, and the first document after a restart pays for a cold model
+load. If a document sits on *processing* for many minutes, the embedding provider is
+usually unreachable rather than slow.
+</Callout>
+
+## Chunks
+
+Documents are split into **chunks** — passages a few hundred words long — because a whole
+PDF will not fit in a prompt and, even if it did, burying the relevant paragraph in fifty
+irrelevant pages makes answers worse, not better.
+
+You can inspect the chunks of any document. It is worth doing once, on your most important
+document: if the chunks are cut in the wrong places, retrieval will be fighting the
+formatting.
+
+Chunk size and overlap are configurable per knowledge base. The defaults are sensible;
+change them only with a reason.
+
+## Turning on retrieval
+
+On the agent → **Knowledge** tab: enable RAG, select the knowledge bases, and set
+**top-k** — how many chunks to retrieve per question. Five is a good starting point. More
+context is not automatically better: it dilutes the relevant passage and costs tokens.
+
+## How retrieval works
+
+Two searches run and their results are merged:
+
+- **Semantic** — the question and the chunks are compared as vectors, so a chunk can match
+  without sharing any words with the question.
+- **Keyword** — full-text search.
+
+Semantic search alone is bad at exact strings: product codes, SKUs, error numbers and
+version numbers all embed to roughly the same place. The keyword half is what makes
+"error BF-4021" find the page about error BF-4021.
+
+## Citations
+
+Answers come back with the documents they used. This is the part that makes a grounded
+agent trustworthy — a reader can check, and you can tell at a glance whether an answer came
+from your content or from the model's imagination.
+
+An agent that answers confidently while citing nothing is answering from the model, not
+from you. That is the thing to watch for when testing.
+
+## Keeping it current
+
+- **Reingest** a document after you replace the source file.
+- **Delete** removes the document and its chunks from retrieval immediately.
+- Stale content is worse than missing content: an agent will quote last year's prices with
+  total confidence, because as far as it knows they are the prices.
+
+## Help Center articles
+
+Articles you publish to your Help Center can be synced into a knowledge base, so the same
+text serves both your public help pages and your agent. Write it once.

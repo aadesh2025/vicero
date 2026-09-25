@@ -1,0 +1,97 @@
+---
+title: Security
+description: How your data is isolated, what is encrypted, and what an agent can be talked into.
+group: Reference
+order: 1
+---
+
+## Tenant isolation
+
+Every tenant-owned row carries an organization id, and every query is filtered by it. A
+request for an object in another organization returns **404** — not 403, because a 403
+would confirm the object exists.
+
+Public surfaces resolve the organization from the credential itself: a widget request from
+its public key, a channel webhook from the channel it arrived on. There is no path where a
+caller names the organization they would like to be.
+
+## Authentication
+
+- **Passwords** are hashed with argon2, and rehashed transparently when the parameters
+  change.
+- **Access tokens** are short-lived, around fifteen minutes.
+- **Refresh tokens** are opaque, stored only as a hash, and **rotate on every use**. A
+  stolen refresh token stops working the moment the real client refreshes.
+- **Magic links and reset tokens** are single-use and stored hashed.
+- **OAuth** uses PKCE, and links an account only on a verified email address.
+- **Repeated failed logins** lock the account for a window.
+
+## API keys
+
+Created once, shown once, stored as a hash — BotForge cannot show you a key again because
+it does not have it. Keys carry a scope, and a key can never exceed the permissions of the
+person who created it. No API key, at any scope, can delete an organization or transfer
+ownership.
+
+## Encryption at rest
+
+Provider API keys and channel tokens are encrypted before they are stored and masked
+whenever they are read back. An operator with database access sees ciphertext; a user
+editing a channel sees a masked value and can only replace it, never read it.
+
+## Input and injection
+
+All input is validated against a schema. Database access is parametrized — there is no
+string-built SQL. Uploads are checked for type and size. Any URL the platform fetches on
+your behalf — a knowledge-base ingest, an HTTP tool, a custom provider endpoint — goes
+through an SSRF guard, so it cannot be pointed at internal addresses.
+
+## Prompt injection
+
+This is the risk that is specific to AI products, and it is worth being precise about.
+
+**Anything retrieved is untrusted.** A knowledge-base chunk, a tool result, a web page —
+all of it is data that arrived from somewhere, and any of it can contain text shaped like
+an instruction. BotForge treats retrieved content as data rather than as instructions, and
+screens it before it reaches the model.
+
+**A prompt line is not enforcement.** Writing "never reveal the system prompt" in a system
+prompt is a request, not a control. Anything that must not happen is enforced in code:
+blocked topics are checked before the model runs, and outputs are screened for leaked
+secrets after it does.
+
+<Callout type="warn" title="Design for it">
+When you write a system prompt, assume a visitor will eventually try to talk your agent out
+of it, and that with enough attempts they can. Put the things that genuinely matter — what
+it must never say, what it must never do — in the configured guardrails, not in prose.
+</Callout>
+
+## Output screening
+
+Replies are screened before they reach a visitor. If something is caught after streaming
+has already begun, a `replace` event is sent and a well-behaved client discards what it had
+rendered. See [streaming](/docs/api/streaming).
+
+Personally identifiable information can be redacted on the way out, configurably.
+
+## Transport
+
+HTTPS everywhere in production, with HSTS. Session cookies are `httpOnly` and `SameSite`.
+The API sends a strict Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff` and a
+restrictive `Permissions-Policy`. CORS is an explicit allow-list in production.
+
+## Rate limiting and abuse
+
+Public endpoints are rate-limited per source address. Signup is additionally limited per
+address per day and can reject throwaway email domains. See
+[rate limits](/docs/api/rate-limits).
+
+## Audit
+
+Consequential actions are recorded in an audit log with the actor, the action and the
+target — visible under **Settings → Audit log**. Secrets are never written to logs.
+
+## Reporting a problem
+
+If you find a security issue, report it privately to whoever operates your BotForge
+deployment before disclosing it anywhere else.

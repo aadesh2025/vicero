@@ -1,0 +1,78 @@
+---
+title: Inbox and human handoff
+description: How a person takes over a conversation, and hands it back.
+group: Operate
+order: 1
+---
+
+The **Inbox** is where your team works. Every conversation from every channel appears in
+it, live.
+
+## When a handoff happens
+
+Three ways:
+
+- **The visitor asks** — "can I talk to someone".
+- **The agent decides** — it has a built-in tool for requesting a handoff, and will use it
+  when it cannot help.
+- **A rule fires** — a blocked topic, a repeated failure to answer, or another condition
+  you configure.
+
+The conversation is then flagged for attention. The visitor is not dropped or told to email
+you; it stays the same thread.
+
+## Taking over
+
+Open the conversation and click **Take over**. From that moment the agent stops replying
+and you are talking to the customer directly. Your replies appear in their widget in real
+time over a WebSocket — no reload, no "an agent will be with you shortly".
+
+While you have it, you can:
+
+- **Reply** as yourself.
+- **Insert a canned response** — a saved snippet, for the things you type forty times a
+  week.
+- **Run a macro** — several actions at once, such as replying, tagging and closing.
+- **Add a note** — internal, never shown to the customer.
+- **Tag** the conversation.
+- **Assign** it to a teammate.
+
+## Handing back
+
+**Hand back** returns the conversation to the agent. It keeps the full history, including
+what you said, so it does not contradict you in the next message.
+
+Hand back when the thing that needed a person is done. Leaving conversations parked with an
+operator is how an inbox becomes a backlog.
+
+## Statuses
+
+| Status | Meaning |
+|---|---|
+| `open` | Active |
+| `pending` | Waiting on the customer or on something you are doing |
+| `closed` | Done |
+
+## Contacts
+
+Each conversation is linked to a **contact**. From the contact you can see everything that
+person has ever asked, across every channel, along with their labels and your notes. It is
+the difference between answering a question and knowing who is asking.
+
+## Who can work the inbox
+
+The `operator` role exists exactly for this: it can handle conversations and read
+analytics, and can change nothing about your agents or knowledge. It is the right role for
+a support team that should not be able to edit prompts.
+
+`owner`, `admin` and `editor` can also work the inbox.
+
+## Keeping an eye on it
+
+The **Attention** view collects conversations that need a human — handoff requests, and
+conversations flagged by a guardrail. Working that list is the daily routine.
+
+Analytics tracks **handoff rate** over time. A rising handoff rate is usually not a staffing
+problem; it means the agent has stopped being able to answer something it used to handle,
+or your customers are asking about something new. Check the **unanswered questions** report
+before adding people.

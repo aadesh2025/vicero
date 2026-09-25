@@ -44,3 +44,23 @@ export async function forward(path: string, body: unknown): Promise<{ status: nu
   }
   return { status: res.status, data };
 }
+
+/** A BFF route that forwards to an API endpoint returning a session (`AuthResponse`), keeps the
+ * refresh token in the httpOnly cookie, and hands the browser only the access token + user. */
+export function sessionRoute(apiPath: string) {
+  return async function POST(request: Request) {
+    const body = await request.json();
+    const { status, data } = await forward(apiPath, body);
+    if (status >= 400 || !data || typeof data !== "object") {
+      return NextResponse.json(data ?? { error: { code: "auth.failed", message: "Sign-in failed" } }, { status });
+    }
+    const { access_token, refresh_token, user } = data as {
+      access_token: string;
+      refresh_token: string;
+      user?: unknown;
+    };
+    const res = NextResponse.json({ access_token, user });
+    setRefreshCookie(res, refresh_token);
+    return res;
+  };
+}

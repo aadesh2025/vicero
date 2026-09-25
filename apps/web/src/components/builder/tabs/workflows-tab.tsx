@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { WorkflowCanvas } from "@/components/builder/workflow-canvas/workflow-canvas";
 import { createWorkflow, listWorkflows } from "@/lib/api/workflows";
 import { useSession } from "@/lib/store/session";
+import { LockedRegion } from "@/components/plan/locked";
 import { useCan } from "@/lib/rbac";
 import type { ApiWorkflow } from "@/lib/api/types";
 
@@ -19,7 +20,16 @@ import type { ApiWorkflow } from "@/lib/api/types";
  * canvas for whichever one is selected. Follows the same tab-owns-its-screen convention as
  * Channels/Analytics — full width, no Playground column (see the agent page's
  * FULL_WIDTH_TABS). */
+/** Workflows are a paid feature; on a trial the tab is shown, locked. */
 export function WorkflowsTab({ agentId }: { agentId: string }) {
+  return (
+    <LockedRegion feature="workflows" label="Workflows">
+      <WorkflowsTabInner agentId={agentId} />
+    </LockedRegion>
+  );
+}
+
+function WorkflowsTabInner({ agentId }: { agentId: string }) {
   const qc = useQueryClient();
   const activeOrgId = useSession((s) => s.activeOrgId);
   const canWrite = useCan("workflows:write");

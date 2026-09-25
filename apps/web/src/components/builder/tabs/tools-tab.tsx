@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LockedRegion } from "@/components/plan/locked";
 import { useBuilder } from "@/lib/store/builder";
 import {
   createTool,
@@ -21,7 +22,16 @@ import {
   type ApiTool,
 } from "@/lib/api/tools";
 
+/** Custom tools, built-ins and MCP servers are a paid feature; on a trial they are shown, locked. */
 export function ToolsTab() {
+  return (
+    <LockedRegion feature="tool_calling" label="Tools and MCP servers">
+      <ToolsTabInner />
+    </LockedRegion>
+  );
+}
+
+function ToolsTabInner() {
   const draft = useBuilder((s) => s.draft);
   const agentId = useBuilder((s) => s.agentId);
   const update = useBuilder((s) => s.update);

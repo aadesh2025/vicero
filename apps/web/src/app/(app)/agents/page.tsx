@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NewAgentDialog, type NewAgentSubmit } from "@/components/agents/new-agent-dialog";
 import { createAgent, listAgents } from "@/lib/api/agents";
+import { LockedButton } from "@/components/plan/locked";
+import { usePlan } from "@/components/plan/use-plan";
 import { useSession } from "@/lib/store/session";
 import { apiAgentStatusMeta as statusMeta } from "@/lib/display";
 import { relativeTime } from "@/lib/utils";
@@ -25,6 +27,13 @@ export default function AgentsPage() {
   });
 
   const [creating, setCreating] = useState(false);
+  const { data: plan } = usePlan();
+  // The server enforces this (402 `plan_limit`); the button just says why it is off.
+  const canCreate = plan ? plan.can_create_agent : true;
+  const lockReason =
+    plan?.status === "trial_expired"
+      ? "Your free trial has ended, so your agent is read-only."
+      : "Your free trial includes one agent.";
 
   async function onCreate({ name, templateId }: NewAgentSubmit) {
     const agent = await createAgent(name, { templateId: templateId ?? undefined });
@@ -36,9 +45,13 @@ export default function AgentsPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader title="Agents" description="Build, configure, and publish your AI agents.">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          <Plus /> New agent
-        </Button>
+        {canCreate ? (
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus /> New agent
+          </Button>
+        ) : (
+          <LockedButton reason={lockReason}>New agent</LockedButton>
+        )}
       </PageHeader>
 
       {isLoading ? (

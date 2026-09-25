@@ -717,7 +717,10 @@
           }
         }
       }
-      if (!acc) bubble.textContent = "…";
+      // Nothing came back: the bot chose (or was made) to stay quiet — a conversation handed to
+      // a human, or an owner whose plan is out. Take the typing indicator away rather than leave
+      // "…" hanging; the visitor's message is already saved for the owner (docs/18 §8).
+      if (!acc && bubble.parentNode) bubble.parentNode.removeChild(bubble);
       renderCitations(bubble, cites, acc);
       emit("response", { content: acc, citations: cites || [] });
       emit("message", { role: "assistant", content: acc, citations: cites || [] });

@@ -53,3 +53,62 @@ export async function logout() {
     clearAuth();
   }
 }
+
+// ── Self-serve (docs/18) ─────────────────────────────────────────────────────
+export type OAuthProvider = "google" | "facebook";
+
+/** Passwordless: emails a single-use sign-in link. The answer is identical for every address. */
+export function requestMagicLink(email: string) {
+  return api<{ message: string }>("/v1/auth/magic-link", { method: "POST", body: { email } });
+}
+
+/** Redeem a magic link. Through the BFF so the refresh token lands in the httpOnly cookie. */
+export async function verifyMagicLink(token: string) {
+  const res = await bff<AuthResponse>("/api/auth/magic", { token });
+  setAccessToken(res.access_token);
+  return res;
+}
+
+export function verifyEmail(token: string) {
+  return api<{ message: string }>("/v1/auth/verify-email", { method: "POST", body: { token } });
+}
+
+export function resendVerification(email: string) {
+  return api<{ message: string }>("/v1/auth/verify-email/resend", { method: "POST", body: { email } });
+}
+
+export function forgotPassword(email: string) {
+  return api<{ message: string }>("/v1/auth/password/forgot", { method: "POST", body: { email } });
+}
+
+export function resetPassword(token: string, password: string) {
+  return api<{ message: string }>("/v1/auth/password/reset", { method: "POST", body: { token, password } });
+}
+
+/** URL to send the browser to for a provider sign-in. `redirect=web` makes the API's callback
+ * bounce back to `/oauth/callback` instead of answering with JSON. */
+export async function oauthAuthorizeUrl(provider: OAuthProvider) {
+  const res = await api<{ authorize_url: string }>(`/v1/auth/oauth/${provider}/authorize?redirect=web`);
+  return res.authorize_url;
+}
+
+/** Trade the one-time code from the provider redirect for a session (via the BFF). */
+export async function exchangeOAuthCode(code: string) {
+  const res = await bff<AuthResponse>("/api/auth/oauth-exchange", { code });
+  setAccessToken(res.access_token);
+  return res;
+}
+
+/** Provider gave no verified email: ask us to mail a link to the one the user typed. */
+export function requestOAuthEmail(pendingToken: string, email: string) {
+  return api<{ message: string }>("/v1/auth/oauth/email", {
+    method: "POST",
+    body: { pending_token: pendingToken, email },
+  });
+}
+
+export async function verifyOAuthEmail(token: string) {
+  const res = await bff<AuthResponse>("/api/auth/oauth-verify", { token });
+  setAccessToken(res.access_token);
+  return res;
+}

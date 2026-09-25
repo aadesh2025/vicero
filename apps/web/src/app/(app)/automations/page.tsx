@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listAgents } from "@/lib/api/agents";
 import { bindN8nWorkflow, listN8nWorkflows, type ApiN8nWorkflow } from "@/lib/api/tools";
+import { LockedPanel } from "@/components/plan/locked";
+import { useFeature } from "@/components/plan/use-plan";
 import { useSession } from "@/lib/store/session";
 import { ApiError } from "@/lib/api/client";
 
@@ -23,11 +25,13 @@ function toToolName(name: string) {
 export default function AutomationsPage() {
   const activeOrgId = useSession((s) => s.activeOrgId);
   const [binding, setBinding] = useState<ApiN8nWorkflow | null>(null);
+  const { allowed: n8nAllowed } = useFeature("n8n");
 
   const { data: workflows, isLoading, error } = useQuery({
     queryKey: ["n8n-workflows", activeOrgId],
     queryFn: listN8nWorkflows,
-    enabled: Boolean(activeOrgId),
+    // Locked plans never ask n8n: the server would answer 402 anyway.
+    enabled: Boolean(activeOrgId) && n8nAllowed,
     retry: false,
   });
 
@@ -43,7 +47,11 @@ export default function AutomationsPage() {
         </a>
       </PageHeader>
 
-      {unavailable ? (
+      <LockedPanel feature="n8n" title="Automations are part of a paid plan">
+        Connect n8n workflows your agents can trigger as tools. Upgrade to unlock them.
+      </LockedPanel>
+
+      {!n8nAllowed ? null : unavailable ? (
         <div className="flex items-center gap-3 rounded-lg border border-warn/25 bg-warn/[0.05] px-4 py-3 text-sm">
           <AlertCircle className="size-4 shrink-0 text-warn" />
           <div className="flex-1">
@@ -74,7 +82,7 @@ export default function AutomationsPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className={`overflow-hidden rounded-lg border border-border bg-surface ${n8nAllowed ? "" : "hidden"}`}>
         {isLoading ? (
           <div className="space-y-2 p-5">
             <Skeleton className="h-12 w-full" />

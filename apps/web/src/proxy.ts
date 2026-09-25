@@ -11,6 +11,8 @@ const PROTECTED = [
   "/automations",
   "/settings",
   "/admin",
+  "/billing",
+  "/onboarding",
 ];
 const AUTH_ROUTES = ["/login", "/signup"];
 
@@ -46,6 +48,8 @@ export const config = {
     "/automations/:path*",
     "/settings/:path*",
     "/admin/:path*",
+    "/billing/:path*",
+    "/onboarding/:path*",
     "/login",
     "/signup",
   ],

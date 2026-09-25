@@ -1,5 +1,7 @@
 # BotForge developer tasks. Run `make help` for the list.
-COMPOSE := docker compose -f infra/docker-compose.yml
+# Two env files: infra/.env (machine-specific host ports) then the root .env (everything else, incl.
+# N8N_WEBHOOK_SIGNING_SECRET — its one home; Compose would otherwise interpolate only from infra/.env).
+COMPOSE := docker compose --env-file infra/.env --env-file .env -f infra/docker-compose.yml
 API := apps/api
 WEB := apps/web
 

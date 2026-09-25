@@ -20,6 +20,11 @@
 # the *_MEM_LIMIT set below — must come from `infra/.env`, the shell, or `--env-file`. It fails
 # loudly rather than silently, which is the one good thing about it.
 #
+# n8n: this file has no n8n service. Whatever n8n you point N8N_BASE_URL at needs the SAME
+# N8N_WEBHOOK_SIGNING_SECRET the API signs with (it is in ../.env, read via --env-file above — never keep a
+# second copy anywhere) plus N8N_BLOCK_ENV_ACCESS_IN_NODE=false and NODE_FUNCTION_ALLOW_BUILTIN=crypto.
+# See infra/n8n/README.md and RISK-REGISTER R15.
+#
 # Required (container env, ../.env): SECRET_KEY, CORS_ORIGINS (= https://$DOMAIN).
 # Required (interpolation): POSTGRES_PASSWORD, DOMAIN, API_DOMAIN, ACME_EMAIL,
 #   NEXT_PUBLIC_API_BASE_URL (= https://$API_DOMAIN).

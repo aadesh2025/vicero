@@ -20,7 +20,12 @@ from app.billing import usage
 from app.chat import attention, guard_models, guardrails, policy_guard, variables
 from app.chat.assembly import build_messages, compose_system_prompt
 from app.chat.budget import agentic_loop_enabled, turn_budget
-from app.chat.handoff import trigger_handoff, wants_handoff
+from app.chat.handoff import (
+    PLAN_LIMIT_REASON,
+    has_open_plan_limit_handoff,
+    trigger_handoff,
+    wants_handoff,
+)
 from app.chat.pii import build_allowlist
 from app.chat.runtime import TurnResult, run_turn
 from app.core.audit import write_audit
@@ -91,6 +96,10 @@ class InboundTurn:
             self.handed_off = True
             conv.last_message_at = dt.datetime.now(tz=dt.UTC)
             await session.flush()
+            # A conversation parked for the plan limit keeps collecting visitor messages that
+            # nobody answers, and the count of them is the upgrade argument (docs/18 §8).
+            if await has_open_plan_limit_handoff(session, conv.id):
+                await usage.record_unanswered(session, org_id)
             return
 
         # Plan gate (docs/18 §7-8) — the one choke point every visitor path goes through: the
@@ -320,7 +329,11 @@ class InboundTurn:
         yield StreamEvent(type="message", message_id=str(self.assistant_message.id))
 
     async def _stay_silent(self, reason: str | None) -> None:
-        """Save-and-stay-quiet: mark the turn silenced, count the unanswered message, audit once."""
+        """Save-and-stay-quiet: mark the turn silenced, count it, park it in the Inbox, audit once.
+
+        `reason=None` is the per-org burst limit — a flood, not a plan problem — which is dropped
+        without counting or routing.
+        """
         conv = self.conversation
         self.silenced = True
         conv.last_message_at = dt.datetime.now(tz=dt.UTC)
@@ -328,6 +341,9 @@ class InboundTurn:
         if reason is None:
             return
         unanswered = await usage.record_unanswered(self.session, conv.organization_id)
+        # Route it to the Inbox like any human-handoff case, so the owner sees a visitor is
+        # waiting. Labelled `plan_limit` so it reads differently from a request for a person.
+        await trigger_handoff(self.session, conv, requested_by="system", reason=PLAN_LIMIT_REASON)
         if unanswered == 1:  # the first time this org hit its limit
             await write_audit(
                 self.session, conv.organization_id, None, "plan.limit_hit",

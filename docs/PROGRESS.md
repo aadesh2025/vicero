@@ -59,6 +59,8 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   **Known:** signup still returns 409 for a registered address (SECURITY.md §10); Facebook PKCE unverified against
   a real app; tests/test_architecture.py::test_no_new_package_import_cycle already failed on HEAD (a
   `core`/`db`/`llm`/`models` cycle) — not caused by this change.
+  **Follow-up:** a conversation silenced by the plan now also lands in the Inbox handoff queue with a "plan limit"
+  badge (`reason=plan_limit`), so the owner sees waiting visitors; details in docs/18-SELF-SERVE-PLAN.md §8.
 - **n8n bind-time signature enforcement, audit, and a single home for the signing secret (2026-09-25, R15, ADR-089).**
   Binding an n8n tool now fails unless the workflow verifies BotForge's signature (by id or by pasted URL,
   resolved via the n8n API); `GET /v1/admin/n8n-signature-audit` reports every already-bound tool that

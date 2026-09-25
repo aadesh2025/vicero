@@ -58,7 +58,7 @@
 ### 2.3 Enforcement points
 | Rule | Where | Server-side check |
 |---|---|---|
-| Silent stop + counter | `chat/inbound.InboundTurn.events()` — after the visitor message is persisted (so the inbox still gets it) | early read check + atomic reserve just before the provider call; blocked ⇒ no tokens, no error text |
+| Silent stop + counter | `chat/inbound.InboundTurn.events()` — after the visitor message is persisted (so the inbox still gets it) | early read check + atomic reserve just before the provider call; blocked ⇒ no tokens, no error text, **and the conversation is parked in the Inbox handoff queue** (`reason = plan_limit`, see §8) |
 | 1 agent | `agents/service.create_agent`, `duplicate_agent` | `plan_limit("agents")` |
 | Agents read-only when expired | agent write paths + Playground | `plan_limit("agents")` |
 | Workflows | `workflows/service` create/update/version/run/test-run/publish | `plan_limit("workflows")`; **runtime**: `_dispatch_run` refuses on a non-entitled org |
@@ -190,3 +190,17 @@ existing organization to `legacy`, so no current client is metered.
 - The playground cap uses the shared Redis fixed-window limiter (24h window from first hit), not a table.
 - E2E: the keyless E2E API runs `SELF_SERVE_ENABLED=false`; trial UI states are checked with a stubbed plan endpoint
   (`e2e/30-trial-ui.spec.ts`) and enforcement by pytest.
+- **Silenced conversations go to the Inbox handoff queue (added after the first verification pass).** The spec
+  said the message is "saved in the inbox"; on dev the visitor message was saved but the Inbox page (which lists
+  handoffs) showed nothing, so the owner had no signal. Now, when a visitor message goes unanswered because of the
+  plan (trial over or messages spent), `InboundTurn._stay_silent` also calls `trigger_handoff(requested_by="system",
+  reason="plan_limit")`: the conversation appears in the Inbox as a normal handoff, the owner gets the usual
+  real-time `handoff.requested` push and webhook, and the Inbox shows a **"plan limit"** badge (tooltip and detail
+  header: "agent couldn't reply (plan limit)") so it is not mistaken for a visitor asking for a person.
+  Behaviour worth knowing: (1) further visitor messages in that conversation are still saved and still counted
+  in `unanswered_messages` — only while the handoff is `open`; once the owner takes over, their replies are the
+  answer and the count stops; (2) it is one handoff per conversation, not one per message; (3) the per-org burst
+  drop is **not** routed (a flood is not a plan problem); (4) `legacy` orgs never get one; (5) the conversation is
+  in `handoff` status, so the bot stays paused in it **after an upgrade until the owner hands it back** — the same
+  as any other handoff. The visitor still sees nothing.
+

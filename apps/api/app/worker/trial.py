@@ -85,17 +85,22 @@ async def _owner_emails(session: AsyncSession, org_id: uuid.UUID) -> list[str]:
     return list(rows.scalars().all())
 
 
-async def sweep(session: AsyncSession, *, now: dt.datetime | None = None) -> dict[str, int]:
-    """Send every due notice once. Returns counts per kind. The caller commits."""
+async def sweep(
+    session: AsyncSession, *, now: dt.datetime | None = None, only_org: uuid.UUID | None = None
+) -> dict[str, int]:
+    """Send every due notice once. Returns counts per kind. The caller commits.
+
+    `only_org` restricts the sweep to one workspace — for tests, which must not depend on (or
+    send mail for) whatever else happens to be in the database they run against.
+    """
     now = now or dt.datetime.now(tz=dt.UTC)
     sent: dict[str, int] = {}
-    orgs = (
-        await session.execute(
-            select(Organization).where(
-                Organization.trial_ends_at.is_not(None), Organization.deleted_at.is_(None)
-            )
-        )
-    ).scalars().all()
+    stmt = select(Organization).where(
+        Organization.trial_ends_at.is_not(None), Organization.deleted_at.is_(None)
+    )
+    if only_org is not None:
+        stmt = stmt.where(Organization.id == only_org)
+    orgs = (await session.execute(stmt)).scalars().all()
     for org in orgs:
         usage_row = await session.get(OrgMessageUsage, org.id, populate_existing=True)
         used = usage_row.messages_used if usage_row else 0

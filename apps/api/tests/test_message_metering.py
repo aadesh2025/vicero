@@ -23,7 +23,15 @@ from app.chat.handoff import trigger_handoff
 from app.core.config import settings
 from app.llm.base import ProviderError
 from app.llm.types import ChatRequest, StreamEvent
-from app.models import AuditLog, Channel, Conversation, Message, Organization, OrgMessageUsage
+from app.models import (
+    AuditLog,
+    Channel,
+    Conversation,
+    Handoff,
+    Message,
+    Organization,
+    OrgMessageUsage,
+)
 from tests.selfserve_helpers import chat, make_agent_public, set_trial_end, trial_org
 
 pytestmark = pytest.mark.usefixtures("self_serve")
@@ -362,3 +370,129 @@ async def test_a_refund_returns_exactly_one() -> None:
                 await s.delete(org)
                 await s.commit()
         await engine.dispose()
+
+
+# ── a silenced conversation lands in the Inbox handoff queue (docs/18 §8) ────
+async def _handoff_items(client: AsyncClient, headers: dict[str, str]) -> list[dict]:  # type: ignore[type-arg]
+    resp = await client.get("/v1/inbox/conversations?status=handoff", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()  # type: ignore[no-any-return]
+
+
+async def _expire(db: AsyncSession, org_id: str) -> None:
+    await set_trial_end(db, org_id, dt.datetime.now(tz=dt.UTC) - dt.timedelta(seconds=1))
+
+
+async def test_an_unanswered_conversation_is_routed_to_the_inbox_as_a_plan_limit_handoff(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, org_id, key = await _setup(client)
+    await _expire(db_session, org_id)
+
+    silent = await chat(client, key, "anyone there?")
+    assert silent.json()["content"] == ""  # still no reply, still no text to the visitor
+
+    (item,) = await _handoff_items(client, headers)
+    assert item["status"] == "handoff"
+    assert item["handoff"]["reason"] == "plan_limit"
+    assert item["handoff"]["requested_by"] == "system"
+    assert item["handoff"]["status"] == "open"
+    assert item["message_count"] == 1  # the visitor's message is saved
+
+
+async def test_running_out_of_messages_routes_it_too(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, org_id, key = await _setup(client)
+    await _set_used(db_session, org_id, 500)
+    await chat(client, key, "no messages left")
+    (item,) = await _handoff_items(client, headers)
+    assert item["handoff"]["reason"] == "plan_limit"
+
+
+async def test_a_plan_limit_handoff_reads_differently_from_a_request_for_a_person(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, org_id, key = await _setup(client)
+    await chat(client, key, "hello")  # answered normally
+    conv = await _first_conversation(db_session, org_id)
+    await trigger_handoff(db_session, conv, requested_by="user", reason="keyword")
+    await _expire(db_session, org_id)
+    await chat(client, key, "second visitor", visitor="v-2")  # a different visitor, now silenced
+
+    reasons = sorted(i["handoff"]["reason"] for i in await _handoff_items(client, headers))
+    assert reasons == ["keyword", "plan_limit"]
+
+
+async def test_more_messages_in_a_parked_conversation_are_counted_but_do_not_reopen_it(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, org_id, key = await _setup(client)
+    await _expire(db_session, org_id)
+    first = await chat(client, key, "one")
+    cid = first.json()["conversation_id"]
+    for text in ("two", "three"):
+        again = await client.post(
+            f"/v1/public/agents/{key}/chat",
+            json={"message": text, "conversation_id": cid, "stream": False, "visitor": {"id": "v-1"}},
+        )
+        assert again.status_code == 200 and again.json()["content"] == ""
+
+    items = await _handoff_items(client, headers)
+    assert len(items) == 1 and items[0]["message_count"] == 3  # one conversation, three saved messages
+    rows = (
+        await db_session.execute(
+            select(Handoff).where(Handoff.organization_id == uuid.UUID(org_id))
+        )
+    ).scalars().all()
+    assert len(rows) == 1  # not a new handoff per message
+    assert (await _used(client, headers, org_id))["unanswered_messages"] == 3  # but every message counts
+
+
+async def test_once_the_owner_takes_over_their_replies_are_the_answer(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, org_id, key = await _setup(client)
+    await _expire(db_session, org_id)
+    cid = (await chat(client, key, "waiting")).json()["conversation_id"]
+
+    took = await client.post(f"/v1/inbox/conversations/{cid}/takeover", headers=headers)
+    assert took.status_code == 200, took.text
+    reply = await client.post(
+        f"/v1/inbox/conversations/{cid}/messages", json={"text": "Sorry for the wait"}, headers=headers
+    )
+    assert reply.status_code == 200, reply.text
+
+    await client.post(
+        f"/v1/public/agents/{key}/chat",
+        json={"message": "thanks", "conversation_id": cid, "stream": False, "visitor": {"id": "v-1"}},
+    )
+    # Assigned to a person now: that message is theirs to answer, not an unanswered one.
+    assert (await _used(client, headers, org_id))["unanswered_messages"] == 1
+
+
+async def test_a_burst_drop_is_not_a_plan_limit_and_is_not_routed(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    headers, _, key = await _setup(client)
+    monkeypatch.setattr(settings, "org_chat_rate_limit", 1)
+    await chat(client, key, "first", visitor="v-a")
+    await chat(client, key, "dropped", visitor="v-b")  # over the burst limit: silent
+    assert await _handoff_items(client, headers) == []
+
+
+async def test_a_working_org_never_gets_plan_limit_handoffs(client: AsyncClient) -> None:
+    headers, _, key = await _setup(client)
+    await chat(client, key, "hello")
+    assert await _handoff_items(client, headers) == []
+
+
+async def test_a_legacy_org_is_never_routed(client: AsyncClient, db_session: AsyncSession) -> None:
+    headers, org_id, key = await _setup(client)
+    org = await db_session.get(Organization, uuid.UUID(org_id))
+    assert org is not None
+    org.plan = "legacy"
+    org.trial_ends_at = dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=30)
+    await db_session.flush()
+    assert (await chat(client, key, "hi")).json()["content"].strip()
+    assert await _handoff_items(client, headers) == []

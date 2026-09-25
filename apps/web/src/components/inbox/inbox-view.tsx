@@ -28,6 +28,7 @@ import { ContactAvatar, contactLabel } from "@/components/inbox/contact-avatar";
 import { ChannelNotConnected } from "@/components/inbox/channel-not-connected";
 import { ReplyBox } from "@/components/inbox/reply-box";
 import { RunMacro } from "@/components/inbox/run-macro";
+import { handoffReasonLabel, isPlanLimitReason } from "@/lib/inbox-reason";
 import { useSession } from "@/lib/store/session";
 
 const STATUS_FILTERS = [
@@ -158,9 +159,14 @@ export function InboxView({ initialId }: { initialId?: string }) {
                   <div className="flex items-center gap-2 text-xs text-faint">
                     <span>{it.message_count} msgs</span>
                     {it.handoff && it.handoff.status !== "resolved" && (
-                      <Badge variant="accent" className="ml-auto">
-                        {it.handoff.assigned_to ? "assigned" : "needs agent"}
-                      </Badge>
+                      <span className="ml-auto flex items-center gap-1.5">
+                        {isPlanLimitReason(it.handoff.reason) && (
+                          <Badge variant="warn" title={handoffReasonLabel(it.handoff.reason as string)}>
+                            plan limit
+                          </Badge>
+                        )}
+                        <Badge variant="accent">{it.handoff.assigned_to ? "assigned" : "needs agent"}</Badge>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -285,7 +291,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
           </div>
           <div className="truncate text-xs text-faint">
             {detail ? `${channelMeta(detail.channel).label} · ${detail.status}` : ""}
-            {handoff?.reason ? ` · reason: ${handoff.reason}` : ""}
+            {handoff?.reason ? ` · reason: ${handoffReasonLabel(handoff.reason)}` : ""}
           </div>
         </div>
         {isHandoff && !assigned && (

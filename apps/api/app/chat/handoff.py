@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import uuid
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Conversation, Handoff
 from app.realtime.hub import hub, inbox_topic
 from app.webhooks.dispatch import emit_event
+
+#: `Handoff.reason` for a conversation routed to the owner because the plan stopped the bot from
+#: answering (trial over / messages spent — docs/18 §8). Kept apart from the reasons a person or the
+#: model asks for ("keyword", "distress:crisis", …) so the inbox can label it differently.
+PLAN_LIMIT_REASON = "plan_limit"
 
 # Keyword triggers checked against the user's message when `features.handoff_enabled`.
 HANDOFF_KEYWORDS = (
@@ -59,3 +67,21 @@ async def trigger_handoff(
         {"conversation_id": str(conversation.id), "handoff_id": str(handoff.id), "reason": reason},
     )
     return handoff
+
+
+async def has_open_plan_limit_handoff(session: AsyncSession, conversation_id: uuid.UUID) -> bool:
+    """True while a plan-limit handoff is still waiting for the owner (not yet taken over).
+
+    Once the owner takes the conversation over (`assigned`) their replies are the answer, so
+    the visitor's next message is no longer "unanswered".
+    """
+    stmt = (
+        select(Handoff.id)
+        .where(
+            Handoff.conversation_id == conversation_id,
+            Handoff.reason == PLAN_LIMIT_REASON,
+            Handoff.status == "open",
+        )
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none() is not None

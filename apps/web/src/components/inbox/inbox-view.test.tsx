@@ -164,3 +164,51 @@ describe("connect flow", () => {
     expect(push).toHaveBeenCalledWith("/agents");
   });
 });
+
+describe("plan-limit handoffs", () => {
+  const item = (id: string, reason: string | null) => ({
+    id,
+    agent_id: "agent-1",
+    channel: "widget",
+    status: "handoff",
+    title: `Chat ${id}`,
+    channel_user_id: `visitor-${id}`,
+    message_count: 1,
+    last_message_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    contact: null,
+    attention_level: null,
+    handoff: {
+      id: `h-${id}`,
+      status: "open",
+      requested_by: reason === "plan_limit" ? "system" : "user",
+      reason,
+      assigned_to: null,
+      notes: [],
+      tags: [],
+      created_at: new Date().toISOString(),
+      resolved_at: null,
+    },
+  });
+
+  it("tells a plan-limit conversation apart from an ordinary handoff request", async () => {
+    listInbox.mockResolvedValue([item("a", "plan_limit"), item("b", "keyword")]);
+    renderInbox();
+
+    const planLimit = await screen.findByText("plan limit");
+    expect(planLimit).toHaveAttribute("title", "agent couldn't reply (plan limit)");
+    // Only the one row carries it; both still read "needs agent" like any handoff.
+    expect(screen.getAllByText("plan limit")).toHaveLength(1);
+    expect(screen.getAllByText("needs agent")).toHaveLength(2);
+  });
+
+  it("does not badge a handoff that has been resolved", async () => {
+    const resolved = item("c", "plan_limit");
+    resolved.handoff.status = "resolved";
+    listInbox.mockResolvedValue([resolved]);
+    renderInbox();
+
+    await screen.findByText("Chat c");
+    expect(screen.queryByText("plan limit")).toBeNull();
+  });
+});

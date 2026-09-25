@@ -13,10 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.email import get_email_backend
 from app.core.email_templates import trial_notice_email
 from app.models import AuditLog, Organization, OrgMessageUsage
-from app.worker.trial import sweep
+from app.worker.trial import sweep as _sweep_all
 from tests.selfserve_helpers import signup, trial_org, unique_email
 
 pytestmark = pytest.mark.usefixtures("self_serve")
+
+
+async def sweep(db: AsyncSession, org: Organization, *, now: dt.datetime) -> dict[str, int]:
+    """Sweep just this test's workspace, so the result never depends on other rows in the DB."""
+    return await _sweep_all(db, now=now, only_org=org.id)
 
 
 async def _start(client: AsyncClient, db: AsyncSession) -> tuple[Organization, dt.datetime]:
@@ -34,35 +39,35 @@ def _subjects() -> list[str]:
 
 
 async def test_a_fresh_trial_sends_nothing(client: AsyncClient, db_session: AsyncSession) -> None:
-    _, start = await _start(client, db_session)
-    assert await sweep(db_session, now=start + dt.timedelta(hours=1)) == {}
+    org, start = await _start(client, db_session)
+    assert await sweep(db_session, org, now=start + dt.timedelta(hours=1)) == {}
     assert _subjects() == []
 
 
 async def test_the_countdown_emails_go_out_once_each(client: AsyncClient, db_session: AsyncSession) -> None:
-    _, start = await _start(client, db_session)
+    org, start = await _start(client, db_session)
 
-    assert await sweep(db_session, now=start + dt.timedelta(days=6, hours=23)) == {}
-    assert await sweep(db_session, now=start + dt.timedelta(days=7, hours=1)) == {"trial_day7": 1}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=6, hours=23)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=7, hours=1)) == {"trial_day7": 1}
     assert len(_subjects()) == 1 and "3 days" in _subjects()[0]
 
     # Re-running (the sweep is hourly) must not send it again.
-    assert await sweep(db_session, now=start + dt.timedelta(days=7, hours=2)) == {}
-    assert await sweep(db_session, now=start + dt.timedelta(days=8)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=7, hours=2)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=8)) == {}
 
-    assert await sweep(db_session, now=start + dt.timedelta(days=9, hours=1)) == {"trial_day9": 1}
-    assert await sweep(db_session, now=start + dt.timedelta(days=9, hours=2)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=9, hours=1)) == {"trial_day9": 1}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=9, hours=2)) == {}
     assert len(_subjects()) == 2
 
 
 async def test_a_sweep_that_meets_the_trial_late_sends_only_the_most_urgent(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    _, start = await _start(client, db_session)  # e.g. the beat process was down for days
-    assert await sweep(db_session, now=start + dt.timedelta(days=9, hours=12)) == {"trial_day9": 1}
+    org, start = await _start(client, db_session)  # e.g. the beat process was down for days
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=9, hours=12)) == {"trial_day9": 1}
     assert len(_subjects()) == 1
     # The milder notice was marked done rather than sent late.
-    assert await sweep(db_session, now=start + dt.timedelta(days=9, hours=13)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=9, hours=13)) == {}
 
 
 async def test_the_trial_ended_email_is_sent_once_and_audited(
@@ -75,8 +80,8 @@ async def test_the_trial_ended_email_is_sent_once_and_audited(
     await db_session.flush()
 
     over = start + dt.timedelta(days=10, minutes=5)
-    assert await sweep(db_session, now=over) == {"trial_ended": 1}
-    assert await sweep(db_session, now=over + dt.timedelta(hours=1)) == {}
+    assert await sweep(db_session, org, now=over) == {"trial_ended": 1}
+    assert await sweep(db_session, org, now=over + dt.timedelta(hours=1)) == {}
 
     (mail,) = get_email_backend().outbox
     assert "ended" in mail.subject.lower()
@@ -103,14 +108,14 @@ async def test_eighty_and_one_hundred_percent_of_messages(
         await db_session.flush()
 
     await set_used(399)
-    assert await sweep(db_session, now=now) == {}
+    assert await sweep(db_session, org, now=now) == {}
     await set_used(400)
-    assert await sweep(db_session, now=now) == {"messages_80": 1}
+    assert await sweep(db_session, org, now=now) == {"messages_80": 1}
     await set_used(450)
-    assert await sweep(db_session, now=now) == {}  # still only the one 80% email
+    assert await sweep(db_session, org, now=now) == {}  # still only the one 80% email
     await set_used(500)
-    assert await sweep(db_session, now=now) == {"messages_100": 1}
-    assert await sweep(db_session, now=now) == {}
+    assert await sweep(db_session, org, now=now) == {"messages_100": 1}
+    assert await sweep(db_session, org, now=now) == {}
     assert len(_subjects()) == 2
     assert "80%" in _subjects()[0] and "all" in _subjects()[1].lower()
 
@@ -119,7 +124,7 @@ async def test_legacy_orgs_get_no_trial_emails(client: AsyncClient, db_session: 
     org, start = await _start(client, db_session)
     org.plan = "legacy"
     await db_session.flush()
-    assert await sweep(db_session, now=start + dt.timedelta(days=30)) == {}
+    assert await sweep(db_session, org, now=start + dt.timedelta(days=30)) == {}
     assert _subjects() == []
 
 
@@ -128,7 +133,7 @@ async def test_the_email_goes_to_the_workspace_owner(client: AsyncClient, db_ses
     org = await db_session.get(Organization, uuid.UUID(org_id))
     assert org is not None and org.trial_started_at is not None
     get_email_backend().outbox.clear()
-    await sweep(db_session, now=org.trial_started_at + dt.timedelta(days=7, hours=1))
+    await sweep(db_session, org, now=org.trial_started_at + dt.timedelta(days=7, hours=1))
     assert [m.to for m in get_email_backend().outbox] == [auth["user"]["email"]]
 
 

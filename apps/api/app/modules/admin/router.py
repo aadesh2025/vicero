@@ -62,6 +62,15 @@ async def automations(
     return await service.automations_overview(session)
 
 
+@router.get("/n8n-signature-audit", response_model=schemas.N8nSignatureAuditOut)
+async def n8n_signature_audit(
+    _staff: User = Depends(require_staff),
+    session: AsyncSession = Depends(get_session),
+) -> schemas.N8nSignatureAuditOut:
+    """Which bound n8n tools point at a workflow that would accept an unsigned call (R15)."""
+    return await service.n8n_signature_audit(session)
+
+
 @router.get("/feature-flags", response_model=list[schemas.FeatureFlagOut])
 async def list_flags(
     _staff: User = Depends(require_staff),

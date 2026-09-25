@@ -30,7 +30,7 @@ which parses the file with its own rules that the Python fix cannot reach.
 | `ENV` | dev/test/prod | yes | dev | no |
 | `SECRET_KEY` | JWT signing + key encryption | yes | — | yes (generate) |
 | `DATABASE_URL` | Postgres async DSN | yes | compose default | no |
-| `POSTGRES_HOST_PORT` | host port the bundled Postgres binds (default `5432`); must agree with `DATABASE_URL`. **Compose-only**, same as `N8N_HOST_PORT` — read from the shell or `infra/.env`, not from the root `.env` | no |
+| `POSTGRES_HOST_PORT` | host port the bundled Postgres binds (default `5432`); must agree with `DATABASE_URL`. **Compose-only**, same as `N8N_HOST_PORT` — read from the shell or `infra/.env` (machine-specific ports only; secrets live in the root `.env`) | no |
 | `REDIS_URL` | Redis DSN | yes | compose default | no |
 | `API_BASE_URL` / `WEB_BASE_URL` | absolute URLs | yes | localhost | no |
 
@@ -125,7 +125,8 @@ serves photos from token-bearing URLs we deliberately never persist (see ADR-036
 | `N8N_BASE_URL` | n8n REST/webhook base (default `http://n8n:5678`) | no |
 | `N8N_HOST_PORT` | host port the bundled n8n binds (default `5678`); must agree with `N8N_BASE_URL`. **Compose-only** — read from the shell or `infra/.env`, not from the root `.env` (which is passed to containers via `env_file` and so never reaches `${...}` interpolation) | no |
 | `N8N_API_KEY` | n8n public API auth — needs the workflow read/list/create/update/activate scopes | yes (from n8n UI) |
-| `N8N_WEBHOOK_SIGNING_SECRET` | sign BotForge→n8n calls; **n8n workflows verify it** (docs/07 "Webhook signature verification"). Must also be in `infra/.env` (compose interpolation) and reach the n8n container, or every call is rejected | generate |
+| `N8N_WEBHOOK_SIGNING_SECRET` | sign BotForge→n8n calls; **n8n workflows verify it** (docs/07 "Webhook signature verification"). **Lives only in the root `.env`** — the n8n container gets it by compose interpolation, so start with `make up` / `--env-file .env --env-file ../.env`, never a copy in `infra/.env`. Without it n8n has an empty secret and rejects every call (fail closed) | generate |
+| `N8N_REQUIRE_SIGNATURE_CHECK` | `true` (default): binding an n8n tool is refused unless its workflow verifies BotForge's signature (RISK-REGISTER R15); a pasted webhook URL is resolved via the n8n API, so it needs `N8N_API_KEY`. `false` only for a deliberately unsigned dev n8n. Audit existing binds: `GET /v1/admin/n8n-signature-audit` | no |
 
 `N8N_HOST_PORT` exists because 5678 is often already taken — on the build machine by an
 unrelated n8n belonging to another project. BotForge must not create or activate workflows in

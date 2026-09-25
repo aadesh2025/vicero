@@ -13,11 +13,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import rbac
+from app.core.config import settings
 from app.core.crypto import encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.core.ssrf import is_blocked_host
-from app.integrations.n8n_client import get_client
+from app.integrations.n8n_client import N8nClient, get_client
+from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
 from app.models import Agent, AgentVersion, MCPServer, Tool, ToolRun
 from app.modules.orgs.deps import OrgContext
@@ -393,6 +395,46 @@ async def list_n8n_workflows(session: AsyncSession, ctx: OrgContext) -> list[sch
     return out
 
 
+async def _require_signed_workflow(
+    client: N8nClient, workflow: dict[str, Any] | None, webhook_url: str
+) -> None:
+    """Refuse a workflow that would accept an unsigned call (RISK-REGISTER R15).
+
+    BotForge signs every request to an n8n webhook, but n8n only checks that signature if the
+    workflow says to — a hand-built or pre-fix workflow accepts a bare `curl` from anyone with
+    its URL, bypassing the agent, RBAC and budgets. `workflow` is what we already fetched when
+    binding by id; for a pasted URL it is None and we resolve it, because **the URL is what
+    BotForge will actually call**, whatever `workflow_id` accompanied it. A URL that cannot be
+    resolved (no `N8N_API_KEY`, n8n down, a workflow on some other n8n) cannot be verified, so it
+    is refused rather than trusted.
+    """
+    if workflow is None:
+        try:
+            workflow = await client.find_workflow_by_webhook_url(webhook_url)
+        except AppError as exc:
+            raise AppError(
+                "tools.n8n_unverifiable",
+                f"Could not check that this webhook verifies BotForge's signature ({exc.message}). "
+                "Bind by workflow instead, or set N8N_API_KEY so BotForge can inspect it.",
+                400,
+            ) from exc
+        if workflow is None:
+            raise AppError(
+                "tools.n8n_unverifiable",
+                "No workflow on BotForge's n8n serves that webhook URL, so BotForge cannot check "
+                f"that it verifies the signature. {FIX_HINT}",
+                400,
+            )
+    reason = unverified_reason(workflow)
+    if reason:
+        raise AppError(
+            "tools.n8n_unsigned_workflow",
+            f"This workflow would accept unsigned calls: {reason}. {FIX_HINT}",
+            400,
+            details={"workflow_id": workflow.get("id"), "workflow_name": workflow.get("name")},
+        )
+
+
 async def bind_n8n_workflow(
     session: AsyncSession, ctx: OrgContext, data: schemas.BindN8nRequest
 ) -> schemas.ToolOut:
@@ -400,8 +442,9 @@ async def bind_n8n_workflow(
     client = get_client()
     webhook_url = data.webhook_url
     workflow_name = data.workflow_name
+    fetched: dict[str, Any] | None = None
     if not webhook_url and data.workflow_id:
-        workflow = await client.get_workflow(data.workflow_id)
+        workflow = fetched = await client.get_workflow(data.workflow_id)
         name = str(workflow.get("name", ""))
         # Same visibility rule as the list endpoint — closes the gap where an org could
         # bind a workflow it was never shown just by knowing (or guessing) its n8n id.
@@ -413,6 +456,8 @@ async def bind_n8n_workflow(
         webhook_url = client.extract_webhook_url(workflow)
     if not webhook_url:
         raise AppError("tools.n8n_no_webhook", "Could not resolve a webhook URL for this workflow.", 400)
+    if settings.n8n_require_signature_check:
+        await _require_signed_workflow(client, fetched, webhook_url)
 
     input_schema = data.input_schema or n8n_args_schema()
     tool = Tool(

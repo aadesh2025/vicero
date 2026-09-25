@@ -47,7 +47,7 @@ agent, RBAC, budget limits and any input validation entirely. So:
   the callback verifier).
 - **Fail closed.** No secret configured, missing headers, stale timestamp, unavailable raw body or a bad MAC
   all answer 401. A workflow must never fall through to "accept" because something is unset.
-- **The n8n container must be given the secret.** `N8N_WEBHOOK_SIGNING_SECRET` (must equal BotForge's) plus
+- **The n8n container must be given the secret.** `N8N_WEBHOOK_SIGNING_SECRET` (the root `.env` value — one source, never a copy) plus
   `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — n8n 2.x blocks both `$env`
   and `require('crypto')` in Code nodes by default. The dev compose sets all three; **a production n8n
   needs them too** (`docker-compose.prod.yml` has no n8n service — an external n8n must be configured the

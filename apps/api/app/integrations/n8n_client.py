@@ -11,6 +11,7 @@ import hmac
 import json
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -21,6 +22,13 @@ from app.core.logging import get_logger
 log = get_logger("n8n")
 
 _WEBHOOK_NODE_TYPES = {"n8n-nodes-base.webhook"}
+
+
+def _webhook_tail(url: str) -> str | None:
+    """`https://h/webhook/abc` -> `/webhook/abc`. The `webhook-test` (editor) URL is not a
+    production endpoint and is deliberately not matched."""
+    path = urlparse(url).path.rstrip("/")
+    return path if path.startswith("/webhook/") else None
 
 
 def _signing_secret() -> str:
@@ -108,6 +116,29 @@ class N8nClient:
                 path = params.get("path") or node.get("webhookId")
                 if path:
                     return f"{self.base_url}/webhook/{path}"
+        return None
+
+    async def find_workflow_by_webhook_url(self, url: str) -> dict[str, Any] | None:
+        """The n8n workflow whose Webhook node serves `url`, or None.
+
+        Matched on the `/webhook/<path>` tail, not the host: an operator can paste the URL n8n
+        shows (public hostname) while BotForge's own `N8N_BASE_URL` is an internal one.
+        """
+        return self.match_workflow_by_webhook_url(await self.list_workflows(), url)
+
+    @staticmethod
+    def match_workflow_by_webhook_url(workflows: list[dict[str, Any]], url: str) -> dict[str, Any] | None:
+        """Pure half of `find_workflow_by_webhook_url`, so a caller that already holds the
+        workflow list (the audit walks every bound tool) does not re-fetch it per tool."""
+        tail = _webhook_tail(url)
+        if tail is None:
+            return None
+        for wf in workflows:
+            for node in wf.get("nodes", []):
+                if node.get("type") in _WEBHOOK_NODE_TYPES:
+                    path = (node.get("parameters") or {}).get("path") or node.get("webhookId")
+                    if path and f"/webhook/{str(path).strip('/')}" == tail:
+                        return wf
         return None
 
     @staticmethod

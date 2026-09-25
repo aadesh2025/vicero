@@ -271,6 +271,12 @@ class Settings(BaseSettings):
     n8n_base_url: str = "http://localhost:5678"
     n8n_api_key: str | None = None
     n8n_webhook_signing_secret: str | None = None
+    # Refuse to bind an n8n workflow as a tool unless its JSON shows the BotForge signature check
+    # in the request path (RISK-REGISTER R15, `app.integrations.n8n_signature`). On by default;
+    # a pasted webhook URL is resolved to its workflow via the n8n API, so with no `N8N_API_KEY`
+    # (or a URL that matches nothing) it cannot be verified and is refused. Turn off only for a
+    # deliberately unsigned dev n8n.
+    n8n_require_signature_check: bool = True
 
     # --- Auth / rate limiting ---
     auth_rate_limit: int = 30

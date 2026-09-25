@@ -9,6 +9,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
+from app.core.config import settings
 from app.integrations.n8n_client import N8nClient, sign, verify_callback
 from app.llm.fake import ScriptedToolProvider
 from app.llm.types import ToolCall
@@ -222,6 +223,8 @@ async def _headers(client: AsyncClient, email: str = "n8n@example.com") -> dict[
 
 
 async def test_bind_and_agent_calls_n8n_tool(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Tests tool execution, not bind gating (tests/test_n8n_signature_gate.py does that).
+    monkeypatch.setattr(settings, "n8n_require_signature_check", False)
     from app.modules.conversations import service as chat_service
 
     def handler(_r: httpx.Request) -> httpx.Response:
@@ -265,6 +268,7 @@ async def test_bind_and_agent_calls_n8n_tool(client: AsyncClient, monkeypatch: p
 
 
 async def test_n8n_callback_resolves_pending_run(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "n8n_require_signature_check", False)
     from app.modules.conversations import service as chat_service
 
     def handler(_r: httpx.Request) -> httpx.Response:

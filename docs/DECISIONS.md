@@ -18,6 +18,36 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-089: An n8n workflow can only be bound as a tool if it verifies BotForge's signature, and the signing secret has one home (RISK-REGISTER R15)
+
+- **Context.** R15's first fix made every *shipped* workflow verify the HMAC, but a workflow built by hand
+  in the n8n UI (or cloned earlier) still accepted an unsigned `curl`, and nothing stopped binding one.
+  The secret also lived in two files (root `.env`, `infra/.env`) that had to be kept equal by hand.
+- **Decision 1 — gate at bind time, structurally.** `bind_n8n_workflow` refuses (400
+  `tools.n8n_unsigned_workflow`, message names the missing piece and points at `infra/n8n/README.md`)
+  unless `integrations/n8n_signature.unverified_reason()` finds, for every Webhook node: `rawBody` on; only
+  outgoing links to a Code node containing `createHmac` + `x-botforge-signature` + `timingSafeEqual`; that
+  node feeding only IF/Switch nodes that test `verified`. It checks *shape*, not a node *name* — a node
+  called "Verify BotForge signature" that does nothing fails (tested). **The pasted `webhook_url` path is
+  covered too:** the URL is what BotForge actually calls, so it is resolved to its workflow through the n8n
+  API (matched on the `/webhook/<path>` tail, since the operator may paste a public hostname; `webhook-test`
+  URLs never match) and a `workflow_id` sent alongside cannot launder an unverified URL. A URL that cannot be
+  resolved (no `N8N_API_KEY`, n8n down, unknown path) is refused as `tools.n8n_unverifiable` — unverifiable is
+  treated as unverified. `N8N_REQUIRE_SIGNATURE_CHECK=false` opts out for a deliberately unsigned dev n8n.
+- **Decision 2 — audit the past.** `GET /v1/admin/n8n-signature-audit` (staff only) re-runs the same check
+  over every bound n8n tool in every org (disabled ones too) and returns counts plus the unverified /
+  unresolved bindings. Bind-time enforcement cannot see binds made before it, or a workflow edited after.
+- **Decision 3 — one home for the secret: the root `.env`.** It is what `pydantic-settings` (and the api /
+  worker `env_file`) already read, so it is what signs. Compose interpolation ignores the root `.env` by
+  default, so the dev `Makefile` now passes `--env-file infra/.env --env-file .env` (infra/.env keeps only
+  machine-specific host ports) and the `infra/.env` copy is gone. Bare `docker compose up` leaves n8n's
+  secret empty, which fails closed (every call 401) rather than open, so the documented
+  `docker compose up -d postgres redis` still works — `:?` would have broken it.
+- **Not decided / still open.** The lint is not proof (marker strings in a comment satisfy it; the
+  shipped verifier's real behaviour is proven only for the shipped JSONs). There is still no production n8n.
+- **Consequence for tests.** Chat-flow tests that bind a pasted URL without an n8n mock set
+  `n8n_require_signature_check=False`; gate behaviour is tested in `tests/test_n8n_signature_gate.py`.
+
 ### ADR-087: A tenant-set LLM provider `base_url` must be public unless the operator allowlists the host (S-03)
 - **Date:** 2026-09-24
 - **Status:** accepted

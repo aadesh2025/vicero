@@ -13,7 +13,9 @@ from app.chat import guard_models
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.probes import check_database, check_redis
+from app.integrations.n8n_client import N8nClient
 from app.integrations.n8n_client import get_client as get_n8n_client
+from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.models import (
     Agent,
     AgentVersion,
@@ -342,6 +344,66 @@ async def automations_overview(session: AsyncSession) -> schemas.AutomationsOver
     order = {"untagged": 0, "unknown-org": 1, "org": 2, "shared-template": 3, "internal": 4}
     out.sort(key=lambda w: (order.get(w.owner_kind, 9), w.name.lower()))
     return schemas.AutomationsOverviewOut(workflows=out)
+
+
+async def n8n_signature_audit(session: AsyncSession) -> schemas.N8nSignatureAuditOut:
+    """Every bound n8n tool, across all orgs, judged by the bind-time signature check (R15).
+
+    Bind-time enforcement only covers binds made after it shipped. This is the sweep over the
+    ones that predate it — and over any workflow edited *after* it was bound. Disabled tools
+    are included: a disabled tool is one click from live.
+    """
+    client = get_n8n_client()
+    try:
+        workflows = await client.list_workflows()
+    except AppError as exc:
+        return schemas.N8nSignatureAuditOut(error=exc.message)
+    by_id = {str(w.get("id")): w for w in workflows}
+
+    stmt = (
+        select(Tool, Organization.slug, Organization.name, Agent.name)
+        .join(Organization, Organization.id == Tool.organization_id)
+        .outerjoin(Agent, Agent.id == Tool.agent_id)
+        .where(Tool.type == "n8n")
+        .order_by(Organization.slug, Tool.name)
+    )
+    out = schemas.N8nSignatureAuditOut(fix_hint=FIX_HINT)
+    for tool, org_slug, org_name, agent_name in (await session.execute(stmt)).all():
+        config = tool.config or {}
+        wf_id = config.get("workflow_id")
+        url = config.get("webhook_url")
+        # The URL is what BotForge actually calls, so it decides — same rule as the bind check.
+        wf = N8nClient.match_workflow_by_webhook_url(workflows, url) if url else None
+        if wf is None and wf_id and not url:
+            wf = by_id.get(str(wf_id))
+        reason: str | None
+        if wf is None:
+            status, reason = "unresolved", "no workflow in n8n serves this tool's webhook, so it cannot be checked"
+        else:
+            reason = unverified_reason(wf)
+            status = "verified" if reason is None else "unverified"
+        if status == "verified":
+            out.verified += 1
+            continue
+        if status == "unverified":
+            out.unverified += 1
+        else:
+            out.unresolved += 1
+        out.findings.append(
+            schemas.N8nSignatureFindingOut(
+                organization_slug=org_slug,
+                organization_name=org_name,
+                agent_name=agent_name,
+                tool_name=tool.name,
+                enabled=bool(tool.enabled),
+                workflow_id=str(wf.get("id")) if wf else (str(wf_id) if wf_id else None),
+                workflow_name=str(wf.get("name")) if wf else None,
+                status=status,
+                reason=reason,
+            )
+        )
+    out.findings.sort(key=lambda f: (f.status != "unverified", f.organization_slug, f.tool_name))
+    return out
 
 
 def _resolve_owner(

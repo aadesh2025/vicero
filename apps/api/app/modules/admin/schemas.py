@@ -98,6 +98,33 @@ class HealthOut(BaseModel):
     guard_injection_model: str | None = None
 
 
+class N8nSignatureFindingOut(BaseModel):
+    """One bound n8n tool and whether its workflow verifies BotForge's signature."""
+
+    organization_slug: str
+    organization_name: str
+    agent_name: str | None
+    tool_name: str
+    enabled: bool
+    workflow_id: str | None
+    workflow_name: str | None
+    #: `verified` | `unverified` | `unresolved` (workflow not found in n8n, so it cannot be judged).
+    status: str
+    #: Why it is not verified. `None` when `status == "verified"`.
+    reason: str | None = None
+
+
+class N8nSignatureAuditOut(BaseModel):
+    verified: int = 0
+    unverified: int = 0
+    unresolved: int = 0
+    #: Only the bindings that need attention (unverified + unresolved), unverified first.
+    findings: list[N8nSignatureFindingOut] = []
+    #: Set when n8n could not be queried at all; the counts are then meaningless.
+    error: str | None = None
+    fix_hint: str | None = None
+
+
 class AutomationBindingOut(BaseModel):
     """One BotForge tool pointing at this workflow."""
 

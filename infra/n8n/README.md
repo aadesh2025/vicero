@@ -43,6 +43,21 @@ Every request is signed: headers `X-BotForge-Signature` (HMAC-SHA256 of `"{times
 using `N8N_WEBHOOK_SIGNING_SECRET`) and `X-BotForge-Timestamp`. **Every JSON in this directory verifies
 them** (see below) — a workflow that does not is callable by anyone who has its URL.
 
+**BotForge enforces this when a workflow is bound as a tool.** `POST /v1/tools/n8n/bind` fetches the
+workflow from the n8n API and refuses (400 `tools.n8n_unsigned_workflow`) unless every Webhook node has
+**Raw Body** on and feeds only a Code node that does the HMAC check (`createHmac`, `x-botforge-signature`,
+`timingSafeEqual`) whose result an IF/Switch then tests (`verified`). To pass, start from
+`template-starter-automation.json` (or copy its first three nodes). A pasted webhook URL is resolved to its
+workflow through the n8n API (matched on the `/webhook/<path>`), so binding by URL needs `N8N_API_KEY`; a
+URL that matches no workflow is refused as unverifiable. It is a structural lint, not proof — the real
+verifier's behaviour is pinned by `tests/test_n8n_workflows_signed.py`. `N8N_REQUIRE_SIGNATURE_CHECK=false`
+turns it off for a deliberately unsigned dev n8n.
+
+**Binds that predate the check** are not re-examined automatically. Staff can list them with
+`GET /v1/admin/n8n-signature-audit` (every bound n8n tool across all orgs → `verified` / `unverified` /
+`unresolved`, with the reason and org/agent/tool, unverified first). Run it once after deploying the check,
+and again after editing any bound workflow in the n8n UI.
+
 - **Sync** workflows must end in a **Respond to Webhook** node returning JSON — that JSON is fed
   straight back to the model.
 - **Async** workflows do their work, then `POST` back to `callback_url` with a signed body
@@ -82,12 +97,18 @@ since `docker-compose.prod.yml` has no n8n service):
 
 | n8n env | Why |
 |---|---|
-| `N8N_WEBHOOK_SIGNING_SECRET` | the shared secret — **must equal** the root `.env` value BotForge signs with |
+| `N8N_WEBHOOK_SIGNING_SECRET` | the shared secret — the root `.env` value BotForge signs with (one source, see below) |
 | `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` | n8n 2.x hides `$env` from Code nodes by default |
 | `NODE_FUNCTION_ALLOW_BUILTIN=crypto` | ...and blocks `require('crypto')` |
 
-Compose interpolates from the shell or `infra/.env` — **not** the root `.env` — so the secret has to be in
-`infra/.env` as well (gitignored). After changing it: `cd infra && docker compose up -d n8n`. If the secret
+**Why one file.** The secret lives **only in the root `.env`** — that is where BotForge's own settings loader
+reads it, so it is what the API signs with. Compose's `${...}` interpolation ignores the root `.env` by
+default and reads `infra/.env`, which used to hold a second copy. Two copies drift silently: rotate one and
+n8n rejects every call as "invalid signature" while nothing looks wrong on the BotForge side. So the compose
+file has no copy; `make up` passes `--env-file .env` and n8n gets the same value the API signs with. From
+`infra/` by hand: `docker compose --env-file .env --env-file ../.env up -d n8n`. Started without it, n8n has
+an empty secret and rejects every call (fail closed — safe, but every tool call 401s). After changing it:
+`make up` (recreates n8n). If the secret
 is missing or different, every call is rejected with 401 rather than accepted — that is the failure mode
 to look for when a tool "stopped working".
 
@@ -107,8 +128,7 @@ workflows. Rebuild in this order:
 1. `cd infra && docker compose up -d n8n`, open http://localhost:5679 and create the owner account.
 2. n8n → Settings → **n8n API** → create a key with workflow create/read/list/update/activate, tag
    create/list/read/update and workflowTags scopes; put it in the root `.env` as `N8N_API_KEY`.
-3. Make sure `infra/.env` has `N8N_WEBHOOK_SIGNING_SECRET` (same as the root `.env`) and recreate the
-   container if you had to add it.
+3. Make sure the root `.env` has `N8N_WEBHOOK_SIGNING_SECRET` and start n8n with `make up` (see above).
 4. `node scripts/import-n8n-workflows.mjs` — creates or updates every `demo-niches/*.json`, activates it and
    tags it `demo` (`--org acme --dir infra/n8n` for other sets). Idempotent.
 5. Restart the API so it picks up the new `N8N_API_KEY`. Tools bound before the wipe keep working (they store

@@ -38,6 +38,11 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **n8n bind-time signature enforcement, audit, and a single home for the signing secret (2026-09-25, R15, ADR-089).**
+  Binding an n8n tool now fails unless the workflow verifies BotForge's signature (by id or by pasted URL,
+  resolved via the n8n API); `GET /v1/admin/n8n-signature-audit` reports every already-bound tool that
+  doesn't; `N8N_WEBHOOK_SIGNING_SECRET` lives only in the root `.env` (`make up` passes both env files).
+  New `N8N_REQUIRE_SIGNATURE_CHECK`. R15 (b) — no production n8n — stays open.
 - **n8n webhook signatures are now verified, and the demo workflows live in the repo (2026-09-24, RISK-REGISTER R15).**
   BotForge signed every call to an n8n webhook, but no workflow checked it: an unsigned `curl` to a
   workflow URL ran the automation, bypassing the agent, RBAC and budgets.
@@ -48,8 +53,8 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
     and both example workflows.
   - **What n8n 2.x needed:** Code nodes cannot read `$env` or `require('crypto')` by default, so the dev
     compose n8n service now sets `N8N_WEBHOOK_SIGNING_SECRET`, `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and
-    `NODE_FUNCTION_ALLOW_BUILTIN=crypto`. Compose interpolates from `infra/.env`, not the root `.env`, so the
-    secret is in both (drift => every call 401, i.e. closed). Prod compose has no n8n service; the
+    `NODE_FUNCTION_ALLOW_BUILTIN=crypto`. Compose interpolates from `infra/.env`, not the root `.env`; the secret
+    was briefly copied into both (superseded 2026-09-25: one home, the root `.env` — see the entry above). Prod compose has no n8n service; the
     requirement is written up in docs/07 and `infra/n8n/README.md`.
   - **Verified live** against all four demo workflows: an 8-case attack matrix each (no headers, wrong MAC,
     no timestamp, 10-min replay, future timestamp, tampered body, wrong secret, **empty secret**) = all 401;

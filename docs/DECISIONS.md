@@ -18,9 +18,82 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-096: Production database is the bundled Postgres on the Oracle VM again — supersedes ADR-086's hosting decision
+- **Date:** 2026-09-25
+- **Status:** accepted (owner instruction, 2026-09-25). **Supersedes ADR-086 for database hosting only.** ADR-086's auth decision (a) — BotForge keeps its own auth, Supabase Auth is not adopted — is unchanged.
+- **Context:** ADR-086 chose Supabase-managed Postgres with the application containers on Oracle's free tier. Re-examined
+  before the first deploy, four things weigh against it for this stack:
+  - **Size cap.** Supabase's free tier is 500 MB of database. `chunks.embedding` is `vector(768)` plus an HNSW index, roughly
+    6-8 KB per chunk, so a modest knowledge base fills it. ADR-086 already said the free tier is "unsuitable for a paying
+    client's chat data".
+  - **Idle pause.** Free projects pause after about 7 days without activity — an outage for a quiet pilot.
+  - **Latency and unverified items.** Every query would cross the internet (ADR-086: the R4 latency numbers "do not transfer
+    at all"), and ADR-086's 🔶 items — IPv6-only direct host, pooler mode vs asyncpg prepared statements, the `extensions`
+    schema for `vector`, the PostgREST/Data API exposure of `public` tables — were all still unverified.
+  - **The box fits the database.** Oracle Always Free is now 2 OCPU / 12 GB (from June 2026; older accounts may be
+    grandfathered at 4 / 24), 200 GB storage. The prod stack's steady state is about 4-6 GB including Postgres (docs/19 s3),
+    so the database can live beside the app.
+- **Decision:** production uses the compose `postgres` service (`pgvector/pgvector:pg16`) on the same Oracle VM as the
+  application containers. `DATABASE_URL` stays the compose default (`...@postgres:5432/...`); no host port is published;
+  `migrate` runs `alembic upgrade head` on every `up`. Supabase is not on the critical path. It may still be used as an
+  **off-box backup target** (docs/19 s6). Local dev is unchanged.
+- **Alternatives considered:**
+  - Keep Supabase (ADR-086) — rejected for the reasons above; still viable later on a **paid** plan (about $25/month, 8 GB)
+    if the owner would rather not operate the database, in which case ADR-086's list is the checklist to work through.
+  - Postgres on a *second* Oracle instance — rejected: the free allowance is one 2 OCPU / 12 GB Arm shape, splitting it
+    halves RAM for both.
+  - A paid x86 VPS (about EUR 4-6/month) — kept as the fallback if 2 OCPU saturates or Oracle capacity blocks creation.
+- **Consequences:**
+  - The owner operates backups, upgrades and recovery. The `backup` service already dumps Postgres **and** archives the
+    uploads volume (ADR-082) but writes to the **same disk**: an off-box copy and one restore drill are required before a
+    paying client (docs/19 s6, s8).
+  - Single box, single point of failure. Oracle may reclaim an idle Always Free instance or close a free account
+    (docs/19 s7).
+  - `docs/16-VPS-MIGRATION.md`'s database sections are valid again for the self-hosted case; its box sizing (4 OCPU / 24 GB)
+    is stale — `docs/19-ORACLE-SINGLE-VPS-PLAN.md` is the current plan and takes precedence.
+  - **Not yet executed.** Nothing here has been built on Arm or deployed; the first deploy is the real test.
+
+### ADR-096: The private reference is a separate login with an email allow-list, not an `is_staff` page
+- **Date:** 2026-09-25
+- **Status:** accepted (supersedes the access-gate half of ADR-095)
+- **Context:** ADR-095 put the internal reference at `/internal-docs`, gated on the BotForge login plus
+  `is_staff`. The operator asked for something different: a **separate login, unconnected to the main
+  one, where only the administrator's email can sign in**, and inside it the real API keys and structure. The
+  first version also showed names only, never values. Two problems with the original design surfaced with it:
+  any BotForge account promoted to staff (or a bug in how `is_staff` is granted) opened the door, and a private
+  page that lives inside the customer dashboard shares that dashboard's whole attack surface.
+- **Decision:** `/vault` is its own area with its own credentials and no dependency on BotForge auth: no user row,
+  no JWT, no call to the API. `VAULT_ADMIN_EMAILS` is an exact-match allow-list; the password is checked against
+  a scrypt hash in `VAULT_PASSWORD_HASH` (made by `make vault-password`, which never prints or stores the password);
+  the session is a stateless HMAC-signed `httpOnly`, `SameSite=Strict` cookie of 8 hours, re-checked against the
+  allow-list on every request. It is **off** until all three settings are present and well-formed. Guessing is
+  bounded by a per-address limit plus a **global** one, because without a proxy `X-Forwarded-For` is
+  caller-controlled and a per-address limit alone resets on every guess; a wrong email and a wrong password get one
+  identical response and both run a full scrypt. Inside, real values are shown **masked, with a Reveal button**:
+  the page is server-rendered from names, descriptions and a masked preview only, and a value crosses the wire
+  only from `POST /api/vault/reveal`, which re-checks the session, refuses any name not in `.env.example` (so
+  `PATH` and the vault's own `VAULT_*` are absent, not filtered), is never cached, and is logged by name and
+  admin, never by value. `/internal-docs`, the `is_staff` check and its sidebar entry were removed so there is one
+  door, not two.
+- **Alternatives considered:** keeping `is_staff` and only adding values (rejected — it is the very coupling
+  the operator asked to avoid); an emailed one-time code (rejected for now — needs working SMTP and this deployment
+  uses the console backend, so codes would only appear in server logs); a server-side session table (rejected —
+  it would make the vault depend on the database it exists to help repair; the cost is that a cookie cannot be
+  revoked individually before it expires, mitigated by the 8-hour life and the per-request allow-list check);
+  always showing values in plain text (rejected — anything on screen is exposed to a shoulder-surf or screenshot);
+  rate limiting in Redis (rejected — same dependency argument).
+- **Consequences:** Three new required settings and one optional (`VAULT_ENV_FILE`), documented in `docs/ENV.md`.
+  **What the vault can show is bounded by what the web process can see.** The dev compose gives the web container
+  the whole root `.env`; the production compose gives it two variables, so nearly everything reads *not set* there
+  until an operator mounts the root `.env` and sets `VAULT_ENV_FILE` — which puts every API secret inside the web
+  container and is a real widening of what a web-tier compromise exposes, so it is a deliberate opt-in, not a default.
+  The limiter is per-process: several web replicas would each keep their own counters and loosen the limit. A
+  determined attacker can lock the real administrator out for fifteen minutes; that is recoverable, a guessed
+  password is not. Covered by `src/lib/vault/*.test.ts` and `src/app/api/vault/vault-routes.test.ts` (82 tests).
+
 ### ADR-095: The documentation site is MDX in the repo, and its API reference is generated, never written
 - **Date:** 2026-09-25
-- **Status:** accepted
+- **Status:** accepted (the private-area access gate was replaced by ADR-096)
 - **Context:** BotForge had no public-facing surface at all — `apps/web/src/app/page.tsx` redirected `/` to
   `/dashboard` — while `docs/05-FRONTEND.md §2` had specified a `/docs` route since day one. The repo's own
   documentation is written for a build agent, not a customer, and the one hand-written API catalogue
@@ -258,7 +331,7 @@ Format each entry as below. Newest at the top.
 
 ### ADR-086: Database hosting is Supabase-managed Postgres (on Oracle's free tier for compute), not self-hosted Postgres on the VPS
 - **Date:** 2026-09-24
-- **Status:** accepted. **Auth decision (owner, 2026-09-24): option (a) — database only.** BotForge keeps its own auth (argon2, JWT + rotating refresh, OAuth, magic links); Supabase Auth is **not** adopted at VPS deploy. Revisit only via a new ADR.
+- **Status:** database-hosting decision **superseded by ADR-096** (2026-09-25); the auth decision below stands. Originally: accepted. **Auth decision (owner, 2026-09-24): option (a) — database only.** BotForge keeps its own auth (argon2, JWT + rotating refresh, OAuth, magic links); Supabase Auth is **not** adopted at VPS deploy. Revisit only via a new ADR.
 - **Context:** `docs/16-VPS-MIGRATION.md` (not yet executed) assumes the API, worker and a self-managed
   `pgvector/pgvector:pg16` container all run on one Oracle Cloud Always Free VM (compose `postgres` service,
   nightly `pg_dump` to a volume, no published DB port). The actual plan is to keep the Oracle VM for the

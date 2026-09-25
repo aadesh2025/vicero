@@ -4,8 +4,8 @@
  * boundary rather than a filing convention:
  *
  *   `content/docs`     public. Anything here is world-readable and statically rendered.
- *   `content/internal` platform staff only. Served exclusively through the route handler
- *                      at `/api/internal-docs`, which checks `is_staff` on every request.
+ *   `content/internal` the private admin area only. Served only under `/vault`, behind its own
+ *                      sign-in and session check.
  *
  * `collectionRoot` is the only place a collection name becomes a path, and it accepts the
  * two literals above and nothing else. Every read goes through `readDoc`, which resolves

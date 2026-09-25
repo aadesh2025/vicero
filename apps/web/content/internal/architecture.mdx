@@ -5,9 +5,10 @@ group: System
 order: 1
 ---
 
-<Callout type="warn" title="Platform staff only">
+<Callout type="warn" title="Private area — administrator only">
 This section describes the system's internals — its full endpoint surface, its tenancy
-model and the names of every secret it reads. It is gated server-side on `is_staff`. Do
+model and the real values of every secret it reads. It sits behind its own sign-in at
+`/vault/login`, separate from BotForge accounts, and is checked on the server. Do
 not paste from it into a customer-facing channel.
 </Callout>
 

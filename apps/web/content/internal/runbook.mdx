@@ -51,6 +51,25 @@ The dev Postgres and Redis publish on **loopback only**, and `POSTGRES_PASSWORD`
 default — Compose refuses to start without one (ADR-093). A fresh clone must set it before
 `make up`.
 
+## The private area
+
+You are in it. To set it up on a new machine, or to change the password:
+
+```bash
+make vault-password        # asks for a password twice (hidden); prints two lines
+```
+
+Paste the two lines into the root `.env`, add `VAULT_ADMIN_EMAILS=you@example.com` (comma-separate
+several), restart the web app, and sign in at `/vault/login`. Running it again changes both values,
+which signs the administrator out everywhere.
+
+| Symptom | Cause |
+|---|---|
+| The login page says *Not set up on this server* | One of the three `VAULT_*` variables is missing, or `VAULT_SESSION_SECRET` is under 32 characters |
+| Correct password, still refused | The address is not in `VAULT_ADMIN_EMAILS`, or the hash was pasted with a stray space or quote |
+| *Too many attempts* | Five failures from one address, or thirty from anywhere, inside 15 minutes. Wait it out |
+| A value shows *not set* here but the API has it | The web container cannot see it. Dev passes the whole root `.env`; production does not (`VAULT_ENV_FILE`) |
+
 ## Regenerating the docs reference
 
 Any change that adds an endpoint or an environment variable must be followed by:

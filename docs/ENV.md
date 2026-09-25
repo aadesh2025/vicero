@@ -199,6 +199,32 @@ synchronous. If `SMTP_HOST`/`SMTP_FROM` are unset while the backend is `smtp`, a
 
 ## Billing (optional)
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` — needs-human; unset → billing
+## Private admin area (`/vault`) — ADR-096
+
+A sign-in that is **separate from BotForge accounts** and shows the internal reference plus the
+real value of every setting in `.env.example`. Off until all three of the first rows are set.
+
+| Var | Purpose | Needs human |
+|---|---|---|
+| `VAULT_ADMIN_EMAILS` | comma-separated allow-list; exact addresses only, case-insensitive | yes |
+| `VAULT_PASSWORD_HASH` | scrypt hash from `make vault-password` — never the password | yes |
+| `VAULT_SESSION_SECRET` | 32+ random characters; signs the 8-hour session cookie | yes |
+| `VAULT_ENV_FILE` | optional `KEY=value` file to read values from (see below) | no |
+
+Setup: `make vault-password` (asks for a password twice, hidden, prints two lines) → paste them and
+`VAULT_ADMIN_EMAILS` into the root `.env` → restart the web app → sign in at `/vault/login`.
+
+**What it can show depends on what the web process can see.** The dev compose gives the web
+container the whole root `.env`, so every value resolves. The production compose passes it only
+`API_INTERNAL_URL` and `NODE_ENV`, so almost every entry reads *not set* there. To show them, set
+`VAULT_ENV_FILE` to a read-only mount of the root `.env`. That puts every API secret inside the web
+container, which is a real widening of what a web-tier compromise exposes — a deliberate choice for
+the operator, so the production compose does not do it by default.
+
+The `VAULT_*` names are excluded from the vault's own listing and can never be revealed by it.
+Changing `VAULT_SESSION_SECRET` (or removing an address from `VAULT_ADMIN_EMAILS`) ends the
+affected sessions on their next request.
+
 disabled.
 
 ## Observability

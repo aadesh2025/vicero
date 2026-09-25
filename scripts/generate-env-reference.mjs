@@ -88,8 +88,10 @@ export function parseEnvExample(source) {
     const inline = hash === -1 ? "" : rest.slice(hash + 2).trim();
 
     const above = pending.join(" ").trim();
-    const needsHuman = above.startsWith("[HUMAN]");
-    const description = [above.replace(/^\[HUMAN\]\s*/, "").trim(), inline]
+    // The marker is not always on the first comment line — a note can precede it — so look for
+    // it anywhere in the block, and strip every occurrence from the prose.
+    const needsHuman = above.includes("[HUMAN]");
+    const description = [above.replace(/\[HUMAN\]\s*/g, "").replace(/\s{2,}/g, " ").trim(), inline]
       .filter(Boolean)
       .join(" — ");
 

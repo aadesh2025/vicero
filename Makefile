@@ -5,7 +5,7 @@ COMPOSE := docker compose --env-file infra/.env --env-file .env -f infra/docker-
 API := apps/api
 WEB := apps/web
 
-.PHONY: help up down logs dev-api dev-web install lint fmt typecheck test test-api test-web test-e2e migrate seed clean-devdata explain-fts eval-retrieval rechunk docs-generate docs-check
+.PHONY: help up down logs dev-api dev-web install lint fmt typecheck test test-api test-web test-e2e migrate seed clean-devdata explain-fts eval-retrieval rechunk docs-generate docs-check vault-password
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -89,3 +89,6 @@ docs-generate: ## Regenerate the docs site's OpenAPI + env reference from the co
 docs-check: docs-generate ## Fail if the committed docs reference is stale (CI)
 	@git diff --exit-code -- $(WEB)/content/generated \
 		|| (echo "\nThe generated docs reference is out of date. Run 'make docs-generate' and commit the result." && exit 1)
+
+vault-password: ## Generate VAULT_PASSWORD_HASH + VAULT_SESSION_SECRET for the private admin area
+	node scripts/vault-hash-password.mjs

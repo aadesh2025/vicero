@@ -38,7 +38,21 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
-- **Documentation site and staff-only internal reference (2026-09-25, ADR-094, ADR-095).** `/docs` is now the first
+- **Private admin area with its own login, `/vault` (2026-09-25, ADR-096).** Replaces the `is_staff` page: a
+  **separate sign-in, unconnected to BotForge accounts**, where only addresses in `VAULT_ADMIN_EMAILS` can enter, with a
+  scrypt-hashed password (`make vault-password`) and an 8-hour signed session. Inside: the internal architecture, all
+  215 endpoints (admin tags included) and every configuration entry with its **real value behind a Reveal button** —
+  masked in the HTML, fetched per click from a route that re-checks the session and logs the name, never the value.
+  Verified in a real browser against a production build with throwaway credentials: wrong email and wrong password give
+  one identical message, the full value is absent from the served HTML, `VAULT_*` and `PATH` cannot be revealed even
+  signed in, and after sign-out every route refuses. 82 unit tests. `/internal-docs` and its sidebar link are gone.
+  **Not done / limits:** it is off until you run `make vault-password` and set the three `VAULT_*` variables; in
+  production the web container is given only two variables, so most values read *not set* until you choose to mount the
+  root `.env` (`VAULT_ENV_FILE`, which widens what a web compromise exposes); no second factor; the login limiter is
+  per process. The signed-in flow has no Playwright test (it needs a real hash in the server env) — it is covered at the
+  handler level and was checked by hand. Also fixed: the env reference now recognises `[HUMAN]` on any line of a
+  comment block (`REDIS_PASSWORD` had lost its badge).
+- **Documentation site and staff-only internal reference (2026-09-25, ADR-094, ADR-095; the private half's `is_staff` gate was replaced by `/vault`, ADR-096).** `/docs` is now the first
   public surface: 16 customer-voice MDX pages (quickstart, concepts, agents, knowledge, widget, channels, inbox, n8n,
   security, self-hosting, and an API section covering auth, errors, streaming incl. the `replace` event, rate limits and
   webhooks) plus an endpoint reference rendered from a committed OpenAPI snapshot. `/internal-docs` is the platform-staff

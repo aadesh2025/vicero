@@ -166,3 +166,37 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
 - ⚠️ Still bound to all interfaces in the dev compose file: `api` (8000), `web` (3001), `n8n` (5679), `ollama` (11435).
   Redis still has no password (loopback-only for now). k8s manifests not audited.
 
+## 12. Private admin area `/vault` (ADR-096) — verified 2026-09-25
+- ✅ **Separate credentials, no coupling to BotForge auth.** No user row, no JWT, no API call. A BotForge session of any
+  role — including a real, valid one — is refused at every `/vault` route and at `/api/vault/reveal` (E2E-covered).
+- ✅ **Off until fully configured.** `VAULT_ADMIN_EMAILS`, `VAULT_PASSWORD_HASH` and a 32+ character
+  `VAULT_SESSION_SECRET` must all be present; a missing or weak one refuses everyone. A corrupt or foreign-format hash
+  verifies as **false**, never as "any password works" (tested, incl. a hostile cost parameter that would allocate GBs).
+- ✅ **Exact-match allow-list**, case-insensitive; no domain, suffix or substring rule. Re-read on every request, so
+  removing an address, or rotating `VAULT_SESSION_SECRET`, ends live sessions immediately.
+- ✅ **Password stored as scrypt (N=2^15, r=8, p=1)** with a per-hash salt. The format avoids `$`, `#` and spaces so
+  Compose and dotenv cannot corrupt it. `make vault-password` reads the password hidden, prints only the hash, and
+  writes no file.
+- ✅ **No user enumeration.** A wrong email and a wrong password return one identical response and both run a full
+  scrypt (a decoy hash stands in for unknown addresses), so neither content nor timing distinguishes them.
+- ✅ **Guessing is bounded** — 5 failures per address / 15 min, plus a global cap of 30 that ignores the address
+  (`X-Forwarded-For` is caller-controlled without a proxy), plus a 350 ms cost per failure. ⚠️ In-memory per process:
+  several web replicas would each keep their own counters. ⚠️ The global cap means an attacker can lock the real
+  administrator out for 15 minutes — a deliberate trade against a guessable password.
+- ✅ **Cookie** `bf_vault`: `httpOnly`, `SameSite=Strict`, `secure` in production, 8 h, HMAC-SHA256 signed and compared in
+  constant time. ⚠️ Stateless, so one cookie cannot be revoked before expiry; mitigated by the short life and the
+  per-request allow-list check.
+- ✅ **The gate is server-side.** Pages are server components that check the session before reading any content;
+  routes are `force-dynamic`. Verified on a cold build: no private string appears in any static asset or prerendered
+  file, and a signed-out request to any `/vault/*` page receives a redirect and none of the content.
+- ✅ **Secrets never enter rendered HTML.** The page carries names, descriptions and a masked preview (last 4 characters,
+  and only for values of 16+ characters). A real value exists in the browser only after a click on Reveal, held in
+  component state, hidden again after 30 s. Verified in a real browser: the full value is absent from the served HTML.
+- ✅ **`POST /api/vault/reveal`** re-checks the session, allows only names present in `.env.example` (so `PATH`,
+  `__proto__` and every `VAULT_*` are absent, not filtered), sends `Cache-Control: no-store`, and logs
+  `{event: vault_reveal, name, by}` — never the value.
+- ✅ **CSRF:** `SameSite=Strict` plus an `Origin`-vs-`Host` check on every state-changing route.
+- ⚠️ **What it can show depends on the web container's environment.** Dev passes the whole root `.env`; production passes two
+  variables. Showing production secrets means mounting the root `.env` (`VAULT_ENV_FILE`), which widens what a web-tier
+  compromise exposes — a deliberate opt-in, not a default.
+- ⚠️ **Not built:** a second factor; per-reveal re-authentication; an alert on repeated lockouts.

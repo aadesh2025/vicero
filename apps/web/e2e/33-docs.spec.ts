@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 import { WEB, createAccount, authenticateBrowser } from "./helpers";
 
 /**
- * The documentation site: public pages readable signed out, and the internal reference
- * refused to everyone who is not platform staff.
+ * The documentation site: public pages readable signed out, and the private admin area
+ * (`/vault`, its own sign-in) closed to everyone without its own session.
  *
  * The refusal assertions check the **response body**, not just the rendered page. A
  * client-side guard produces exactly the same screen as a server-side one — the difference
@@ -54,57 +54,76 @@ test.describe("public docs", () => {
   });
 });
 
-test.describe("internal docs", () => {
-  test("bounce a signed-out visitor to the login page", async ({ page }) => {
-    const response = await page.goto(`${WEB}/internal-docs`);
-    await expect(page).toHaveURL(/\/login/);
+test.describe("private admin area", () => {
+  test("sends a signed-out visitor to its own login page, not BotForge's", async ({ page }) => {
+    const response = await page.goto(`${WEB}/vault`);
+    await expect(page).toHaveURL(/\/vault\/login$/);
+    await expect(page.getByRole("heading", { name: "Private area" })).toBeVisible();
+    // Its own door: no BotForge dashboard chrome, and it must not redirect to /login.
+    await expect(page).not.toHaveURL(/\/login\?/);
     const body = (await response?.text()) ?? "";
     for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
   });
 
-  test("refuse a signed-in account that is not staff, and send it no content", async ({
-    page,
-    context,
-    request,
-  }) => {
-    const account = await createAccount(request, "Docs Gate Org");
-    await authenticateBrowser(context, account);
-
-    const response = await page.goto(`${WEB}/internal-docs`);
-    await expect(page.getByText("Platform staff only")).toBeVisible();
-
-    // The point of the whole design: the refusal is not a redirect over content that was
-    // already delivered. Nothing from the internal collection is in the response.
-    const body = (await response?.text()) ?? "";
-    for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
-  });
-
-  test("refuse a deep link the same way, including one that tries to traverse", async ({
-    page,
-    context,
-    request,
-  }) => {
-    const account = await createAccount(request, "Docs Traversal Org");
-    await authenticateBrowser(context, account);
-
-    for (const path of ["/internal-docs/architecture", "/internal-docs/api-keys-and-secrets"]) {
+  test("refuses a deep link without a session, and sends no content", async ({ page }) => {
+    for (const path of ["/vault/architecture", "/vault/env", "/vault/api-keys-and-secrets"]) {
       const response = await page.goto(`${WEB}${path}`);
+      await expect(page).toHaveURL(/\/vault\/login$/);
       const body = (await response?.text()) ?? "";
       for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
     }
   });
 
-  test("are not offered in the sidebar to a non-staff account", async ({ page, context, request }) => {
+  test("a signed-in BotForge account gets nothing from it", async ({ page, context, request }) => {
+    // The two logins must be unrelated: a real, valid BotForge session — even an owner's —
+    // is worth nothing at this door.
+    const account = await createAccount(request, "Vault Isolation Org");
+    await authenticateBrowser(context, account);
+
+    const response = await page.goto(`${WEB}/vault`);
+    await expect(page).toHaveURL(/\/vault\/login$/);
+    const body = (await response?.text()) ?? "";
+    for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
+  });
+
+  test("the reveal endpoint refuses a BotForge session outright", async ({ context, request }) => {
+    const account = await createAccount(request, "Vault Reveal Org");
+    await authenticateBrowser(context, account);
+    const res = await context.request.post(`${WEB}/api/vault/reveal`, { data: { name: "SECRET_KEY" } });
+    expect(res.status()).toBe(401);
+    expect(await res.text()).not.toContain("SECRET");
+  });
+
+  test("rejects a wrong password with the same message whoever it is for", async ({ page }) => {
+    await page.goto(`${WEB}/vault/login`);
+    // Unconfigured servers say so instead of showing a form; both outcomes are safe, and
+    // what must never happen is a successful sign-in with made-up credentials.
+    const form = page.getByLabel("Admin email");
+    if (await form.count()) {
+      await form.fill("nobody@example.com");
+      await page.getByLabel("Password").fill("definitely-not-the-password");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      // Not `getByRole("alert")`: Next's route announcer is also role=alert, so that
+      // matches two elements and fails strict mode (or, worse, passes on the empty one).
+      await expect(page.getByText("Invalid email or password.")).toBeVisible();
+      await expect(page).toHaveURL(/\/vault\/login$/);
+    } else {
+      await expect(page.getByText("Not set up on this server")).toBeVisible();
+    }
+  });
+
+  test("is not offered anywhere in the BotForge dashboard", async ({ page, context, request }) => {
     const account = await createAccount(request, "Docs Nav Org");
     await authenticateBrowser(context, account);
     await page.goto(`${WEB}/dashboard`);
-    await expect(page.getByRole("link", { name: "Internal docs" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /internal docs|private|vault/i })).toHaveCount(0);
   });
 });
 
 /**
- * The staff-renders-successfully path is covered by `src/lib/docs/staff.test.ts` rather
- * than here: promoting an account to `is_staff` needs direct database access, and there is
- * deliberately no API endpoint that grants it. What this file can prove — that everyone
- * else is refused, and refused without receiving the content — is the half that matters.
+ * The signed-in path is covered by `src/app/api/vault/vault-routes.test.ts`, not here: it needs
+ * a real password hash in the web server's environment, and this suite deliberately runs
+ * without any. What this file proves — the door is locked to everyone without the vault's own
+ * session, a BotForge session included, and nothing leaks while it is — is the half a real
+ * browser can show.
  */

@@ -66,6 +66,21 @@ test("marks the variables only a human can supply, without keeping the marker", 
   assert.ok(!byName.SECRET_KEY.description.includes("[HUMAN]"));
 });
 
+test("finds the human marker on a later line of a multi-line comment", () => {
+  const parsed = parseEnvExample(
+    [
+      "# 127.0.0.1, not localhost: a note that comes first.",
+      "# [HUMAN] Password for the dev Redis.",
+      "REDIS_PASSWORD=",
+      "",
+    ].join("\n"),
+  );
+  const v = parsed.sections[0].vars[0];
+  assert.equal(v.needsHuman, true);
+  assert.ok(!v.description.includes("[HUMAN]"));
+  assert.ok(v.description.includes("Password for the dev Redis"));
+});
+
 test("does not attach a file-level comment block to the first variable", () => {
   assert.ok(!byName.ENV.description.includes("Copy to .env"));
 });

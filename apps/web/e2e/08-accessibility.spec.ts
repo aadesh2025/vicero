@@ -36,6 +36,14 @@ test.describe("accessibility (axe, serious+critical)", () => {
     expect(await scan(page)).toEqual([]);
   });
 
+  test("private area login", async ({ page }) => {
+    // Its own sign-in page, reachable by anyone who guesses the URL. Whether or not the
+    // server has it configured, the page has to be accessible.
+    await page.goto("/vault/login");
+    await expect(page.getByRole("heading", { name: "Private area" })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+  });
+
   test("dashboard + agents (authenticated)", async ({ page, context, request }) => {
     const account = await createAccount(request, "A11y Org");
     await request.post(`${API}/v1/agents`, {

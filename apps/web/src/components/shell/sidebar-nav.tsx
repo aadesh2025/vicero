@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { BookLock, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { nav, type NavGroup } from "@/lib/nav";
 import { listInbox } from "@/lib/api/inbox";
 import { useSession } from "@/lib/store/session";
@@ -11,10 +11,7 @@ import { cn } from "@/lib/utils";
 
 const STAFF_GROUP: NavGroup = {
   heading: "Platform",
-  items: [
-    { label: "Admin", href: "/admin", icon: ShieldAlert },
-    { label: "Internal docs", href: "/internal-docs", icon: BookLock },
-  ],
+  items: [{ label: "Admin", href: "/admin", icon: ShieldAlert }],
 };
 
 export function SidebarNav({ collapsed }: { collapsed: boolean }) {

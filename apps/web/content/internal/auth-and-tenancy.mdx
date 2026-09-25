@@ -19,7 +19,7 @@ pair. Two consequences worth holding on to:
 - A stolen refresh token stops working as soon as the real client refreshes — and the
   resulting logout is the signal that it happened.
 - **Nothing server-side may spend a user's refresh token on their behalf.** That is why the
-  internal-docs gate reads `bf_access` instead; see [the gate](#the-internal-docs-gate).
+  private area does not use it at all; see [the private area](#the-private-area).
 
 ## Cookies
 
@@ -85,23 +85,39 @@ gated by `require_staff` in `app/modules/admin/deps.py`.
 
 A key acts as its `created_by` user inside its `organization_id`.
 
-## The internal-docs gate
+## The private area
 
-`apps/web/src/lib/docs/staff.ts`. Reads the `bf_access` cookie server-side, calls
-`GET /v1/auth/me`, and requires `user.is_staff === true`.
+`/vault`. A **separate** sign-in from BotForge — no `users` row, no JWT, no `is_staff`, no
+call to the API. A BotForge account, staff or otherwise, gets nothing here, and this login
+gets nothing in the dashboard.
 
-Three deliberate choices:
+**Who.** `VAULT_ADMIN_EMAILS`: an exact-match, case-insensitive allow-list of mailboxes — not a
+domain or suffix rule. **How.** A password whose scrypt hash is in `VAULT_PASSWORD_HASH`
+(`make vault-password` produces it; the password itself is never stored or printed). The area is
+**off** until the email list, the hash and `VAULT_SESSION_SECRET` are all present and well-formed.
 
-1. **Server-side, before content is read.** The `/admin` page's client-side `useEffect`
-   redirect is fine for a console whose data arrives by API call, but it would not do here:
-   MDX compiled into a page bundle is in the payload before any redirect runs.
-2. **`bf_access`, not `bf_refresh`.** Exchanging the refresh cookie rotates it and would
-   log the reader out of the tab they are in.
-3. **`expired` is distinct from `forbidden`.** A staff member whose 30-minute access cookie
-   aged out gets a silent refresh, not a permission error.
+**Session.** A stateless, HMAC-signed `bf_vault` cookie: `httpOnly`, `SameSite=Strict`, `secure`
+in production, 8-hour lifetime. Every request re-reads the allow-list, so removing an address ends
+its sessions at once, and rotating `VAULT_SESSION_SECRET` ends everyone's. The trade-off of being
+stateless is that a cookie cannot be revoked individually before it expires.
 
-It fails closed: an unreachable API, a 5xx, a missing `user`, or an `is_staff` that is
-truthy-but-not-`true` all return `forbidden`. Covered by `src/lib/docs/staff.test.ts`.
+**Guessing.** Five failures per address per 15 minutes, plus a **global** cap of thirty that ignores
+the address — `X-Forwarded-For` is caller-controlled without a proxy, so a per-address limit alone
+would reset on every guess. Every failure also costs the caller 350 ms. A wrong email and a wrong
+password return the identical response and both run a full scrypt, so neither can be told from the
+other by content or by timing. In-memory per process: if the web tier is ever scaled to several
+replicas, each keeps its own counters and the limit loosens accordingly.
+
+**The server is the gate.** The pages are server components that check the session before reading a
+byte of content and redirect to the login page otherwise. A client-side redirect would not do: MDX
+compiled into a page is already in the payload before any redirect runs.
+
+**Secrets.** The page renders names, descriptions and a masked preview only. A real value exists in
+the browser solely after a click on Reveal, which calls `POST /api/vault/reveal` — re-checking the
+session, refusing any name not in `.env.example` (so `PATH`, and the vault's own `VAULT_*`, are
+absent rather than filtered), never cached, and logged by name and admin, never by value.
+
+Covered by `src/lib/vault/vault.test.ts` and `src/app/api/vault/vault-routes.test.ts`.
 
 ## Signup hardening
 

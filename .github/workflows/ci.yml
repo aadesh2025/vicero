@@ -183,6 +183,11 @@ jobs:
       # through the public API, so it needs the test-only escape. The production rule itself
       # is pinned by tests/test_org_creation_gate.py, which turns this back off.
       ALLOW_SELF_SERVE_ORGS: "true"
+      # Self-serve signup (docs/18) is on in production: every signup would also get a
+      # metered trial workspace. The suite bootstraps its own unmetered tenants instead, so it
+      # runs the staff-provisioned model; trial UI is covered by e2e/30-trial-ui.spec.ts and the
+      # enforcement by tests/test_self_serve_*.py.
+      SELF_SERVE_ENABLED: "false"
       ENV: dev
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
       E2E_API_URL: http://localhost:8000

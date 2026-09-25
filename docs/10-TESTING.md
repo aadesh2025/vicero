@@ -65,6 +65,13 @@ lifted `AUTH_RATE_LIMIT` (the suite mints many tenants). A **Celery worker** run
 API so real ingestion (fake embeddings) drives criterion 2. `ENV=dev` exposes the invitation
 `accept_token` in the API response so criterion 6 can accept without SMTP.
 
+**Self-serve is off in the E2E API** (`SELF_SERVE_ENABLED=false`, docs/18): with it on, every
+signup also gets a metered trial workspace and the suite's own tenants would sit beside it. The
+pytest suite does the same via an autouse fixture in `tests/conftest.py`; the `self_serve` fixture
+opts a test into production behaviour (`test_self_serve_*.py`, `test_message_metering.py`,
+`test_trial_emails.py`). `e2e/24-signup-and-workspace.spec.ts` and `e2e/30-trial-ui.spec.ts` cover
+the sign-in surface and how a trial workspace is drawn (plan endpoint stubbed).
+
 ¹ The live n8n webhook **trigger** roundtrip (model decides to call → n8n runs → result fed back)
 requires a running n8n and the model emitting a tool call; it is covered by the backend suite
 (`tests/test_n8n.py`, verified live in Phase 10) rather than re-run in keyless CI. The E2E covers

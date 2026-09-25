@@ -18,6 +18,73 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-090: Sign-in hardening for self-serve — verified-only OAuth linking, mailbox-proven Facebook email, one-time redirect codes
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** Adding public signup (ADR-088) exposed three problems in the existing auth code, all found by reading it:
+  `oauth_login` linked a provider identity to any existing user with the same email **without checking that account's
+  email was verified** (pre-registration account takeover); the OAuth callback answered with JSON at the API URL, so
+  there was no working browser flow and no place tokens could safely go; and GitHub fell back to a fabricated
+  `id@users.noreply.github.com` address. Facebook may return no email at all.
+- **Decision:** (1) A provider identity is linked only to an account whose email is verified, and only when the
+  provider itself vouches for the address (`email_verified` for Google; Facebook returns `email` only when confirmed;
+  GitHub's `/user/emails` primary+verified). Otherwise nothing is created: an unverified local account gets
+  `409 auth.oauth_email_unverified`; a provider address that is missing/unvouched gets a 15-minute signed
+  `pending_token`, the user types an address, we mail a **single-use** signed link (`limiter.hit(jti, 1)`), and only
+  the click creates/links (`mailbox_proven`). (2) `?redirect=web` on authorize makes the callback redirect to
+  `/oauth/callback?code=<one-time, 60s>`; the web BFF trades it for the session and sets the httpOnly refresh cookie —
+  tokens never appear in a URL. The pending token rides in the URL **fragment**. The plain JSON callback is kept for
+  API clients and tests. (3) Login runs one Argon2 verify against a dummy hash for unknown accounts; per-IP **and**
+  per-email limits; lockout counts *failures* through a new non-incrementing `RateLimiter.count` and applies equally to
+  unknown emails so the lockout is not an oracle.
+- **Alternatives considered:** auto-link and wipe the unverified account's password (rejected: the spec says never
+  link to an unverified email, and wiping is a surprising side-effect); return tokens in the redirect URL (rejected:
+  logs/history/Referer); a DB table for pending OAuth (rejected: stateless JWT + limiter-backed single use suffices).
+- **Consequences:** Facebook **PKCE is off** (Meta documents none for the server-side code flow; state + app secret
+  protect the exchange) — flip `pkce` in `oauth._PROVIDERS` once verified on a real app. State and exchange codes are
+  process-local like the existing OAuth state (single API process; move to Redis before scaling out — the note already
+  in `oauth.py`). **Residual:** signup still answers `409 auth.email_taken` for a registered address — a signup that
+  returns a session cannot be indistinguishable from a refusal, and the invitation UI keys on the code; login, reset,
+  magic-link and resend never reveal existence. A pre-registered unverified account can still be verified later by its
+  real owner via magic link with the squatter's password intact (pre-existing behaviour, unchanged; unverified
+  accounts cannot publish).
+
+### ADR-088: Self-serve signup, a 10-day trial, and one table of plan limits (reverses the "provisioned per client" rule)
+- **Date:** 2026-09-25
+- **Status:** accepted (supersedes the staff-only org-creation rule in `orgs.service.create_org` and the
+  no-self-serve E2E spec, now `e2e/24-signup-and-workspace`)
+- **Context:** Access was given by hand; `create_org` was staff-only and a stray signup ended on a dead end. The
+  operator asked for self-serve: signup → one workspace → 10-day trial with limits → silent stop → upgrade banner.
+  `Organization.plan` existed (`free|pro|enterprise`) but nothing read it.
+- **Decision:** **One source of truth** — `app/core/plans.py`: `PLANS` (`trial`, `legacy`) + `get_entitlements()`;
+  no other file holds a limit, a plan-name comparison or the trial length. `trial_expired` is **computed**
+  (`plan=="trial" and (now>=trial_ends_at or messages_used>=cap)`), never stored, so no cron is a single point of
+  failure. **Fail-safe default:** `Organization.plan` defaults to **`legacy`** (unlimited) and migration 0028
+  backfills *every existing org* to it — only the signup path writes `trial`, so forgetting to set a plan can never
+  lock a client out; an *unrecognised* stored plan also resolves to `legacy`. **Counter:** new `org_message_usage`
+  table (not `Quota`: token/request-shaped, not unique per org, read elsewhere); 1 message = 1 visitor message or
+  1 AI reply; `reserve()` is one `UPDATE … WHERE used + 2 <= limit RETURNING` in its **own short transaction** (a row
+  lock held for a whole streamed reply would serialise every visitor of the org); a provider failure refunds 1 (the
+  visitor got the agent's canned fallback, not a model reply). Because a reply is reserved as a pair, fewer than 2 left
+  counts as exhausted (else a refund could strand the counter at 499 forever). **Enforcement** at the one choke
+  point every visitor path shares — `chat/inbound.InboundTurn.events()`, *after* the visitor message is persisted and
+  *before* any cost or text, including the canned handoff line — plus server-side 402 `plan_limit` gates
+  (`details.feature`) on agents (1; read-only once expired), workflows, n8n, tool calling/MCP and workspaces, plus
+  **runtime** checks (`build_tooling`, `_execute_and_persist`) so leftover tools/workflows never run on a trial.
+  Publishing/enabling a channel needs a verified email **on trial plans only** (`PlanSpec.publish_needs_verified_email`).
+  `SELF_SERVE_ENABLED` (default on) is the operator's kill switch; off = the previous staff-only behaviour.
+- **Alternatives considered:** store `trial_expired` and flip it with a cron (fails open if the cron dies); read
+  `Quota` (semantics clash); reserve in the request transaction (lock contention); hard-code limits per call site
+  (the drift this prevents); the spec's flat 402 body (kept the project's `{error:{code,message,details}}` envelope
+  so the typed web client works unchanged — same data).
+- **Consequences:** Existing tests: conftest turns self-serve off (autouse) and `test_n8n`'s org stub gained `plan`.
+  The dev DB needs `alembic upgrade head`. The playground cap uses the shared limiter's 24h window (per-process
+  memory if Redis is down). Payments/pricing are out of scope; a paid plan = one `PLANS` entry + a webhook that sets
+  `Organization.plan`. Audit rows: `plan.trial_started`, `plan.limit_hit` (once), `plan.trial_expired`, `auth.signup`,
+  `auth.login` (trial workspaces only, so existing tenants' logs are unchanged); plan *changes* have no code path yet,
+  so none is audited. Package layout: DB-touching counter code is in `app/billing/` (core may not import models);
+  `normalize_email` is in `db/base.py`.
+
 ### ADR-089: An n8n workflow can only be bound as a tool if it verifies BotForge's signature, and the signing secret has one home (RISK-REGISTER R15)
 
 - **Context.** R15's first fix made every *shipped* workflow verify the HMAC, but a workflow built by hand

@@ -38,6 +38,27 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Self-serve signup, 10-day free trial and plan limits — Phase S1 (2026-09-25, ADR-088, ADR-090, docs/18).**
+  Anyone can now sign up (Google, Facebook, email magic link, email + password) and gets exactly one workspace
+  on a 10-day trial: 500 messages (1 visitor message or 1 AI reply each), one agent, no workflows / n8n / tool
+  calling / MCP, a 50-per-day dashboard test-chat cap, and publishing needs a verified email. Every limit lives in
+  one table (`app/core/plans.py`); `trial_expired` is computed, never stored. **Existing orgs were backfilled to
+  `legacy` (unlimited) by migration 0028** and `plan` defaults to `legacy`, so no current client is metered.
+  When the trial ends or the messages run out the bot goes **silent** — no error/upgrade text on any channel, the
+  visitor message is still saved, the owner can reply from the inbox — enforced in `InboundTurn` (the one path the
+  widget and every messaging channel share) with an atomic `UPDATE … RETURNING` reservation (300 racing
+  reservations against a cap of 500 → exactly 250). 402 `plan_limit` on the API + runtime checks (`build_tooling`,
+  workflow execution). Dashboard: trial banner + usage meter, ended banner with "N visitor messages were not
+  answered", locked (not hidden) features, `/billing/upgrade` placeholder, onboarding, and the auth pages
+  (`/verify-email`, `/forgot-password`, `/reset-password`, `/magic`, `/oauth/callback`, `/oauth/verify`). Hourly
+  Celery-beat `trial.sweep` sends the five lifecycle emails once each. Abuse: normalised-email uniqueness, per-IP
+  signup cap, disposable-domain blocklist, weak-password floor, login lockout, per-email limits, per-org burst limit.
+  OAuth now links only to **verified** accounts and has a real browser flow (one-time exchange code, httpOnly
+  refresh cookie). **Setup only you can do:** Google/Facebook apps, SMTP + Celery beat, `alembic upgrade head` —
+  `docs/18-SELF-SERVE-PLAN.md` §7. **Not built (out of scope):** payments, pricing, team invites for trial users.
+  **Known:** signup still returns 409 for a registered address (SECURITY.md §10); Facebook PKCE unverified against
+  a real app; tests/test_architecture.py::test_no_new_package_import_cycle already failed on HEAD (a
+  `core`/`db`/`llm`/`models` cycle) — not caused by this change.
 - **n8n bind-time signature enforcement, audit, and a single home for the signing secret (2026-09-25, R15, ADR-089).**
   Binding an n8n tool now fails unless the workflow verifies BotForge's signature (by id or by pasted URL,
   resolved via the n8n API); `GET /v1/admin/n8n-signature-audit` reports every already-bound tool that

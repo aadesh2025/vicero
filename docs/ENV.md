@@ -89,8 +89,27 @@ before a deploy (docs/15 PROD-2):
   works; that is why the probe checks for the model and not just the endpoint.
 
 ## OAuth
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — all
-needs-human (create OAuth apps). Unset → hide/deny those login buttons.
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`,
+`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` — all needs-human (create OAuth apps). Unset → that
+provider's authorize call answers `501 auth.oauth_not_configured` and the login button reports
+"isn't set up on this server yet". Redirect URI for each is
+`{OAUTH_REDIRECT_BASE}/v1/auth/oauth/{provider}/callback`. Setup steps: `docs/18-SELF-SERVE-PLAN.md` §7.
+
+## Self-serve signup + free trial (docs/18, ADR-088)
+| Variable | Default | Meaning |
+|---|---|---|
+| `SELF_SERVE_ENABLED` | `true` | Signup provisions one 10-day trial workspace and a non-staff user may own one. `false` = staff-provisioned only (the pre-S1 behaviour) and the kill switch for abuse. Turn it **off** for the keyless E2E API so other specs keep bootstrapping their own tenants. |
+| `SIGNUPS_PER_IP_PER_DAY` | `3` | New self-serve accounts per client IP per 24h. `0` disables. Behind a proxy make sure the API sees the real client IP. |
+| `BLOCK_DISPOSABLE_EMAILS` | `true` | Refuse throwaway-mailbox domains at signup / magic link. |
+| `LOGIN_LOCKOUT_FAILURES` | `10` | Failed password logins per email before lockout. |
+| `LOGIN_LOCKOUT_WINDOW` | `900` | Lockout window, seconds. |
+| `ORG_CHAT_RATE_LIMIT` | `30` | Public chat messages per minute per metered organization; excess is dropped silently and not counted. |
+| `ORG_CHAT_RATE_WINDOW` | `60` | Window for the above, seconds. |
+| `NEXT_PUBLIC_UPGRADE_EMAIL` | *(unset)* | Web app: address on the `/billing/upgrade` page. |
+| `NEXT_PUBLIC_UPGRADE_WHATSAPP` | *(unset)* | Web app: WhatsApp number (digits, with country code) on the upgrade page. |
+
+Plan **limits** (10 days, 500 messages, one agent/workspace, locked features) are deliberately
+**not** env vars: they live in one table, `apps/api/app/core/plans.py`.
 
 ## Channels
 `TELEGRAM_BOT_TOKEN`; Slack `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`; Discord

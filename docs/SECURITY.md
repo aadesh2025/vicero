@@ -56,7 +56,8 @@
   intentionally not SSRF-guarded (noted in the module docstring).
 
 ## 5. Rate limiting (public surfaces)
-- ✅ **Auth**: signup / login / resend / forgot / magic (`app/modules/auth/router.py`).
+- ✅ **Auth**: signup / login / resend / forgot / magic / reset / verify / OAuth exchange (`app/modules/auth/router.py`),
+  per IP, **and** per email for signup, magic-link, forgot, resend (5/h) and login failures (lockout, §10).
 - ✅ **Public chat**: `/v1/public/agents/{key}/chat` (60/min).
 - ✅ **Channel webhooks** (Phase 16.2): telegram / whatsapp / slack / discord inbound (120/min per IP).
 - ✅ **n8n callback** (Phase 16.2): `/v1/tools/n8n/callback` (120/min per IP).
@@ -106,3 +107,39 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
 - Realtime hub → Redis pub/sub before multi-node prod (ADR-028).
 - Webhook retry beat-sweep for `pending` deliveries past `next_retry_at`.
 - Replace `python-jose` to drop the `ecdsa` advisory (§8).
+
+## 10. Self-serve signup & free trial (docs/18, ADR-088, ADR-090) — verified 2026-09-25
+- ✅ **Signup can never mint staff or an admin role**: the request schema has no such field and the service never
+  sets one (`test_self_signup_can_never_produce_staff`). Every `/v1/admin/*` route is behind `require_staff`;
+  `test_self_serve_admin.py` walks the router's own route table, so a route added later is checked automatically
+  (403 for a normal user, 401 anonymous, 200 for staff as the control).
+- ✅ **Account linking**: a provider identity attaches to an existing user only when that user's email is
+  **verified** and the provider vouches for the address; otherwise nothing is created (ADR-090). A provider with
+  no verified email (Facebook phone signups) proves a typed address by a single-use emailed link first.
+- ✅ **OAuth**: `state` (single-use, 10 min) + PKCE for Google; tokens are stored encrypted (Fernet); the browser
+  flow uses a one-time 60-second exchange code and the httpOnly refresh cookie — no token in any URL, the pending
+  email token in the URL fragment. ⚠️ **Facebook: no PKCE** (Meta documents none for the server-side code flow).
+- ✅ **Login**: one Argon2 verification for every attempt (dummy hash for unknown accounts), identical 401 body for
+  unknown email and wrong password, lockout after `LOGIN_LOCKOUT_FAILURES` failures per email (applies to unknown
+  emails too, so the lockout is not an oracle), per-IP and per-email limits on signup / magic-link / forgot / resend.
+- ⚠️ **Residual — signup enumeration.** `POST /signup` answers `409 auth.email_taken` for a registered address. A
+  signup that returns a session cannot be indistinguishable from a refusal, and the invitation UI keys off that
+  code. Bounded by the per-IP daily cap, the per-email limit and the global auth limit; login, forgot-password,
+  magic-link and resend reveal nothing (`test_self_serve_abuse.py`).
+- ⚠️ **Residual — pre-registration.** Someone can register a victim's address with their own password; it stays
+  unverified (cannot publish, cannot be OAuth-linked) but if the real owner later signs in by magic link the account
+  becomes verified with the squatter's password still valid. Pre-existing behaviour, not widened by this work.
+- ✅ **One trial per person**: `users.email_normalized` (lowercase, `+tag` stripped, Gmail dots removed) is checked at
+  signup; disposable domains are refused (`BLOCK_DISPOSABLE_EMAILS`); `SIGNUPS_PER_IP_PER_DAY` caps new accounts per
+  IP (behind a proxy the API must see the real client IP). The uniqueness check is app-level, not a DB constraint,
+  so pre-existing duplicates can never break a migration.
+- ✅ **Plan enforcement is server-side**: 402 `plan_limit` on the API and runtime checks in `build_tooling` and
+  workflow execution, so a tool or workflow that somehow exists on a trial org still never runs. The UI only explains.
+- ✅ **Silent stop leaks nothing**: the gate sits before any model call or emitted text; tests read the raw JSON and
+  SSE bodies and every messaging channel and assert no error, quota or upgrade wording.
+- ✅ **Counter is race-safe**: one atomic `UPDATE … WHERE used + 2 <= limit RETURNING`, in its own short transaction
+  (`test_concurrent_reservations_never_exceed_the_cap`: 300 concurrent reservations, cap 500 → exactly 250).
+- ⚠️ **Not verified against real providers**: Google/Facebook OAuth, real SMTP delivery and Meta's behaviour were
+  exercised with mocked provider responses only. Do this by hand once credentials exist (docs/18-SELF-SERVE-PLAN.md §7).
+- ⚠️ OAuth `state`, exchange codes and the in-memory rate-limit fallback are process-local (as before); move them to
+  Redis before running more than one API process.

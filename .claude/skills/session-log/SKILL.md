@@ -9,6 +9,28 @@ description: Session-by-session build history for BotForge — incident postmort
 > fresh session has context beyond git log. Full detail lives in `docs/PROGRESS.md` +
 > `docs/DECISIONS.md`; keep entries here to a few lines.
 
+### 2026-09-25 — Phase S1: self-serve signup + 10-day trial (ADR-088, ADR-090; docs/18)
+- **Reverses "workspaces are provisioned per client".** Signup → one trial workspace → limits → silent stop. All
+  limits are in `app/core/plans.py`; **`Organization.plan` defaults to `legacy` and migration 0028 backfilled every
+  existing org to it** — never change that default to `trial`, or a forgotten code path locks a client out.
+  `trial_expired` is computed, not stored.
+- **The choke point is `chat/inbound.InboundTurn.events()`** (widget HTTP/SSE/WS + every channel). The gate sits after
+  the visitor message is persisted and before any cost or text. `billing/usage.py` (not `core/` — architecture test
+  forbids core importing models) does the atomic reserve in its **own short transaction** (a row lock held across a
+  streamed reply serialised every visitor of the org).
+- **Suite convention:** conftest turns `SELF_SERVE_ENABLED` off (autouse) so the ~1300 existing tests keep bootstrapping
+  unmetered tenants; opt in with the `self_serve` fixture (`test_self_serve_*.py`, `test_message_metering.py`,
+  `test_trial_emails.py`). The limiter is memory-only in tests (a shared Redis carried lockout counters between runs).
+  The E2E API must also run `SELF_SERVE_ENABLED=false` (CI updated).
+- **Gotchas:** newer FastAPI wraps included routers (`app.routes` is not flat — read a router's own `.routes`);
+  the tool wrapper's shell parser chokes on apostrophes inside heredocs (write files with the Write tool);
+  `test_architecture.py::test_no_new_package_import_cycle` is a **baseline failure** (a `core`/`db`/`llm`/`models` cycle
+  already on HEAD). A stuck test process from a previous session held a lock on the dev DB and blocked `ALTER TABLE` —
+  I ran everything on a scratch database (`botforge_s1`) instead of touching it.
+- **Not verified live:** Google/Facebook OAuth, real SMTP, Meta behaviour (mocked). Human steps: docs/18 plan §7.
+- A **second Claude session was committing to the same repo** during this work (n8n signature gate, ADR-089); files
+  were kept separate by path-scoped commits.
+
 ### 2026-09-24 — R14 fixed (ADR-083): a dropped chat stream no longer loses the reply
 - Hand the reply to a Celery task (`chat.finalize_turn`) from the disconnect handler; the worker
   recreates the conversation/user message under the same client-assigned UUIDv7 if they never

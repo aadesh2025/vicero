@@ -1,0 +1,75 @@
+---
+title: Runbook
+description: Bringing the stack up on this machine, and the ports that are not the defaults.
+group: Operations
+order: 1
+---
+
+A session usually starts with Docker Desktop and every service stopped.
+
+## Bring it up
+
+```bash
+# 1. Docker Desktop must be running first.
+cd infra && docker compose up -d postgres redis      # wait for healthy
+
+# 2. API — from apps/api, not the repo root
+cd apps/api && ./.venv/Scripts/python.exe -m uvicorn app.main:app --port 8000
+
+# 3. Celery worker (Windows needs --pool=solo)
+celery -A app.worker.celery_app worker --pool=solo
+
+# 4. Web — from apps/web
+cd apps/web && npm run dev -- -p 3001
+```
+
+Then open **http://localhost:3001**.
+
+<Callout type="warn" title="Run from the app directory, not the repo root">
+`apps/api` or `apps/web`, always. From the root you get `ModuleNotFoundError: app` or an
+npm ENOENT, and both look like a broken install rather than a wrong working directory.
+</Callout>
+
+## Ports on this machine
+
+| Service | Canonical | Here | Why |
+|---|---|---|---|
+| Web | 3000 | **3001** | 3000 is taken by an unrelated app |
+| API | 8000 | 8000 | — |
+| Keyless E2E API | — | **8010** | `LLM_FORCE_FAKE=true` and the auth rate limit lifted, so it cannot clash with a real API on 8000 |
+| n8n | 5678 | 5678 | The instance answering on 5678 belongs to the **separate AUROZEN AI compose**, not to this project's own n8n service |
+
+## Database
+
+```bash
+cd apps/api && alembic upgrade head        # migrate
+make seed                                  # demo data
+make clean-devdata                         # remove @example.com users and orgs
+```
+
+The dev Postgres and Redis publish on **loopback only**, and `POSTGRES_PASSWORD` has no
+default — Compose refuses to start without one (ADR-093). A fresh clone must set it before
+`make up`.
+
+## Regenerating the docs reference
+
+Any change that adds an endpoint or an environment variable must be followed by:
+
+```bash
+make docs-generate
+```
+
+CI fails if the committed snapshot is stale.
+
+## Diagnosing
+
+| Symptom | Look at |
+|---|---|
+| Every chat reply is `echo: <message>` | `LLM_FORCE_FAKE` is set. The startup log says so loudly, and in prod it logs an error |
+| Every turn fails with `llm.provider_unavailable` | No key configured for that agent's provider |
+| Documents stuck on `processing` | The embedding endpoint is unreachable. `EMBEDDING_PROBE_ENABLED` reports this at startup |
+| Workflows missing from Automations | `N8N_API_KEY` missing, or `N8N_BASE_URL` wrong |
+| Rate limits trip for everyone at once | `TRUSTED_PROXIES` does not contain the proxy, so every visitor counts as one client |
+
+`/healthz` and `/readyz` are unauthenticated. `/metrics` is Prometheus and excluded from
+the schema.

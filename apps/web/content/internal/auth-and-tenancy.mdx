@@ -1,0 +1,118 @@
+---
+title: Auth and tenancy
+description: Tokens, the org-scoping dependency, the RBAC matrix, and where each is enforced.
+group: System
+order: 2
+---
+
+## Tokens
+
+| | |
+|---|---|
+| **Access token** | JWT, HS256, signed with `SECRET_KEY`. TTL ~15 min. Claims: `sub`, `type: "access"`, `iat`, `exp`, `jti`, and `sid` — the refresh session that minted it, which is what powers "this device" in the session list |
+| **Refresh token** | Opaque, `secrets.token_urlsafe(32)`, TTL ~30 days. Only the SHA-256 hash is stored, in `sessions` |
+| **Passwords** | argon2, with transparent rehash on login when parameters change |
+
+`service.refresh()` **rotates**: it revokes the presented token before issuing the new
+pair. Two consequences worth holding on to:
+
+- A stolen refresh token stops working as soon as the real client refreshes — and the
+  resulting logout is the signal that it happened.
+- **Nothing server-side may spend a user's refresh token on their behalf.** That is why the
+  internal-docs gate reads `bf_access` instead; see [the gate](#the-internal-docs-gate).
+
+## Cookies
+
+| Cookie | Set by | httpOnly | Why |
+|---|---|---|---|
+| `bf_refresh` | The Next BFF, server-side | **yes** | XSS cannot exfiltrate it |
+| `bf_access` | Client JS | no | Needed in JS for cross-origin Bearer calls, SSE, and the inbox WebSocket's `?token=` |
+| `bf_org` | Client JS | no | Active org, sent as `X-Org-Id` |
+
+The split is ADR-019: the long-lived credential is unreadable by script; the short-lived
+one is readable because three transports need it there.
+
+## Org scoping
+
+`app/modules/orgs/deps.py` is the centre of tenancy.
+
+`OrgContext` carries `org`, `membership`, `user`, `via` (`"jwt"` or `"apikey"`), `scopes`
+and `role_override`. Its `.role` returns `role_override or membership.role` — which is how
+an API key's scope caps the role it acts with.
+
+- **`current_org`** — the dependency nearly every tenant route uses. Resolves the org from
+  the `X-Org-Id` header (JWT path) or from an API key presented as `X-API-Key` or
+  `Authorization: Bearer bf_…`. Membership must be `status == "active"` or it raises
+  `org.forbidden`.
+- **`org_context(org_id, …)`** — for the path-scoped `/v1/orgs/{org_id}/…` routes.
+
+## RBAC
+
+`app/core/rbac.py`. Roles: `owner`, `admin`, `editor`, `viewer`, `operator` — **not**
+owner/admin/member. Capabilities: `org:manage`, `members:manage`, `agents:write`,
+`agents:publish`, `kb:manage`, `tools:manage`, `analytics:view`, `read`, `inbox:handle`,
+`workflows:write`, `workflows:publish`.
+
+`editor` is the client role: everything except publishing, org management and member
+management. `ASSIGNABLE_ROLES` excludes `owner` — ownership moves only through
+`/transfer-ownership`.
+
+<Callout type="warn" title="Permissions are enforced in services, not in decorators">
+`rbac.require_permission(ctx.role, rbac.X)` is called at the top of service functions.
+There is no router-level decorator and no global dependency doing it for you, so **a new
+endpoint is unprotected until its service function asks**. `apps/web/src/lib/rbac.ts`
+mirrors the matrix for the UI and is explicitly not authoritative.
+</Callout>
+
+`user.is_staff` is a separate axis entirely — platform staff, orthogonal to org roles,
+gated by `require_staff` in `app/modules/admin/deps.py`.
+
+## API keys
+
+`app/modules/apikeys/service.py`.
+
+- **Minted** `"bf_" + secrets.token_urlsafe(32)`, returned once.
+- **Stored** as `key_prefix` (first 12 chars, an O(1) lookup index) plus `key_hash`, a
+  **plain unsalted SHA-256**. That is adequate here specifically because the key is 32
+  bytes of CSPRNG output — there is no dictionary to attack — but it is worth knowing it is
+  not a KDF, and this reasoning is the whole justification.
+- **Verified** by `resolve_api_key()`: prefix check, prefix lookup, `hmac.compare_digest`
+  on the hash, then revocation and expiry, then `last_used_at` is stamped.
+- **Scopes** `read` / `write` / `admin` map through `rbac.scope_effective_role`, then
+  **cap at the creating member's role**. `admin` deliberately maps to role `admin`, never
+  `owner`, so no key can delete an org. No scopes means the creator's full role, for
+  back-compat.
+
+A key acts as its `created_by` user inside its `organization_id`.
+
+## The internal-docs gate
+
+`apps/web/src/lib/docs/staff.ts`. Reads the `bf_access` cookie server-side, calls
+`GET /v1/auth/me`, and requires `user.is_staff === true`.
+
+Three deliberate choices:
+
+1. **Server-side, before content is read.** The `/admin` page's client-side `useEffect`
+   redirect is fine for a console whose data arrives by API call, but it would not do here:
+   MDX compiled into a page bundle is in the payload before any redirect runs.
+2. **`bf_access`, not `bf_refresh`.** Exchanging the refresh cookie rotates it and would
+   log the reader out of the tab they are in.
+3. **`expired` is distinct from `forbidden`.** A staff member whose 30-minute access cookie
+   aged out gets a silent refresh, not a permission error.
+
+It fails closed: an unreachable API, a 5xx, a missing `user`, or an `is_staff` that is
+truthy-but-not-`true` all return `forbidden`. Covered by `src/lib/docs/staff.test.ts`.
+
+## Signup hardening
+
+`SIGNUPS_PER_IP_PER_DAY`, `BLOCK_DISPOSABLE_EMAILS` with a weekly-refreshed blocklist plus
+a soft MX check (ADR-091), `LOGIN_LOCKOUT_FAILURES` / `LOGIN_LOCKOUT_WINDOW`, and per-route
+`rate_limit(...)` dependencies.
+
+Client IP comes from `X-Forwarded-For` **only** when the TCP peer is in `TRUSTED_PROXIES`,
+read right-to-left (ADR-092). Without that, one proxy makes every visitor a single client.
+
+<Callout type="note" title="Known gap">
+Signup still returns 409 for an already-registered address, which is an email-enumeration
+oracle. Tracked in `docs/SECURITY.md §10`.
+</Callout>

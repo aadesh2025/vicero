@@ -1,0 +1,50 @@
+---
+title: Decisions and history
+description: Where the reasoning lives, and the decisions most likely to bite.
+group: Operations
+order: 2
+---
+
+The full log is `docs/DECISIONS.md` — 95 ADRs, newest first, each with Context / Decision /
+Alternatives / Consequences. This page points at the ones that explain something surprising
+in the code.
+
+## Read these before changing what they describe
+
+| ADR | Why it matters |
+|---|---|
+| **084** | Tenant isolation is org-scoped fetch — **not** a repository layer, **not** Postgres RLS. A query that forgets `organization_id` leaks, and nothing structural stops it |
+| **094** | `/docs`, `/redoc` and `/openapi.json` are dev-only. They were previously served in prod, publishing the whole surface |
+| **095** | This documentation site: MDX in the repo, generated API and env references, CI staleness check |
+| **019** | The refresh token is httpOnly and rotates; the access token is JS-readable because SSE and WebSockets need it there |
+| **044** | The `.env` comment trap that once shipped a placeholder to Google as a real API key |
+| **083** | A dropped chat stream finishes in a Celery task — an in-request retry cannot work |
+| **087** | A tenant-set provider `base_url` must be public unless the operator allowlists the host |
+| **085** | stdio MCP servers are staff-only; SSE MCP URLs and URL ingest go through the SSRF guard |
+| **091 / 092** | Disposable-email detection, and why `X-Forwarded-For` is trusted only from a configured proxy |
+| **093** | Dev Postgres and Redis bind to loopback, and the Postgres password has no default |
+
+## Two standing rules from the safety track
+
+Repeated in `CLAUDE.md` because they are easy to violate by accident:
+
+1. **A prompt line is not enforcement.** Measured on this stack, prompt-only grounding
+   fabricates 12 times out of 15 on `llama-3.1-8b-instant`. Anything that must not happen
+   needs a code-level check.
+2. **Re-run the no-context A/B** after any edit to `DEFAULT_SYSTEM_PROMPT`,
+   `db/templates.py`, or the identity lock in `chat/assembly.py`. A unit test cannot see
+   that regression.
+
+## The other living documents
+
+| File | What it is |
+|---|---|
+| `docs/PROGRESS.md` | Phase status, plus the dated list of everything shipped post-v1 — the de facto changelog |
+| `docs/SECURITY.md` | The security checklist, verified per release, with a state per item |
+| `docs/RISK-REGISTER.md` | Known gaps, prioritized, compiled from the ADRs |
+| `docs/11-SAFETY-GUARDRAILS.md` | The guardrail spec. Read before touching `app/chat/`, `app/rag/` or prompt assembly |
+| `docs/17-AGENTIC-RUNTIME-AND-BUILDER.md` | The agentic runtime and workflow builder spec |
+
+Both `docs/11-*` and `docs/17-*` are **read-always, execute-on-request**: their phases are
+deliberately outside the autonomous build contract, because each adds latency, cost or
+attack surface that should be an explicit decision.

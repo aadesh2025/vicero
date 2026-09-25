@@ -1,0 +1,56 @@
+---
+title: Background jobs
+description: The eleven Celery tasks, the three beat schedules, and the queue that does not exist.
+group: System
+order: 7
+---
+
+`app/worker/celery_app.py`. Broker and result backend are Redis (`REDIS_URL`), app name
+`botforge`, JSON serialization, UTC, `task_track_started=True`.
+
+```bash
+celery -A app.worker.celery_app worker   # on Windows, add --pool=solo
+celery -A app.worker.celery_app beat
+```
+
+<Callout type="warn" title="There are no custom queues">
+Every task runs on the default queue. There is no routing, so isolation is
+per-worker-process only — a burst of document ingestion and a latency-sensitive
+`chat.finalize_turn` compete for the same workers. Worth knowing before scaling; splitting
+them is a routing change, not a code change.
+</Callout>
+
+## Tasks
+
+| Task | Does | Retries |
+|---|---|---|
+| `rag.ingest_document` | Extract, chunk and embed a document | 2 |
+| `chat.finalize_turn` | Post-turn work off the request path: memory summary, usage, flags | 3 |
+| `webhooks.deliver` | One outbound delivery, with backoff | 5 |
+| `email.send` | A transactional email (console or SMTP backend) | 3 |
+| `workflows.run` | Execute a workflow run | 0 |
+| `workflows.resume` | Resume after a human approve or reject | 0 |
+| `workflows.resume_delay` | Resume after a `delay` node elapses | 0 |
+| `usage.rollup_org` | Daily per-org usage rollup | — |
+| `webhooks.sweep_pending` | **beat** — re-enqueue due deliveries lost to downtime | — |
+| `disposable.refresh` | **beat** — refresh the throwaway-domain list into Redis (ADR-091) | 2 |
+| `trial.sweep` | **beat** — send due trial lifecycle emails, idempotent per workspace | — |
+
+## Beat schedule
+
+| Schedule | Task | Interval |
+|---|---|---|
+| `webhook-retry-sweep` | `webhooks.sweep_pending` | `WEBHOOK_SWEEP_INTERVAL_SECONDS`, default 60s |
+| `disposable-list-refresh` | `disposable.refresh` | 7 days |
+| `trial-lifecycle-sweep` | `trial.sweep` | hourly |
+
+## Notes
+
+`enqueue_document_ingestion(document_id)` in `tasks.py` is the entry point the knowledge
+module uses — call that rather than the task directly.
+
+A dropped chat stream hands its reply to `chat.finalize_turn` rather than retrying in the
+request (ADR-083). By the time the stream drops the tokens are already spent, so an
+in-request retry would bill them twice and still have nowhere to deliver the result.
+
+`CELERY_TASK_ALWAYS_EAGER` runs tasks inline. The test suite sets it; production must not.

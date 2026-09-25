@@ -1,0 +1,102 @@
+---
+title: Architecture
+description: What the services are, how a request moves through them, and where the boundaries sit.
+group: System
+order: 1
+---
+
+<Callout type="warn" title="Platform staff only">
+This section describes the system's internals — its full endpoint surface, its tenancy
+model and the names of every secret it reads. It is gated server-side on `is_staff`. Do
+not paste from it into a customer-facing channel.
+</Callout>
+
+## Services
+
+| Service | Lives in | Responsibility |
+|---|---|---|
+| **API** | `apps/api` | FastAPI modular monolith. Every route under `/v1` |
+| **Web** | `apps/web` | Next.js 16 App Router — dashboard, public Help Center, this documentation |
+| **Worker** | `apps/api/app/worker` | Celery. Ingestion, webhook delivery, email, workflow runs, post-turn work |
+| **Widget** | `packages/widget` | Dependency-free `widget.js`, served by the **web** app, not the API |
+| **Postgres 16** | — | With `pgvector`. 49 tables |
+| **Redis 7** | — | Cache, rate-limit counters, Celery broker, realtime pub/sub |
+
+The API is a **modular monolith**, not microservices: `app/modules/<domain>/` with
+`router.py` / `service.py` / `schemas.py`, plus the top-level packages `app/channels`,
+`app/tools`, `app/workflows`, `app/webhooks`, `app/chat` and `app/rag`.
+
+There is no `/api` prefix. Routers declare their own `prefix="/v1/…"` and mount at root, so
+the base path is `/v1`.
+
+## Request flows
+
+### A chat turn
+
+1. The route resolves the tenant — `current_org` from `X-Org-Id` or an API key, or
+   `_resolve_agent` from a `public_key` on the public surface.
+2. Input guards run: length cap, blocked topics, injection screening.
+3. If RAG is on, retrieval runs — dense (pgvector) and keyword (FTS) merged by reciprocal
+   rank fusion, optionally reranked.
+4. The prompt is assembled in `app/chat/assembly.py`: system prompt, identity lock,
+   retrieved context, memory window, the turn.
+5. The provider streams. Tool calls are executed and fed back, bounded by
+   `TOOL_MAX_ITERATIONS`.
+6. Output guards run. A reply corrected after streaming began emits a **`replace`** event.
+7. `chat.finalize_turn` is enqueued: memory summary, usage, flags. It is deliberately off
+   the request path.
+
+### Document ingestion
+
+Upload → row written with `status=queued` → `rag.ingest_document` → extract (Docling or the
+legacy extractor) → chunk → embed → `chunks` rows with a 768-dimension vector → `ready`.
+
+### Channel inbound
+
+Webhook arrives → signature verified (`app/channels/meta_signature.py`, Slack signing,
+Discord Ed25519, a per-channel Telegram secret) → the channel resolves the org → mapped to
+a conversation → the same chat flow → the reply goes out through the adapter.
+
+### A workflow as a tool
+
+BotForge signs a POST to the n8n webhook (`X-BotForge-Signature` over
+`"{timestamp}.{body}"`). **sync** feeds the response straight back into the turn; **async**
+leaves a pending `tool_runs` row that a signed callback to `POST /v1/tools/n8n/callback`
+resolves.
+
+## Multi-tenancy
+
+Shared database, shared schema, row-level scoping by `organization_id`.
+
+<Callout type="danger" title="Isolation is a convention, not a structural guard">
+There is **no Postgres row-level security**. Isolation is enforced by the `current_org`
+dependency plus org-scoped `_get_*` helpers in each service — which means a new query that
+forgets its `organization_id` filter is a cross-tenant leak that nothing will catch for
+you. This was a deliberate decision (ADR-084), taken with the alternative of a repository
+layer considered and rejected, but it puts the burden on review.
+</Callout>
+
+Public surfaces never take an org from the caller. The widget resolves it from the agent's
+public key; a channel webhook from the channel row.
+
+## The realtime hub
+
+`app/realtime/hub.py` bridges operator↔widget delivery over Redis pub/sub, so it works
+across API replicas. A single-process deployment would not need it; anything scaled does.
+
+## Error model
+
+`{"error": {"code", "message", "details"}}` via `AppError` in `app/core/errors.py`. Around
+95 distinct codes, namespaced by module. `register_exception_handlers` also converts
+Pydantic validation failures — note `_safe_validation_errors`, which stringifies `ctx`
+because a custom validator's `ValueError` is not JSON-encodable and used to turn every
+custom-validation failure into a 500.
+
+## Observability
+
+Structured JSON logs with request/org/user ids (`RequestContextMiddleware`), `/healthz`,
+`/readyz`, `/metrics` (Prometheus, `include_in_schema=False`), and Sentry when
+`SENTRY_DSN` is set.
+
+`/docs`, `/redoc` and `/openapi.json` are served **in dev only** (ADR-094). The public API
+reference is built from a committed snapshot instead.

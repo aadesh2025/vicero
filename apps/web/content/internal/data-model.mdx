@@ -1,0 +1,94 @@
+---
+title: Data model
+description: All 49 tables, grouped by domain.
+group: System
+order: 6
+---
+
+PostgreSQL 16 with `pgvector`. Models live in `apps/api/app/models/` — **not** `app/db/`,
+which holds `base.py` (the declarative `Base`, `UUIDPrimaryKey`, `TimestampMixin`,
+`SoftDeleteMixin`), `session.py`, `seed.py` and `templates.py`.
+
+Conventions: UUID primary keys, `organization_id` on every tenant-owned table, soft delete
+where history matters. Migrations are Alembic (`apps/api/alembic/`).
+
+## Identity
+
+| Table | Purpose |
+|---|---|
+| `users` | Human and machine accounts. `is_staff`, `is_active`, soft delete |
+| `oauth_accounts` | Linked Google / GitHub / Facebook identities, encrypted tokens |
+| `sessions` | Refresh-token sessions — hash, device, rotation |
+| `magic_link_tokens` | Hashed single-use passwordless tokens |
+| `password_reset_tokens` | Hashed reset tokens |
+| `email_verification_tokens` | Hashed verification tokens |
+| `organizations` | The tenant. Plan, trial, guard toggles, `public_contacts` |
+| `memberships` | user ↔ org, with `role` and `status` |
+| `invitations` | Pending invites — token, role, expiry |
+
+## Agents
+
+| Table | Purpose |
+|---|---|
+| `agents` | The container. Persona, published-version pointer, `public_key` |
+| `agent_versions` | Immutable snapshot: prompt, model config, RAG config, toggles |
+| `provider_credentials` | BYO LLM keys per org or agent. `api_key_enc` is Fernet |
+| `agent_steps` | Per-turn agentic-loop trace — tool calls, budget consumed |
+| `agent_tests` / `agent_test_runs` | Saved regression cases and their results |
+| `widget_configs` | Per-agent widget appearance and behaviour |
+
+## Knowledge
+
+| Table | Purpose |
+|---|---|
+| `knowledge_bases` | A KB attached to an org |
+| `documents` | Source file, ingest status, `pii_flags` |
+| `chunks` | An embedded passage — a **768-dimension** vector plus an FTS column |
+
+<Callout type="warn" title="768 is in the schema, not in a setting">
+`chunks.embedding` is fixed at 768 dimensions. Changing `EMBEDDING_MODEL` to something with
+a different dimension needs a migration — and changing it at all needs everything
+re-embedded, because vectors from two models are not comparable. A mixed table returns
+nonsense rather than failing.
+</Callout>
+
+## Conversations and inbox
+
+| Table | Purpose |
+|---|---|
+| `conversations` | One thread, one visitor, one channel |
+| `messages` | A turn, with its citations and cost |
+| `conversation_flags` | One reason a human was asked to look (guardrail L6) |
+| `handoffs` | Takeover / handback / approval records |
+| `channels` | A connected platform. Encrypted config |
+| `contacts` | Visitor identity per org |
+| `crm_contacts` | CRM-side record |
+| `macros` | Multi-action inbox macro |
+| `canned_responses` | Reusable operator snippet |
+| `help_articles` | Help Center article, public when published |
+| `campaigns` | Proactive widget / outbound campaign |
+
+## Tools and workflows
+
+| Table | Purpose |
+|---|---|
+| `tools` | A bound tool — builtin, HTTP, or n8n workflow |
+| `tool_runs` | One invocation and its result, including pending async n8n runs |
+| `mcp_servers` | Org-registered MCP server |
+| `workflows` / `workflow_versions` | A visual workflow and its draft/review/published snapshots |
+| `workflow_runs` / `workflow_steps` | An execution and its per-node records |
+| `workflow_tests` / `workflow_test_runs` | Saved cases and results |
+
+## Platform
+
+| Table | Purpose |
+|---|---|
+| `api_keys` | `key_prefix`, `key_hash`, `scopes`, expiry, revocation |
+| `webhook_endpoints` | Outbound subscription — URL, events, secret |
+| `webhook_deliveries` | One attempt, with `next_retry_at` |
+| `audit_logs` | Actor, action, target |
+| `usage_records` | Per-event tokens and cost |
+| `quotas` | Per-org counters |
+| `org_message_usage` | Per-org message counter for metered and trial plans |
+| `feature_flags` | Platform-wide, toggled by staff |
+| `subscriptions` | Stripe. **Unused** — Phase 18 is deferred |

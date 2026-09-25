@@ -1,7 +1,12 @@
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 const rgb = (v: string) => `rgb(var(${v}) / <alpha-value>)`;
+/** Prose colours as raw `rgb(...)`. The typography plugin feeds these into CSS variables
+ *  rather than class names, so Tailwind's `<alpha-value>` placeholder is never substituted
+ *  and would ship literally. */
+const solid = (v: string) => `rgb(var(${v}))`;
 
 const config: Config = {
   darkMode: "class",
@@ -9,6 +14,11 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // Public docs only. `content/internal` is deliberately absent: its class names would be
+    // baked into the stylesheet every visitor downloads, and the whole point of that
+    // directory is that nothing from it reaches a non-staff browser. Internal pages get
+    // their styling from components, which are scanned above.
+    "./content/docs/**/*.mdx",
   ],
   theme: {
     extend: {
@@ -86,8 +96,40 @@ const config: Config = {
         "fade-up": "fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
         "caret-blink": "caret-blink 1.1s ease-in-out infinite",
       },
+      // `prose-botforge` maps the typography plugin onto the app's own tokens, so docs
+      // inherit the palette instead of introducing a second one. Because every colour is a
+      // token, light/dark are handled by `.dark` in globals.css — there is no `prose-invert`
+      // and adding one would fight the tokens.
+      typography: {
+        botforge: {
+          css: {
+            "--tw-prose-body": solid("--muted"),
+            "--tw-prose-headings": solid("--text"),
+            "--tw-prose-lead": solid("--muted"),
+            "--tw-prose-links": solid("--accent-soft"),
+            "--tw-prose-bold": solid("--text"),
+            "--tw-prose-counters": solid("--faint"),
+            "--tw-prose-bullets": solid("--border-strong"),
+            "--tw-prose-hr": solid("--border"),
+            "--tw-prose-quotes": solid("--text"),
+            "--tw-prose-quote-borders": solid("--border-strong"),
+            "--tw-prose-captions": solid("--faint"),
+            "--tw-prose-code": solid("--text"),
+            "--tw-prose-th-borders": solid("--border-strong"),
+            "--tw-prose-td-borders": solid("--border"),
+            maxWidth: "none",
+            // Shiki writes its own colours onto the `pre`, so the plugin's defaults are
+            // cleared rather than overridden — otherwise the two fight and the theme loses.
+            pre: { backgroundColor: "transparent", color: "inherit", padding: "0" },
+            // The plugin quotes inline code with `` characters; the app's own code spans
+            // never have, and the docs match the app.
+            "code::before": { content: '""' },
+            "code::after": { content: '""' },
+          },
+        },
+      },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [tailwindcssAnimate, typography],
 };
 export default config;

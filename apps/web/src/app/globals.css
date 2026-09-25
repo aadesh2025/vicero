@@ -156,6 +156,33 @@
   }
 }
 
+/* Shiki dual-theme code highlighting (docs site).
+   Shiki is configured with `defaultColor: false`, so every token carries BOTH themes as
+   inline custom properties and nothing is painted until one is selected here. The app's
+   theme is a `.dark` class rather than a media query, so the switch has to be a class
+   selector — a `prefers-color-scheme` block would ignore a manual theme toggle. */
+.shiki,
+.shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+.dark .shiki,
+.dark .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+
+/* An anchored heading stays a heading: the wrapping link inherits colour and only reveals
+   the `#` affordance on hover, so the prose reads unchanged. */
+.heading-anchor {
+  color: inherit;
+  text-decoration: none;
+}
+.heading-anchor:hover::after {
+  content: " #";
+  color: rgb(var(--faint));
+}
+
 /* Focus-visible ring, honored across the app */
 :focus-visible {
   outline: 2px solid rgb(var(--accent-soft) / 0.9);

@@ -87,6 +87,17 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+      # The docs site renders its API reference from a committed snapshot of the schema, so
+      # an endpoint added without regenerating it would silently go undocumented. Runs in
+      # the API job because it needs the API's venv.
+      - name: Docs reference is current
+        run: |
+          uv run python ../../scripts/generate-openapi.py
+          cd ../..
+          node scripts/generate-env-reference.mjs
+          git diff --exit-code -- apps/web/content/generated \
+            || { echo "::error::Generated docs reference is stale — run 'make docs-generate' and commit."; exit 1; }
+
   security:
     name: Dependency audit (pip-audit · npm audit)
     runs-on: ubuntu-latest

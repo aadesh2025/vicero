@@ -5,7 +5,7 @@ COMPOSE := docker compose --env-file infra/.env --env-file .env -f infra/docker-
 API := apps/api
 WEB := apps/web
 
-.PHONY: help up down logs dev-api dev-web install lint fmt typecheck test test-api test-web test-e2e migrate seed clean-devdata explain-fts eval-retrieval rechunk
+.PHONY: help up down logs dev-api dev-web install lint fmt typecheck test test-api test-web test-e2e migrate seed clean-devdata explain-fts eval-retrieval rechunk docs-generate docs-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -80,4 +80,12 @@ rechunk: ## Re-chunk + re-embed from the persisted DoclingDocument — no re-con
 	cd $(API) && uv run python ../../scripts/rechunk_documents.py
 
 test-scripts: ## Unit-test the provisioning script's helpers
-	node --test scripts/provision-client.test.mjs
+	node --test scripts/provision-client.test.mjs scripts/generate-env-reference.test.mjs
+
+docs-generate: ## Regenerate the docs site's OpenAPI + env reference from the code
+	cd $(API) && uv run python ../../scripts/generate-openapi.py
+	node scripts/generate-env-reference.mjs
+
+docs-check: docs-generate ## Fail if the committed docs reference is stale (CI)
+	@git diff --exit-code -- $(WEB)/content/generated \
+		|| (echo "\nThe generated docs reference is out of date. Run 'make docs-generate' and commit the result." && exit 1)

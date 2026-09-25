@@ -24,6 +24,18 @@ test.describe("accessibility (axe, serious+critical)", () => {
     expect(await scan(page)).toEqual([]);
   });
 
+  test("public docs", async ({ page }) => {
+    // The docs are the product's only fully public surface, so a violation here is one
+    // anybody can hit without an account.
+    await page.goto("/docs");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+
+    await page.goto("/docs/api/reference");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+  });
+
   test("dashboard + agents (authenticated)", async ({ page, context, request }) => {
     const account = await createAccount(request, "A11y Org");
     await request.post(`${API}/v1/agents`, {

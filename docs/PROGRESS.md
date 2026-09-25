@@ -38,6 +38,22 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Documentation site and staff-only internal reference (2026-09-25, ADR-094, ADR-095).** `/docs` is now the first
+  public surface: 16 customer-voice MDX pages (quickstart, concepts, agents, knowledge, widget, channels, inbox, n8n,
+  security, self-hosting, and an API section covering auth, errors, streaming incl. the `replace` event, rate limits and
+  webhooks) plus an endpoint reference rendered from a committed OpenAPI snapshot. `/internal-docs` is the platform-staff
+  engineering reference (architecture, auth/tenancy, data model, Celery jobs, runbook, all 215 endpoints, all 133 env
+  var names) and is gated **server-side** by `lib/docs/staff.ts` before any content is read — a client redirect would
+  have shipped the content in the bundle. Verified on a cold build: no internal string appears in any static asset,
+  nothing under `/internal-docs` is prerendered, and a real account promoted to `is_staff` sees the pages while a
+  non-staff one gets a refusal with no content in the body. The env reference is generated from `.env.example` only and
+  emits names, never values (asserted by a test). **Found on the way:** `/docs`, `/redoc` and `/openapi.json` were
+  served unauthenticated in production, publishing every route including `/v1/admin/*`; now dev-only (ADR-094).
+  `make docs-generate` regenerates the snapshots and CI fails if they are stale. Also fixed: Turbopack failed every cold
+  Windows build with a junction error once `next-mdx-remote` was added — `transpilePackages` in `next.config.mjs`.
+  **Not done:** the staff *success* path has no Playwright test (granting `is_staff` needs DB access; covered by
+  `staff.test.ts` and a manual check); screenshots were not taken (browser tools disconnected mid-session), so the
+  visual design is verified by rendered HTML only, not by eye.
 - **Client IP, throwaway-email list and dev exposure fixes (2026-09-25, ADR-091/092/093).** The BFF now forwards the
   visitor's `X-Forwarded-For`/`User-Agent` and the API believes it only from `TRUSTED_PROXIES` (read from the right;
   spoofed headers ignored), so per-IP limits are per visitor — the shared-bucket bug that blocked dev signups is fixed and

@@ -39,7 +39,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
         # Swagger/ReDoc need to load their own JS/CSS; skip the strict CSP for the docs UIs only.
-        is_docs = request.url.path in ("/docs", "/redoc") or request.url.path.startswith("/docs/")
+        # In prod those routes don't exist (main.py serves no schema there), so the carve-out
+        # is withheld too — otherwise a 404 at /docs would answer with a weaker CSP than every
+        # other 404, which is both pointless and a hint that something used to live there.
+        is_docs = not settings.is_prod and (
+            request.url.path in ("/docs", "/redoc") or request.url.path.startswith("/docs/")
+        )
         for header, value in _SECURITY_HEADERS.items():
             if is_docs and header in ("Content-Security-Policy", "X-Frame-Options"):
                 continue

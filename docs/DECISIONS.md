@@ -18,6 +18,51 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-095: The documentation site is MDX in the repo, and its API reference is generated, never written
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** BotForge had no public-facing surface at all — `apps/web/src/app/page.tsx` redirected `/` to
+  `/dashboard` — while `docs/05-FRONTEND.md §2` had specified a `/docs` route since day one. The repo's own
+  documentation is written for a build agent, not a customer, and the one hand-written API catalogue
+  (`docs/04-API-SPEC.md`) had drifted badly: it is missing roughly ten resource families that ship today and still
+  documents a `/v1/billing` router that was never built. Meanwhile `apps/web` had no MDX toolchain, no typography
+  plugin and no syntax highlighter; `src/lib/markdown.ts` is a deliberately thin subset with no tables, heading
+  anchors or highlighting.
+- **Decision:** Docs are MDX files in `apps/web/content/`, compiled with `next-mdx-remote` (not the file-based
+  `@next/mdx`), rendered by routes in `apps/web`. The endpoint reference and the env-var reference are **generated**
+  into `apps/web/content/generated/` by `scripts/generate-openapi.py` and `scripts/generate-env-reference.mjs`, and CI
+  fails if the committed output is stale. `prose-botforge` maps `@tailwindcss/typography` onto the existing design
+  tokens rather than introducing a second palette.
+- **Alternatives considered:** a database-backed docs CMS (rejected — new tables, an editor UI and RBAC for a
+  single-author site); rendering `docs/*.md` directly (rejected — those are build-agent instructions and read wrong
+  publicly, besides leaking internal reasoning); a hosted tool like Mintlify (rejected — the staff-only half could not
+  be gated on BotForge's own JWT); hand-writing the endpoint reference (rejected — this is precisely how
+  `04-API-SPEC.md` rotted).
+- **Consequences:** Seven new web dependencies. `src/lib/markdown.ts` stays untouched and keeps serving
+  tenant-authored Help Center articles, where its escape-before-format property matters; the MDX pipeline must never
+  be pointed at user-submitted text. `make docs-generate` becomes a step in any change that adds an endpoint or an
+  env var. The generator reads `.env.example` only and emits names and comments, never values — asserted by a test.
+
+### ADR-094: Swagger, ReDoc and `/openapi.json` are not served in production
+- **Date:** 2026-09-25
+- **Status:** accepted
+- **Context:** `create_app()` constructed `FastAPI(...)` with no `docs_url`/`redoc_url`/`openapi_url` overrides, so
+  all three were served in every environment including prod — the complete schema for 215 operations across 163
+  paths, `/v1/admin/*` included, to any unauthenticated caller. `SecurityHeadersMiddleware` carried an explicit
+  CSP/X-Frame-Options carve-out for `/docs` so Swagger would render, which confirms the exposure was unconditional
+  rather than an oversight of omission. Found while building the docs site (ADR-095), not by a security review.
+- **Decision:** Pass `None` for all three when `settings.is_prod`, which removes the routes. Narrow the middleware
+  carve-out with the same condition, so a prod request to `/docs` gets the same strict CSP as any other 404.
+- **Alternatives considered:** gating them behind `require_staff` (rejected — FastAPI's schema URLs take no
+  dependency, so it means hand-rolling the routes, and a 403 confirms the endpoint exists where a 404 does not);
+  leaving them on because the API is behind Caddy (rejected — the API host is public by design, it serves the widget
+  and every channel webhook); blocking the paths at the reverse proxy (rejected — that puts a security control in a
+  file the application does not test, and `docker-compose.prod.yml` is not the only way this ships).
+- **Consequences:** `/docs` in dev is unchanged and `docs/guides/API-USAGE.md` still points there. The public API
+  reference on the docs site is unaffected: it renders a committed snapshot produced by `app.openapi()`, which does
+  not need the route. Anyone debugging a prod deployment loses Swagger and must read the docs site or run the schema
+  generator locally. Covered by `apps/api/tests/test_schema_exposure.py`.
+
 ### ADR-093: The dev Postgres and Redis are published on loopback only, and the Postgres password is no longer a default
 - **Date:** 2026-09-25
 - **Status:** accepted

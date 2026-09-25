@@ -76,7 +76,14 @@
   nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy`,
   `Cross-Origin-Resource-Policy`, `Permissions-Policy`, and a strict API CSP
   (`default-src 'none'; frame-ancestors 'none'; base-uri 'none'`). Docs UIs (`/docs`, `/redoc`) are
-  exempted from CSP/X-Frame-Options so Swagger/ReDoc render.
+  exempted from CSP/X-Frame-Options so Swagger/ReDoc render — **in dev only**, since the routes do not
+  exist in prod (below), and an exempted 404 would advertise that they once did.
+- ✅ **Interactive schema is dev-only** (ADR-094): `/docs`, `/redoc` and `/openapi.json` are served when
+  `ENV != prod` and removed otherwise. They previously answered in every environment, publishing all 215
+  operations across 163 paths — `/v1/admin/*` included — to unauthenticated callers. `None` for each URL
+  removes the route, so prod returns 404 rather than a 403 that would confirm it exists. The docs site's
+  public API reference is unaffected: it renders a committed snapshot from `app.openapi()`, which does not
+  need the route. Covered by `apps/api/tests/test_schema_exposure.py`.
 - ✅ **HSTS** emitted in production only (`Strict-Transport-Security`, 2 years, includeSubDomains).
 - ✅ **CORS**: explicit allow-list in prod; localhost-any only in dev.
 - ⚠️ **TLS termination**: handled by the reverse proxy (Nginx/Caddy) at deploy — verify at Phase 20.

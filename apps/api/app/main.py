@@ -151,6 +151,15 @@ def _init_sentry() -> None:
         log.warning("sentry_init_failed", error=str(exc))
 
 
+def _serve_schema() -> bool:
+    """Whether the interactive schema routes exist at all.
+
+    When they don't, FastAPI is given `None` for each URL, which removes the route: prod
+    answers 404 rather than 403, so nothing confirms the endpoint was ever there.
+    """
+    return not settings.is_prod
+
+
 def create_app() -> FastAPI:
     _init_sentry()
     app = FastAPI(
@@ -158,6 +167,14 @@ def create_app() -> FastAPI:
         version=__version__,
         description="AI chatbot & automation platform — backend API.",
         lifespan=lifespan,
+        # Swagger, ReDoc and the raw schema are dev tools. Served in prod they publish the
+        # entire surface — every `/v1/admin/*` route, every request shape — to anyone who
+        # asks, which is a free reconnaissance map and nothing a tenant needs: the public
+        # API reference on the docs site is generated from a committed snapshot of this same
+        # schema (scripts/generate-openapi.py), so turning these off costs nobody anything.
+        docs_url="/docs" if _serve_schema() else None,
+        redoc_url="/redoc" if _serve_schema() else None,
+        openapi_url="/openapi.json" if _serve_schema() else None,
     )
 
     app.add_middleware(SecurityHeadersMiddleware)

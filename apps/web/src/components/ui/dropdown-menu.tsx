@@ -18,7 +18,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-surface-2 p-1 shadow-pop",
+        "z-50 min-w-[12rem] overflow-hidden rounded-card border border-border bg-surface p-1 shadow-pop dark:bg-surface-2",
         "data-[state=open]:animate-fade-up",
         className,
       )}
@@ -35,8 +35,8 @@ const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-2 text-sm text-muted outline-none transition-colors",
-      "focus:bg-surface-3 focus:text-text data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
+      "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-muted outline-none transition-colors",
+      "focus:bg-surface-2 focus:text-text dark:focus:bg-surface-3 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
       inset && "pl-8",
       className,
     )}
@@ -53,7 +53,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     ref={ref}
     checked={checked}
     className={cn(
-      "relative flex cursor-pointer select-none items-center rounded-md py-2 pl-8 pr-2.5 text-sm text-muted outline-none transition-colors focus:bg-surface-3 focus:text-text",
+      "relative flex cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-2.5 text-sm font-medium text-muted outline-none transition-colors focus:bg-surface-2 focus:text-text dark:focus:bg-surface-3",
       className,
     )}
     {...props}
@@ -74,7 +74,7 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Label
     ref={ref}
-    className={cn("px-2.5 py-1.5 text-xs font-medium uppercase tracking-wide text-faint", className)}
+    className={cn("px-2.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-faint", className)}
     {...props}
   />
 ));

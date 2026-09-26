@@ -91,6 +91,9 @@
   --ch-discord-text: 71 82 196; /* #4752C4 */
   --ch-discord-soft: 238 240 254; /* #EEF0FE */
 
+  /* Area-chart fill strength: lighter in light mode, a bit stronger on dark surfaces. */
+  --chart-fill: 0.22;
+
   /* Light: very soft, ink-tinted. Dark sets both to 0 — borders separate surfaces there. */
   --shadow: 17 24 39;
   --shadow-1: 0.04;
@@ -165,6 +168,8 @@
   --ch-discord-text: 139 149 248; /* #8B95F8 */
   --ch-discord-soft: 32 37 65; /* #202541 */
 
+
+  --chart-fill: 0.3;
 
   --shadow: 0 0 0;
   --shadow-1: 0;

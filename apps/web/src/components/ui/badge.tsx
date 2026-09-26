@@ -2,18 +2,22 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+// Soft pills: `<m>-soft` background + `<m>-text` text. Callers always pass a label, so status
+// is never colour alone. For status use <StatusPill>, which picks the variant from STATUS_TONE.
 const badgeVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-extrabold transition-colors",
   {
     variants: {
       variant: {
-        default: "border-border bg-surface-2 text-muted",
-        accent: "border-accent/30 bg-accent/10 text-accent",
-        success: "border-success/30 bg-success/10 text-success-text",
-        warn: "border-warn/30 bg-warn/10 text-warn-text",
-        error: "border-error/30 bg-error/10 text-error-text",
-        info: "border-info/30 bg-info/10 text-info-text",
-        outline: "border-border text-muted",
+        default: "bg-surface-3 text-muted",
+        neutral: "bg-surface-3 text-muted",
+        accent: "bg-accent-soft text-accent",
+        ai: "bg-ai-soft text-ai-text",
+        success: "bg-success-soft text-success-text",
+        warn: "bg-warn-soft text-warn-text",
+        error: "bg-error-soft text-error-text",
+        info: "bg-info-soft text-info-text",
+        outline: "border border-border text-muted",
       },
     },
     defaultVariants: { variant: "default" },

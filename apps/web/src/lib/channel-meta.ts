@@ -13,6 +13,7 @@ import {
   Globe,
   Hash,
   LayoutDashboard,
+  Mail,
   MessageCircle,
   MessageSquare,
   Phone,
@@ -31,20 +32,48 @@ import type { ChannelType } from "./api/channels";
  */
 export type InboxChannel = ChannelType | "widget" | "playground";
 
+/** Which `--ch-*` colour set a channel uses. `null` = no brand colour (neutral). */
+export type ChannelColor =
+  | "widget"
+  | "whatsapp"
+  | "instagram"
+  | "facebook"
+  | "telegram"
+  | "email"
+  | "slack"
+  | "discord";
+
 export interface ChannelMeta {
   label: string;
   Icon: typeof Send;
+  /** Colour set in globals.css (`--ch-<color>`, `-text`, `-soft`). Channel colours are only
+   *  for channel contexts — never general UI colour (docs/20 §5). */
+  color: ChannelColor | null;
+}
+
+/** Resolved CSS values for one channel, ready for an inline `style`. They are CSS variables, so
+ *  they follow the theme without a re-render. */
+export interface ChannelTone {
+  /** Exact brand colour: dots, logos, chart bars. */
+  dot: string;
+  /** Brand gradient where the brand is one (Instagram); use as `background-image`. */
+  gradient?: string;
+  /** Shade that passes AA as text on `surface` and on `soft`. */
+  text: string;
+  /** Tinted background for chips and avatars. */
+  soft: string;
 }
 
 export const CHANNEL_META: Record<InboxChannel, ChannelMeta> = {
-  widget: { label: "Web Chat", Icon: Globe },
-  facebook: { label: "Messenger", Icon: MessageCircle },
-  instagram: { label: "Instagram", Icon: Camera },
-  whatsapp: { label: "WhatsApp", Icon: Phone },
-  telegram: { label: "Telegram", Icon: Send },
-  slack: { label: "Slack", Icon: Hash },
-  discord: { label: "Discord", Icon: MessageSquare },
-  playground: { label: "Playground", Icon: FlaskConical },
+  widget: { label: "Web Chat", Icon: Globe, color: "widget" },
+  facebook: { label: "Messenger", Icon: MessageCircle, color: "facebook" },
+  instagram: { label: "Instagram", Icon: Camera, color: "instagram" },
+  whatsapp: { label: "WhatsApp", Icon: Phone, color: "whatsapp" },
+  telegram: { label: "Telegram", Icon: Send, color: "telegram" },
+  slack: { label: "Slack", Icon: Hash, color: "slack" },
+  discord: { label: "Discord", Icon: MessageSquare, color: "discord" },
+  // The operator testing their own bot: not a customer channel, so no brand colour.
+  playground: { label: "Playground", Icon: FlaskConical, color: null },
 };
 
 /** Tab order follows the reference: the always-on web chat, then the Meta surfaces.
@@ -74,17 +103,39 @@ export const INBOX_CHANNEL_ORDER: InboxChannel[] = [
  * was dropping conversations that Conversations listed fine.
  */
 const REPORTING_ONLY: Record<string, ChannelMeta> = {
-  dashboard: { label: "Dashboard", Icon: LayoutDashboard },
-  api: { label: "API", Icon: Code2 },
-  web: { label: "Web", Icon: Globe },
-  manual: { label: "Added manually", Icon: UserPlus },
+  dashboard: { label: "Dashboard", Icon: LayoutDashboard, color: null },
+  api: { label: "API", Icon: Code2, color: null },
+  // Legacy value for the website widget: same colour as `widget`.
+  web: { label: "Web", Icon: Globe, color: "widget" },
+  manual: { label: "Added manually", Icon: UserPlus, color: null },
+  // Email is reportable (contacts and analytics can carry it) but has no inbox tab yet.
+  email: { label: "Email", Icon: Mail, color: "email" },
 };
 
-const FALLBACK: ChannelMeta = { label: "Other", Icon: MessageSquare };
+const FALLBACK: ChannelMeta = { label: "Other", Icon: MessageSquare, color: null };
 
 /** Meta for any channel string, including reporting-only values like `dashboard`. */
 export function channelMeta(type: string): ChannelMeta {
   return CHANNEL_META[type as InboxChannel] ?? REPORTING_ONLY[type] ?? FALLBACK;
+}
+
+const NEUTRAL_TONE: ChannelTone = {
+  dot: "rgb(var(--faint))",
+  text: "rgb(var(--muted))",
+  soft: "rgb(var(--surface-2))",
+};
+
+/** Colours for any channel string. Unknown and non-brand channels get neutral greys. */
+export function channelTone(type: string): ChannelTone {
+  const color = channelMeta(type).color;
+  if (!color) return NEUTRAL_TONE;
+  const tone: ChannelTone = {
+    dot: `rgb(var(--ch-${color}))`,
+    text: `rgb(var(--ch-${color}-text))`,
+    soft: `rgb(var(--ch-${color}-soft))`,
+  };
+  if (color === "instagram") tone.gradient = "var(--ch-instagram-gradient)";
+  return tone;
 }
 
 /** A channel counts as connected once a row exists for it *and* it's switched on. */

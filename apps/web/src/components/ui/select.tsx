@@ -16,8 +16,8 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-text transition-colors",
-      "focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/40 data-[placeholder]:text-faint",
+      "flex h-[38px] w-full items-center justify-between rounded-lg border border-border-strong bg-surface px-3 py-1 text-sm font-medium text-text transition-colors",
+      "focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring/25 data-[placeholder]:font-normal data-[placeholder]:text-faint",
       "disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate",
       className,
     )}
@@ -40,7 +40,7 @@ const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        "relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-lg border border-border bg-surface-2 shadow-pop",
+        "relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-card border border-border bg-surface shadow-pop dark:bg-surface-2",
         "data-[state=open]:animate-fade-up",
         position === "popper" && "translate-y-1",
         className,
@@ -64,8 +64,8 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-md py-2 pl-8 pr-3 text-sm text-muted outline-none transition-colors",
-      "focus:bg-surface-3 focus:text-text data-[state=checked]:text-text data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 text-sm font-medium text-muted outline-none transition-colors",
+      "focus:bg-surface-2 focus:text-text dark:focus:bg-surface-3 data-[state=checked]:text-text data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
     {...props}
@@ -86,7 +86,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn("px-2.5 py-1.5 text-xs font-medium uppercase tracking-wide text-faint", className)}
+    className={cn("px-2.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.08em] text-faint", className)}
     {...props}
   />
 ));

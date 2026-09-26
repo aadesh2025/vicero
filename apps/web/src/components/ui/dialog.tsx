@@ -13,7 +13,7 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
@@ -22,14 +22,14 @@ const DialogContent = React.forwardRef<
         // centering transform and every dialog was anchored *at* the viewport centre rather
         // than centred on it. Small dialogs still landed on-screen, which is why it went
         // unnoticed; a taller one gets clipped off the right and bottom edges.
-        "fixed inset-0 z-50 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-pop",
+        "fixed inset-0 z-50 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-card border border-border bg-surface p-6 shadow-pop dark:bg-surface-2",
         "data-[state=open]:animate-fade-up",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-faint transition-colors hover:text-text">
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-1 text-faint transition-colors hover:text-text">
         <X className="size-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -48,7 +48,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("font-display text-lg font-semibold text-text", className)}
+    className={cn("font-display text-lg font-extrabold text-text", className)}
     {...props}
   />
 ));

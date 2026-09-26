@@ -417,7 +417,7 @@ function ToolArgumentsField({
         }}
         placeholder={'{"query": "{{search_term}}"}'}
       />
-      {error && <p className="text-xs text-error">{error}</p>}
+      {error && <p className="text-xs text-error-text">{error}</p>}
     </Field>
   );
 }

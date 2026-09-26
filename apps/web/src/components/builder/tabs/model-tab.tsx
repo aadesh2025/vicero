@@ -84,7 +84,7 @@ export function ModelTab() {
             </p>
             <Link
               href="/settings/credentials"
-              className="mt-3 inline-block text-sm text-accent-soft underline underline-offset-2"
+              className="mt-3 inline-block text-sm text-accent underline underline-offset-2"
             >
               Add a provider key
             </Link>
@@ -347,7 +347,7 @@ function FeatureRow({
   if (!draft) return null;
   return (
     <div className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3">
-      <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+      <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
         {icon}
       </span>
       <div className="min-w-0 flex-1">
@@ -405,7 +405,7 @@ function CredentialStatus({ provider, name }: { provider: ApiProviderInfo | unde
           </span>
         </>
       )}
-      <Link href="/settings/credentials" className="text-xs text-accent-soft underline underline-offset-2">
+      <Link href="/settings/credentials" className="text-xs text-accent underline underline-offset-2">
         Manage
       </Link>
     </div>

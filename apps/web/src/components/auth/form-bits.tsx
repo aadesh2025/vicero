@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+    <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">
       {message}
     </p>
   );

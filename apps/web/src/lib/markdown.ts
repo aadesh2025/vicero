@@ -30,7 +30,7 @@ function inline(text: string): string {
       // this keeps the emitted href to something a browser will treat as navigation.
       .replace(
         /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-        '<a href="$2" rel="noreferrer noopener" target="_blank" class="text-accent-soft underline">$1</a>',
+        '<a href="$2" rel="noreferrer noopener" target="_blank" class="text-accent underline">$1</a>',
       )
   );
 }

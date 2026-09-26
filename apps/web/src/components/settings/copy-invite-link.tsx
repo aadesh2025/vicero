@@ -81,7 +81,7 @@ export function CopyInviteLink({
           {url === null ? (
             <div className="space-y-4">
               <p className="flex items-start gap-2 text-sm text-muted">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn-text" />
                 <span>
                   Generating a link <strong className="text-text">replaces any link already
                   sent</strong> to this address — an earlier email will stop working. The new link
@@ -89,7 +89,7 @@ export function CopyInviteLink({
                 </span>
               </p>
               {error && (
-                <p role="alert" className="text-xs text-error">
+                <p role="alert" className="text-xs text-error-text">
                   {error}
                 </p>
               )}
@@ -114,7 +114,7 @@ export function CopyInviteLink({
               <div className="flex items-center gap-2">
                 <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
                 <Button variant="outline" onClick={() => copy(url)} aria-label="Copy link">
-                  {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
+                  {copied ? <Check className="size-4 text-success-text" /> : <Copy className="size-4" />}
                 </Button>
               </div>
               <p className="text-xs text-faint">

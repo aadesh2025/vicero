@@ -77,7 +77,7 @@ export function DeleteOrg() {
   return (
     <section className="rounded-lg border border-error/30 bg-error/[0.04]">
       <div className="border-b border-error/20 p-5">
-        <h2 className="font-display text-base font-semibold text-error">Danger zone</h2>
+        <h2 className="font-display text-base font-semibold text-error-text">Danger zone</h2>
         <p className="mt-0.5 text-sm text-muted">
           Deleting <span className="text-text">{org.name}</span> removes its agents, conversations,
           knowledge bases and channel connections from BotForge. Members lose access immediately.
@@ -113,7 +113,7 @@ export function DeleteOrg() {
             autoFocus
             aria-label={`Type ${org.name} to confirm deletion`}
           />
-          {error && <p className="mt-3 text-sm text-error">{error}</p>}
+          {error && <p className="mt-3 text-sm text-error-text">{error}</p>}
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={close} disabled={busy}>
               Cancel

@@ -56,7 +56,7 @@ export function UserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-error focus:text-error" onSelect={onLogout}>
+        <DropdownMenuItem className="text-error-text focus:text-error-text" onSelect={onLogout}>
           <LogOut className="size-4" /> Log out
         </DropdownMenuItem>
       </DropdownMenuContent>

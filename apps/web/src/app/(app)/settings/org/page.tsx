@@ -151,7 +151,7 @@ export default function OrgSettingsPage() {
               {canManage && m.role !== "owner" && (
                 <button
                   onClick={() => remove.mutate(m.user_id)}
-                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                   title="Remove member"
                 >
                   <Trash2 className="size-4" />
@@ -180,7 +180,7 @@ export default function OrgSettingsPage() {
                 <CopyInviteLink orgId={orgId} invitationId={inv.id} email={inv.email} />
                 <button
                   onClick={() => revoke.mutate(inv.id)}
-                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                   title="Revoke invitation"
                 >
                   <Trash2 className="size-4" />
@@ -243,7 +243,7 @@ function InviteDialog({
               </option>
             ))}
           </select>
-          {invite.isError && <p className="text-sm text-error">{(invite.error as Error).message}</p>}
+          {invite.isError && <p className="text-sm text-error-text">{(invite.error as Error).message}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={invite.isPending || !email.trim()}>
             {invite.isPending && <Loader2 className="size-4 animate-spin" />} Send invite
           </Button>

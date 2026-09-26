@@ -43,7 +43,7 @@ export function ContactAvatar({
       </span>
       <span
         title={label}
-        className={`absolute -bottom-0.5 -right-0.5 grid ${badge} place-items-center rounded-full border border-surface bg-surface-2 text-accent-soft`}
+        className={`absolute -bottom-0.5 -right-0.5 grid ${badge} place-items-center rounded-full border border-surface bg-surface-2 text-accent`}
       >
         <Icon className={badgeIcon} aria-hidden />
       </span>

@@ -56,7 +56,7 @@ export default function WebhooksPage() {
           {(hooks ?? []).length === 0 && <p className="p-4 text-sm text-muted">No webhooks yet.</p>}
           {(hooks ?? []).map((h) => (
             <div key={h.id} className="flex items-center gap-3 p-4">
-              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                 <WebhookIcon className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
@@ -86,7 +86,7 @@ export default function WebhooksPage() {
                   <Switch checked={h.enabled} onCheckedChange={(enabled) => toggle.mutate({ id: h.id, enabled })} />
                   <button
                     onClick={() => remove.mutate(h.id)}
-                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                     title="Delete"
                   >
                     <Trash2 className="size-4" />
@@ -161,7 +161,7 @@ function CreateWebhookDialog({
                   onClick={() => toggleEvent(e)}
                   className={`rounded-full border px-2 py-1 text-[11px] ${
                     events.includes(e)
-                      ? "border-accent/40 bg-accent/[0.08] text-accent-soft"
+                      ? "border-accent/40 bg-accent/[0.08] text-accent"
                       : "border-border bg-surface-2 text-muted"
                   }`}
                 >
@@ -170,7 +170,7 @@ function CreateWebhookDialog({
               ))}
             </div>
           </div>
-          {create.isError && <p className="text-sm text-error">{(create.error as Error).message}</p>}
+          {create.isError && <p className="text-sm text-error-text">{(create.error as Error).message}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={create.isPending || !url.trim() || !events.length}>
             {create.isPending && <Loader2 className="size-4 animate-spin" />} Create
           </Button>

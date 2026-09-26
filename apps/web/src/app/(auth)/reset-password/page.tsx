@@ -45,7 +45,7 @@ function ResetForm() {
       {done ? (
         <div className="mt-6 space-y-4">
           <FormNotice>Your password is updated. Sign in with it now.</FormNotice>
-          <Link href="/login" className="block text-center text-sm font-medium text-accent-soft hover:text-accent">
+          <Link href="/login" className="block text-center text-sm font-medium text-accent hover:text-accent">
             Go to sign in
           </Link>
         </div>

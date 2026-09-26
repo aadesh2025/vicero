@@ -80,7 +80,7 @@ export function SettingsTab() {
       {canWrite && (
         <section className="rounded-lg border border-error/30 bg-error/[0.04]">
           <div className="border-b border-error/20 p-5">
-            <h3 className="font-display text-base font-semibold text-error">Danger zone</h3>
+            <h3 className="font-display text-base font-semibold text-error-text">Danger zone</h3>
             <p className="mt-0.5 text-sm text-muted">
               Deleting an agent removes its versions, conversations, and channel connections. This cannot be
               undone.
@@ -101,7 +101,7 @@ export function SettingsTab() {
                 Press OK to delete this agent. Its versions, conversations and channel connections go
                 with it, any embedded widget stops answering, and this cannot be undone.
               </p>
-              {error && <p className="mt-3 text-sm text-error">{error}</p>}
+              {error && <p className="mt-3 text-sm text-error-text">{error}</p>}
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={closeConfirm} disabled={deleting}>
                   Cancel

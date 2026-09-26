@@ -31,7 +31,7 @@ export default function AuditPage() {
   return (
     <Section title="Audit log" description="Sensitive actions taken in this workspace." noPad>
       <ul className="divide-y divide-border">
-        {isError && <li className="px-5 py-4 text-sm text-error">Couldn&apos;t load the audit log.</li>}
+        {isError && <li className="px-5 py-4 text-sm text-error-text">Couldn&apos;t load the audit log.</li>}
         {(entries ?? []).length === 0 && !isError && (
           <li className="px-5 py-6 text-center text-sm text-muted">No audit entries yet.</li>
         )}

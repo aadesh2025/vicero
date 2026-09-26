@@ -129,7 +129,7 @@ function ConnectButton({ channel }: { channel: InboxChannel }) {
                   {/* Decorative initial — the name follows, so keep it out of the a11y name. */}
                   <span
                     aria-hidden
-                    className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface text-sm font-medium uppercase text-accent-soft"
+                    className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface text-sm font-medium uppercase text-accent"
                   >
                     {a.name.slice(0, 1)}
                   </span>

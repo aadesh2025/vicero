@@ -63,7 +63,7 @@ export function EndedBanner({ plan }: { plan: PlanStatus }) {
       data-testid="trial-ended"
       className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-error/30 bg-error/10 px-4 py-3 text-sm md:px-6 lg:px-8"
     >
-      <AlertTriangle className="size-4 shrink-0 text-error" />
+      <AlertTriangle className="size-4 shrink-0 text-error-text" />
       <div className="flex-1">
         <p className="font-medium text-text">Your free trial has ended. Upgrade to continue.</p>
         <p className="text-muted">
@@ -89,7 +89,7 @@ function VerifyNudge({ email }: { email: string }) {
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warn/30 bg-warn/[0.07] px-4 py-2 text-sm md:px-6 lg:px-8">
-      <MailWarning className="size-4 shrink-0 text-warn" />
+      <MailWarning className="size-4 shrink-0 text-warn-text" />
       <span className="text-muted">
         Verify <span className="font-mono text-text">{email}</span> to publish your agent to live channels.
       </span>
@@ -104,7 +104,7 @@ function VerifyNudge({ email }: { email: string }) {
             setState("sent");
           }
         }}
-        className="font-medium text-accent-soft hover:text-accent disabled:text-faint"
+        className="font-medium text-accent hover:text-accent disabled:text-faint"
       >
         {state === "sent" ? "Email sent" : "Resend email"}
       </button>

@@ -7,11 +7,11 @@ import type { HttpMethod, Operation } from "@/lib/docs/openapi";
  *  tokens: green reads as safe, amber as a change, red as destructive — which is exactly
  *  what these methods mean. */
 const METHOD_STYLE: Record<HttpMethod, string> = {
-  get: "border-success/40 bg-surface text-success",
-  post: "border-info/40 bg-surface text-info",
-  put: "border-warn/40 bg-surface text-warn",
-  patch: "border-warn/40 bg-surface text-warn",
-  delete: "border-error/40 bg-surface text-error",
+  get: "border-success/40 bg-surface text-success-text",
+  post: "border-info/40 bg-surface text-info-text",
+  put: "border-warn/40 bg-surface text-warn-text",
+  patch: "border-warn/40 bg-surface text-warn-text",
+  delete: "border-error/40 bg-surface text-error-text",
 };
 
 export function MethodPill({ method }: { method: HttpMethod }) {

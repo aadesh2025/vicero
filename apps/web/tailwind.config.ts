@@ -24,6 +24,7 @@ const config: Config = {
     extend: {
       colors: {
         bg: rgb("--bg"),
+        sidebar: rgb("--sidebar"),
         surface: {
           DEFAULT: rgb("--surface"),
           2: rgb("--surface-2"),
@@ -55,10 +56,14 @@ const config: Config = {
         },
         "on-accent": rgb("--on-accent"),
         glow: rgb("--glow"),
-        success: rgb("--success"),
-        warn: rgb("--warn"),
-        error: rgb("--error"),
-        info: rgb("--info"),
+        // Meaning colours: DEFAULT = main (icons, dots, lines, borders), `text` = the AA-safe
+        // shade for words, `soft` = pill/tint background. See globals.css.
+        ai: { DEFAULT: rgb("--ai"), text: rgb("--ai-text"), soft: rgb("--ai-soft") },
+        success: { DEFAULT: rgb("--success"), text: rgb("--success-text"), soft: rgb("--success-soft") },
+        warn: { DEFAULT: rgb("--warn"), text: rgb("--warn-text"), soft: rgb("--warn-soft") },
+        error: { DEFAULT: rgb("--error"), text: rgb("--error-text"), soft: rgb("--error-soft") },
+        info: { DEFAULT: rgb("--info"), text: rgb("--info-text"), soft: rgb("--info-soft") },
+        chart: { grid: rgb("--chart-grid"), axis: rgb("--chart-axis"), 5: rgb("--chart-5") },
         ring: rgb("--ring"),
       },
       fontFamily: {
@@ -67,6 +72,7 @@ const config: Config = {
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       borderRadius: {
+        card: "14px",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
@@ -106,7 +112,7 @@ const config: Config = {
             "--tw-prose-body": solid("--muted"),
             "--tw-prose-headings": solid("--text"),
             "--tw-prose-lead": solid("--muted"),
-            "--tw-prose-links": solid("--accent-soft"),
+            "--tw-prose-links": solid("--accent"),
             "--tw-prose-bold": solid("--text"),
             "--tw-prose-counters": solid("--faint"),
             "--tw-prose-bullets": solid("--border-strong"),

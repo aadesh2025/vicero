@@ -41,7 +41,7 @@ export function SliderField({
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-text">{label}</label>
-        <span className="rounded bg-surface-2 px-2 py-0.5 font-mono text-xs text-accent-soft">
+        <span className="rounded bg-surface-2 px-2 py-0.5 font-mono text-xs text-accent">
           {display ?? value}
         </span>
       </div>

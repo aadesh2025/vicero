@@ -62,7 +62,7 @@ export function ChannelBreakdown({
             <tr key={b.channel} className="transition-colors hover:bg-surface-2/40">
               <th scope="row" className="whitespace-nowrap px-5 py-2.5 text-left font-normal">
                 <span className="flex items-center gap-2">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                     <Icon className="size-3.5" aria-hidden />
                   </span>
                   <span className={idle ? "text-muted" : "text-text"}>{label}</span>

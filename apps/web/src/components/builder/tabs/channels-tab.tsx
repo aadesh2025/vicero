@@ -280,7 +280,7 @@ export function ChannelsTab() {
                 onClick={copy}
                 className="absolute right-2 top-2 flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted transition-colors hover:text-text"
               >
-                {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+                {copied ? <Check className="size-3.5 text-success-text" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
@@ -423,13 +423,13 @@ function LogoUpload({
           {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />} Upload
         </Button>
         {logoUrl && (
-          <button type="button" onClick={() => onChange(null)} className="text-xs text-muted hover:text-error">
+          <button type="button" onClick={() => onChange(null)} className="text-xs text-muted hover:text-error-text">
             Remove
           </button>
         )}
       </div>
       <p className="mt-1 text-xs text-faint">PNG, JPG, WEBP, or GIF · up to 2 MB. Used on the launcher and as the assistant avatar.</p>
-      {error && <p className="mt-1 text-xs text-error">{error}</p>}
+      {error && <p className="mt-1 text-xs text-error-text">{error}</p>}
     </Field>
   );
 }
@@ -602,7 +602,7 @@ function MessagingChannels({ agentId }: { agentId: string }) {
           return (
             <li key={type} className="rounded-md border border-border bg-surface-2/50 p-3">
               <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                   <Icon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -616,7 +616,7 @@ function MessagingChannels({ agentId }: { agentId: string }) {
                     <Switch checked={ch.enabled} onCheckedChange={(on) => toggle.mutate({ id: ch.id, on })} />
                     <button
                       onClick={() => remove.mutate(ch.id)}
-                      className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                      className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                       title="Disconnect"
                     >
                       <Trash2 className="size-4" />
@@ -689,7 +689,7 @@ function ConnectDialog({
             </div>
           ))}
           <p className="text-xs text-faint">{spec?.hint}</p>
-          {create.isError && <p className="text-sm text-error">{(create.error as Error).message}</p>}
+          {create.isError && <p className="text-sm text-error-text">{(create.error as Error).message}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={create.isPending}>
             {create.isPending && <Loader2 className="size-4 animate-spin" />} Connect
           </Button>

@@ -57,7 +57,7 @@ export default function UpgradePage() {
           )}
         </div>
       </div>
-      <Link href="/dashboard" className="inline-block text-sm text-accent-soft hover:text-accent">
+      <Link href="/dashboard" className="inline-block text-sm text-accent hover:text-accent">
         Back to dashboard
       </Link>
     </div>

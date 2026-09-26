@@ -53,7 +53,7 @@ export default function AutomationsPage() {
 
       {!n8nAllowed ? null : unavailable ? (
         <div className="flex items-center gap-3 rounded-lg border border-warn/25 bg-warn/[0.05] px-4 py-3 text-sm">
-          <AlertCircle className="size-4 shrink-0 text-warn" />
+          <AlertCircle className="size-4 shrink-0 text-warn-text" />
           <div className="flex-1">
             <span className="font-medium text-text">n8n not reachable.</span>{" "}
             <span className="text-muted">
@@ -66,7 +66,7 @@ export default function AutomationsPage() {
         </div>
       ) : (
         <div className="flex items-center gap-3 rounded-lg border border-success/25 bg-success/[0.05] px-4 py-3 text-sm">
-          <span className="grid size-8 place-items-center rounded-md border border-success/30 bg-success/10 text-success">
+          <span className="grid size-8 place-items-center rounded-md border border-success/30 bg-success/10 text-success-text">
             <WorkflowIcon className="size-4" />
           </span>
           <div className="flex-1">
@@ -92,7 +92,7 @@ export default function AutomationsPage() {
           <ul className="divide-y divide-border">
             {(workflows ?? []).map((wf) => (
               <li key={wf.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-2/40">
-                <span className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                <span className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                   <Webhook className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -209,7 +209,7 @@ function BindDialog({ workflow, onClose }: { workflow: ApiN8nWorkflow | null; on
               <option value="async">async — resolve later via callback</option>
             </select>
           </div>
-          {bind.isError && <p className="text-sm text-error">{(bind.error as Error).message}</p>}
+          {bind.isError && <p className="text-sm text-error-text">{(bind.error as Error).message}</p>}
           <Button
             type="submit"
             variant="primary"

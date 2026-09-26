@@ -232,7 +232,7 @@ export default function MacrosPage() {
                       type="button"
                       onClick={() => setActions((l) => l.filter((_, idx) => idx !== i))}
                       aria-label={`Remove step ${i + 1}`}
-                      className="rounded p-1 text-faint hover:text-error"
+                      className="rounded p-1 text-faint hover:text-error-text"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -264,9 +264,9 @@ export default function MacrosPage() {
               {editing ? "Save changes" : "Create macro"}
             </Button>
             {!complete && actions.length > 0 && (
-              <p className="text-xs text-warn">Every step needs its details filled in.</p>
+              <p className="text-xs text-warn-text">Every step needs its details filled in.</p>
             )}
-            {error && <p className="text-sm text-error">{error}</p>}
+            {error && <p className="text-sm text-error-text">{error}</p>}
           </form>
         )}
 
@@ -299,7 +299,7 @@ export default function MacrosPage() {
                   <button
                     onClick={() => remove.mutate(m.id)}
                     aria-label={`Delete ${m.name}`}
-                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                   >
                     <Trash2 className="size-4" />
                   </button>

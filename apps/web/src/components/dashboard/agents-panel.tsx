@@ -38,7 +38,7 @@ export function AgentsPanel() {
         </div>
         <Link
           href="/agents"
-          className="inline-flex items-center gap-1 text-sm font-medium text-accent-soft hover:text-accent"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent"
         >
           View all <ArrowUpRight className="size-3.5" />
         </Link>
@@ -67,7 +67,7 @@ export function AgentsPanel() {
           </div>
           <Link
             href="/agents"
-            className="inline-flex items-center gap-1 text-sm font-medium text-accent-soft hover:text-accent"
+            className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent"
           >
             Create your first agent <ArrowUpRight className="size-3.5" />
           </Link>

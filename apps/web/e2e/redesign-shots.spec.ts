@@ -10,12 +10,15 @@ import { API, auth, authenticateBrowser, createAccount, createPublishedAgent } f
 //   REDESIGN_SHOTS=before npx playwright test e2e/redesign-shots.spec.ts
 //   REDESIGN_SHOTS=after  npx playwright test e2e/redesign-shots.spec.ts
 //
+// REDESIGN_ONLY=dashboard,inbox limits the pass to those route names (fast iteration).
+//
 // Writes var/redesign/<name>/<theme>/<route>.png at the repo root (git-ignored) and, for
 // "after", fails on any colour-contrast violation in either theme.
 
 const RUN = process.env.REDESIGN_SHOTS;
 const OUT = path.resolve(__dirname, "../../../var/redesign", RUN ?? "none");
 const THEMES = ["light", "dark"] as const;
+const ONLY = process.env.REDESIGN_ONLY?.split(",").map((s) => s.trim()).filter(Boolean);
 
 test.skip(!RUN, "set REDESIGN_SHOTS=before|after to run the redesign screenshot pass");
 test.setTimeout(600_000);
@@ -31,6 +34,7 @@ async function setTheme(page: Page, theme: string) {
 }
 
 async function shoot(page: Page, theme: string, name: string, url: string) {
+  if (ONLY && !ONLY.includes(name)) return;
   await page.goto(url, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
   await page.waitForTimeout(400);
@@ -130,7 +134,7 @@ test("screenshot every route in both themes", async ({ browser, request }) => {
     await ctx.close();
   }
 
-  expect(fs.readdirSync(path.join(OUT, "light")).length).toBeGreaterThan(20);
+  expect(fs.readdirSync(path.join(OUT, "light")).length).toBeGreaterThan(ONLY ? 0 : 20);
   if (RUN === "after") {
     const report = fs.readFileSync(path.join(OUT, "contrast.txt"), "utf8");
     expect(report.match(/: [1-9]\d*$/gm) ?? [], report).toEqual([]);

@@ -52,7 +52,7 @@ export function LockedPanel({
 export function UpgradeNotice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-accent/25 bg-accent/[0.05] px-4 py-4 sm:flex-row sm:items-center">
-      <span className="grid size-9 shrink-0 place-items-center rounded-md border border-accent/30 bg-accent/10 text-accent-soft">
+      <span className="grid size-9 shrink-0 place-items-center rounded-md border border-accent/30 bg-accent/10 text-accent">
         <Lock className="size-4" />
       </span>
       <div className="flex-1 text-sm">
@@ -86,7 +86,7 @@ export function LockedButton({
       </TooltipTrigger>
       <TooltipContent>
         {reason}{" "}
-        <Link href={UPGRADE_PATH} className="font-medium text-accent-soft underline">
+        <Link href={UPGRADE_PATH} className="font-medium text-accent underline">
           Upgrade
         </Link>
       </TooltipContent>

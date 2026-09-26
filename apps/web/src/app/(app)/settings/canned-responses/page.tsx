@@ -110,7 +110,7 @@ export default function CannedResponsesPage() {
                 Lowercase letters, digits, hyphens and underscores — no spaces.
               </p>
             </div>
-            {error && <p className="text-sm text-error">{error}</p>}
+            {error && <p className="text-sm text-error-text">{error}</p>}
           </form>
         )}
 
@@ -121,7 +121,7 @@ export default function CannedResponsesPage() {
           )}
           {(items ?? []).map((item) => (
             <div key={item.id} className="flex items-start gap-3 p-3">
-              <code className="mt-0.5 shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-accent-soft">
+              <code className="mt-0.5 shrink-0 rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-accent">
                 /{item.shortcut}
               </code>
               <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-text">{item.content}</p>
@@ -137,7 +137,7 @@ export default function CannedResponsesPage() {
                   <button
                     onClick={() => remove.mutate(item.id)}
                     aria-label={`Delete /${item.shortcut}`}
-                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                   >
                     <Trash2 className="size-4" />
                   </button>

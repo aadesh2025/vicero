@@ -63,10 +63,10 @@ function Callback() {
       <h1 className="font-display text-xl font-semibold text-text">Signing you in</h1>
       {error ? (
         <>
-          <p role="alert" className="mt-3 text-sm text-error">
+          <p role="alert" className="mt-3 text-sm text-error-text">
             {error}
           </p>
-          <Link href="/login" className="mt-4 inline-block text-sm font-medium text-accent-soft hover:text-accent">
+          <Link href="/login" className="mt-4 inline-block text-sm font-medium text-accent hover:text-accent">
             Back to sign in
           </Link>
         </>

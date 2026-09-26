@@ -126,7 +126,7 @@ export function CampaignsSection({ agentId }: { agentId: string }) {
             Add campaign
           </Button>
         </div>
-        {error && <p className="text-sm text-error">{error}</p>}
+        {error && <p className="text-sm text-error-text">{error}</p>}
       </form>
 
       <ul aria-label="Campaigns" className="mt-4 space-y-2">
@@ -164,7 +164,7 @@ export function CampaignsSection({ agentId }: { agentId: string }) {
             <button
               onClick={() => remove.mutate(c.id)}
               aria-label={`Delete ${c.name}`}
-              className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+              className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
             >
               <Trash2 className="size-4" />
             </button>

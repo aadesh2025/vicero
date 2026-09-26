@@ -94,7 +94,7 @@ export default function AgentsPage() {
 
           <button
             onClick={() => setCreating(true)}
-            className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong bg-surface/40 text-muted transition-colors hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent-soft"
+            className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong bg-surface/40 text-muted transition-colors hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent"
           >
             <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2">
               <Bot className="size-5" />

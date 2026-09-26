@@ -3,107 +3,172 @@
 @tailwind utilities;
 
 /*
-  BotForge design tokens — light-first monochrome greyscale.
+  BotForge design tokens — dual theme (docs/20-UI-REDESIGN-DUAL-THEME.md §4, §5).
 
-  The whole system is four greys: #F3F4F6 page, #1F2937 ink, #6B7280 and #4B5563 for the two
-  levels of secondary text. There is no brand hue, which is the point: in a monochrome UI the
-  *only* saturated pixels are the ones that mean something.
-
-  Consequences worth knowing before editing:
-  - **The accent is the ink, not a colour.** A primary button is #1F2937 with white on it. So
-    the accent cannot be used to decorate — anything painted with it reads as "the one action
-    here", and two of them on a screen means neither is.
-  - **Status colours stay coloured.** Red/amber/green are the only saturated things in the
-    interface, deliberately: a greyscale error state is unreadable at a glance, and colour is
-    doing real work rather than styling. They are darkened so they sit calmly against grey.
-  - **`--glow` is the accent here.** It survives as a token because code references it, but a
-    monochrome palette has no second colour to spend on "live"; motion carries that instead.
+  One blue primary, one purple for "the AI", and colour that always means something. About 80%
+  of any screen is neutral (page, cards, text); colour lives in icons, pills, chart series,
+  channel chips and the single primary button. The same meaning has the same hue in both
+  themes — green is success, WhatsApp is green — only the shade moves.
 
   Stored as space-separated RGB channels so Tailwind's `rgb(var(--x) / <alpha-value>)` opacity
   modifiers keep working.
+
+  Things worth knowing before editing:
+  - **Three tiers per meaning colour.** `--success` is the *main* colour (icons, dots, chart
+    lines, borders), `--success-text` is the shade that passes AA as *text* (on both `surface`
+    and `-soft`), `--success-soft` is the pill/tint background. The same holds for warn, error,
+    info and ai. Don't put `text-success` on words — use `text-success-text`.
+  - **`--accent-soft` is a background tint**, not a text colour. It used to be a lighter text
+    shade; every text usage now reads `text-accent`. The `ember` alias in tailwind.config.ts
+    still points at `accent`.
+  - **Filled primary buttons use `--accent-strong`**, not `--accent`: white on the dark-mode
+    accent (#60A5FA) fails AA, white on #3B82F6 passes.
+  - **Dark "soft" values are pre-blended solids** (the main colour at ~14% over `--surface`),
+    so they stay plain RGB triplets and never need an alpha channel.
+  - **Channel colours (`--ch-*`) are only for channel contexts** — a chip, a chart bar, an
+    avatar tint where a channel is named. They are never general UI colour. Brand colours that
+    fail as text get a separate `-text` shade; dots and bars keep the exact brand colour.
 */
 :root {
-  /* Surfaces — white cards lifting off a grey page. That contrast *is* the layering here;
-     without it every panel edge would depend on a border alone. */
-  --bg: 243 244 246; /* #F3F4F6 */
-  --surface: 255 255 255;
-  --surface-2: 249 250 251; /* #F9FAFB inset panels */
-  --surface-3: 243 244 246; /* #F3F4F6 deepest inset, back to the page */
+  /* Surfaces, text, primary, meaning colours, chart, channels */
+  --bg: 247 248 252; /* #F7F8FC */
+  --surface: 255 255 255; /* #FFFFFF */
+  --surface-2: 248 250 252; /* #F8FAFC */
+  --surface-3: 241 245 249; /* #F1F5F9 */
   --border: 229 231 235; /* #E5E7EB */
   --border-strong: 209 213 219; /* #D1D5DB */
+  --text: 17 24 39; /* #111827 */
+  --muted: 71 85 105; /* #475569 */
+  --faint: 100 116 139; /* #64748B */
+  --sidebar: 255 255 255; /* #FFFFFF */
+  --accent: 37 99 235; /* #2563EB */
+  --accent-strong: 37 99 235; /* #2563EB */
+  --accent-2: 29 78 216; /* #1D4ED8 */
+  --accent-soft: 239 246 255; /* #EFF6FF */
+  --on-accent: 255 255 255; /* #FFFFFF */
+  --ring: 37 99 235; /* #2563EB */
+  --glow: 37 99 235; /* #2563EB */
+  --ai: 124 58 237; /* #7C3AED */
+  --ai-text: 109 40 217; /* #6D28D9 */
+  --ai-soft: 243 232 255; /* #F3E8FF */
+  --success: 22 163 74; /* #16A34A */
+  --success-text: 21 128 61; /* #15803D */
+  --success-soft: 240 253 244; /* #F0FDF4 */
+  --warn: 217 119 6; /* #D97706 */
+  --warn-text: 180 83 9; /* #B45309 */
+  --warn-soft: 255 251 235; /* #FFFBEB */
+  --error: 220 38 38; /* #DC2626 */
+  --error-text: 185 28 28; /* #B91C1C */
+  --error-soft: 254 242 242; /* #FEF2F2 */
+  --info: 37 99 235; /* #2563EB */
+  --info-text: 29 78 216; /* #1D4ED8 */
+  --info-soft: 239 246 255; /* #EFF6FF */
+  --chart-grid: 233 236 242; /* #E9ECF2 */
+  --chart-axis: 100 116 139; /* #64748B */
+  --chart-5: 8 145 178; /* #0891B2 */
+  --ch-widget: 37 99 235; /* #2563EB */
+  --ch-widget-text: 29 78 216; /* #1D4ED8 */
+  --ch-widget-soft: 239 246 255; /* #EFF6FF */
+  --ch-whatsapp: 37 211 102; /* #25D366 */
+  --ch-whatsapp-text: 21 128 61; /* #15803D */
+  --ch-whatsapp-soft: 236 253 243; /* #ECFDF3 */
+  --ch-instagram: 221 42 123; /* #DD2A7B */
+  --ch-instagram-text: 193 53 132; /* #C13584 */
+  --ch-instagram-soft: 253 242 248; /* #FDF2F8 */
+  --ch-facebook: 8 102 255; /* #0866FF */
+  --ch-facebook-text: 7 89 219; /* #0759DB */
+  --ch-facebook-soft: 238 244 255; /* #EEF4FF */
+  --ch-telegram: 34 158 217; /* #229ED9 */
+  --ch-telegram-text: 26 127 176; /* #1A7FB0 */
+  --ch-telegram-soft: 236 247 253; /* #ECF7FD */
+  --ch-email: 245 158 11; /* #F59E0B */
+  --ch-email-text: 180 83 9; /* #B45309 */
+  --ch-email-soft: 255 251 235; /* #FFFBEB */
+  --ch-slack: 97 31 105; /* #611F69 */
+  --ch-slack-text: 97 31 105; /* #611F69 */
+  --ch-slack-soft: 248 238 249; /* #F8EEF9 */
+  --ch-discord: 88 101 242; /* #5865F2 */
+  --ch-discord-text: 71 82 196; /* #4752C4 */
+  --ch-discord-soft: 238 240 254; /* #EEF0FE */
 
-  /* Text */
-  --text: 31 41 55; /* #1F2937 — 12.6:1 on white */
-  --muted: 75 85 99; /* #4B5563 — 8.0:1 */
-  /* #6B7280 is 4.83:1 on a white card but only 4.39:1 on the #F3F4F6 page — i.e. AA on
-     `surface`, fractionally under on `bg`. Keep faint text inside cards; if you ever need it
-     directly on the page, step up to --muted. */
-  --faint: 107 114 128; /* #6B7280 */
+  /* Light: very soft, ink-tinted. Dark sets both to 0 — borders separate surfaces there. */
+  --shadow: 17 24 39;
+  --shadow-1: 0.04;
+  --shadow-2: 0.06;
 
-  /* Accent = the ink. Filled controls are near-black with white on them. */
-  --accent: 31 41 55; /* #1F2937 */
-  --accent-2: 75 85 99; /* #4B5563 — hover, and the second stop of the wordmark */
-  --accent-soft: 75 85 99; /* #4B5563 for accent-coloured text */
-  --accent-strong: 31 41 55; /* filled surfaces; white on it is 12.6:1 */
-  --on-accent: 255 255 255;
-  --glow: 75 85 99;
+  /* Instagram's brand gradient — same in both themes; it's a brand element. */
+  --ch-instagram-gradient: linear-gradient(45deg, #f58529, #dd2a7b, #8134af);
 
-  /* Status — the only saturated colour in the UI, darkened for light surfaces */
-  --success: 4 120 87; /* #047857 */
-  --warn: 180 83 9; /* #B45309 */
-  --error: 185 28 28; /* #B91C1C */
-  --info: 29 78 216; /* #1D4ED8 */
-
-  /* Shadows are tinted with the ink rather than pure black: black on a warm grey reads muddy */
-  --shadow: 31 41 55;
-  --shadow-1: 0.06;
-  --shadow-2: 0.1;
-
-  --ring: 31 41 55;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 }
 
-/* Dark mode restores the original graphite + ember palette (the dark-first design this app
-   shipped with), rather than inverting the light greyscale.
-   The greyscale inversion made dark mode a flat wash: `--accent` became near-white, so every
-   primary action, focus ring and "live" glow rendered as another shade of grey on grey, and
-   the interface lost the one colour that told you where to look. Light mode is untouched —
-   only these values change.
-   Token *names* are the current ones; the values are the pre-`db3aa91` ember set. */
+/* Dark mode is designed, not inverted: its own surfaces (each step lighter than the last),
+   slightly brighter accents, no drop shadows. */
 .dark {
-  /* Surfaces (cool graphite) */
-  --bg: 10 11 13; /* #0A0B0D */
-  --surface: 19 21 25; /* #131519 */
-  --surface-2: 24 27 33; /* #181B21 */
-  --surface-3: 31 35 43; /* #1F232B */
-  --border: 36 40 50; /* #242832 */
-  --border-strong: 52 58 71; /* #343A47 */
+  --bg: 11 13 16; /* #0B0D10 */
+  --surface: 21 25 31; /* #15191F */
+  --surface-2: 27 32 40; /* #1B2028 */
+  --surface-3: 34 40 49; /* #222831 */
+  --border: 39 45 54; /* #272D36 */
+  --border-strong: 52 59 70; /* #343B46 */
+  --text: 241 245 249; /* #F1F5F9 */
+  --muted: 203 213 225; /* #CBD5E1 */
+  --faint: 148 163 184; /* #94A3B8 */
+  --sidebar: 14 17 22; /* #0E1116 */
+  --accent: 96 165 250; /* #60A5FA */
+  --accent-strong: 59 130 246; /* #3B82F6 */
+  --accent-2: 147 197 253; /* #93C5FD */
+  --accent-soft: 32 45 62; /* #202D3E */
+  --on-accent: 255 255 255; /* #FFFFFF */
+  --ring: 96 165 250; /* #60A5FA */
+  --glow: 96 165 250; /* #60A5FA */
+  --ai: 167 139 250; /* #A78BFA */
+  --ai-text: 167 139 250; /* #A78BFA */
+  --ai-soft: 41 41 62; /* #29293E */
+  --success: 74 222 128; /* #4ADE80 */
+  --success-text: 74 222 128; /* #4ADE80 */
+  --success-soft: 28 53 45; /* #1C352D */
+  --warn: 251 191 36; /* #FBBF24 */
+  --warn-text: 251 191 36; /* #FBBF24 */
+  --warn-soft: 53 48 32; /* #353020 */
+  --error: 248 113 113; /* #F87171 */
+  --error-text: 248 113 113; /* #F87171 */
+  --error-soft: 53 37 42; /* #35252A */
+  --info: 96 165 250; /* #60A5FA */
+  --info-text: 96 165 250; /* #60A5FA */
+  --info-soft: 32 45 62; /* #202D3E */
+  --chart-grid: 35 42 51; /* #232A33 */
+  --chart-axis: 148 163 184; /* #94A3B8 */
+  --chart-5: 34 211 238; /* #22D3EE */
+  --ch-widget: 37 99 235; /* #2563EB */
+  --ch-widget-text: 96 165 250; /* #60A5FA */
+  --ch-widget-soft: 32 45 62; /* #202D3E */
+  --ch-whatsapp: 37 211 102; /* #25D366 */
+  --ch-whatsapp-text: 74 222 128; /* #4ADE80 */
+  --ch-whatsapp-soft: 24 55 42; /* #18372A */
+  --ch-instagram: 221 42 123; /* #DD2A7B */
+  --ch-instagram-text: 244 114 182; /* #F472B6 */
+  --ch-instagram-soft: 53 28 46; /* #351C2E */
+  --ch-facebook: 8 102 255; /* #0866FF */
+  --ch-facebook-text: 77 148 255; /* #4D94FF */
+  --ch-facebook-soft: 19 39 71; /* #132747 */
+  --ch-telegram: 34 158 217; /* #229ED9 */
+  --ch-telegram-text: 79 195 247; /* #4FC3F7 */
+  --ch-telegram-soft: 23 46 61; /* #172E3D */
+  --ch-email: 245 158 11; /* #F59E0B */
+  --ch-email-text: 251 191 36; /* #FBBF24 */
+  --ch-email-soft: 57 46 28; /* #392E1C */
+  --ch-slack: 97 31 105; /* #611F69 */
+  --ch-slack-text: 215 159 218; /* #D79FDA */
+  --ch-slack-soft: 48 44 57; /* #302C39 */
+  --ch-discord: 88 101 242; /* #5865F2 */
+  --ch-discord-text: 139 149 248; /* #8B95F8 */
+  --ch-discord-soft: 32 37 65; /* #202541 */
 
-  /* Text */
-  --text: 237 238 240; /* #EDEEF0 */
-  --muted: 138 143 152; /* #8A8F98 */
-  --faint: 139 145 155; /* #8B919B — AA at 5.7:1 on --surface */
-
-  /* Signature ember accent */
-  --accent: 255 106 61; /* #FF6A3D */
-  --accent-2: 255 176 32; /* #FFB020 spark gold — second stop of the wordmark */
-  --accent-soft: 255 138 92; /* lighter ember, for accent-coloured text on dark */
-  --accent-strong: 255 106 61;
-  /* Near-black on ember is 7.2:1; white on it is 2.9:1 and fails AA, so filled ember
-     surfaces take dark type. */
-  --on-accent: 10 11 13;
-  --glow: 255 106 61;
-
-  /* Semantic */
-  --success: 63 185 80; /* #3FB950 */
-  --warn: 240 160 32; /* #F0A020 */
-  --error: 248 81 73; /* #F85149 */
-  --info: 88 166 255; /* #58A6FF */
 
   --shadow: 0 0 0;
-  --shadow-1: 0.3;
-  --shadow-2: 0.2;
-  --ring: 255 106 61;
+  --shadow-1: 0;
+  --shadow-2: 0;
 }
 
 @layer base {
@@ -113,7 +178,6 @@
   body {
     background-color: rgb(var(--bg));
     color: rgb(var(--text));
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -128,7 +192,7 @@
   .text-balance {
     text-wrap: balance;
   }
-  /* Ink→grey gradient text, for the wordmark and little else */
+  /* Accent gradient text, for the wordmark and little else */
   .text-accent-gradient {
     background: linear-gradient(100deg, rgb(var(--accent)) 0%, rgb(var(--accent-2)) 100%);
     -webkit-background-clip: text;
@@ -142,8 +206,7 @@
       linear-gradient(to bottom, rgb(var(--border) / 0.35) 1px, transparent 1px);
     background-size: 44px 44px;
   }
-  /* A barely-there wash behind page headers. At 4% the ink reads as a change in paper rather
-     than a coloured panel — anything stronger on a greyscale page looks like a rendering fault. */
+  /* A barely-there wash behind page headers. */
   .glow-accent {
     background: radial-gradient(70% 130% at 15% 0%, rgb(var(--accent) / 0.04), transparent 65%);
   }
@@ -196,7 +259,7 @@
 
 /* Focus-visible ring, honored across the app */
 :focus-visible {
-  outline: 2px solid rgb(var(--accent-soft) / 0.9);
+  outline: 2px solid rgb(var(--ring));
   outline-offset: 2px;
 }
 

@@ -174,9 +174,9 @@ export default function KnowledgeDetailPage() {
             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2/40 p-6 text-center transition-colors hover:border-accent/40 hover:bg-accent/[0.03] disabled:opacity-60"
           >
             {upload.isPending ? (
-              <Loader2 className="size-6 animate-spin text-accent-soft" />
+              <Loader2 className="size-6 animate-spin text-accent" />
             ) : (
-              <FileUp className="size-6 text-accent-soft" />
+              <FileUp className="size-6 text-accent" />
             )}
             <div className="text-sm font-medium text-text">Upload a file</div>
             <div className="text-xs text-faint">PDF, DOCX, TXT, CSV, MD</div>
@@ -185,7 +185,7 @@ export default function KnowledgeDetailPage() {
             onClick={() => setUrlOpen(true)}
             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2/40 p-6 text-center transition-colors hover:border-accent/40 hover:bg-accent/[0.03]"
           >
-            <Link2 className="size-6 text-accent-soft" />
+            <Link2 className="size-6 text-accent" />
             <div className="text-sm font-medium text-text">Add a URL</div>
             <div className="text-xs text-faint">Fetch a web page</div>
           </button>
@@ -193,13 +193,13 @@ export default function KnowledgeDetailPage() {
             onClick={() => setTextOpen(true)}
             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2/40 p-6 text-center transition-colors hover:border-accent/40 hover:bg-accent/[0.03]"
           >
-            <Type className="size-6 text-accent-soft" />
+            <Type className="size-6 text-accent" />
             <div className="text-sm font-medium text-text">Paste text</div>
             <div className="text-xs text-faint">Raw content</div>
           </button>
         </div>
         {upload.isError && (
-          <p className="mt-3 text-sm text-error">{(upload.error as Error).message}</p>
+          <p className="mt-3 text-sm text-error-text">{(upload.error as Error).message}</p>
         )}
       </div>
 
@@ -257,11 +257,11 @@ export default function KnowledgeDetailPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2">
-                        {busy && <Loader2 className="size-3.5 animate-spin text-info" />}
+                        {busy && <Loader2 className="size-3.5 animate-spin text-info-text" />}
                         <Badge variant={status.variant}>{status.label}</Badge>
                         {doc.status === "failed" && doc.error_message && (
                           <span title={doc.error_message}>
-                            <AlertCircle className="size-3.5 text-error" />
+                            <AlertCircle className="size-3.5 text-error-text" />
                           </span>
                         )}
                       </div>
@@ -289,7 +289,7 @@ export default function KnowledgeDetailPage() {
                         <button
                           onClick={() => remove.mutate(doc.id)}
                           title="Delete"
-                          className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                          className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                         >
                           <Trash2 className="size-4" />
                         </button>
@@ -332,7 +332,7 @@ export default function KnowledgeDetailPage() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />
-            {addUrl.isError && <p className="text-sm text-error">{(addUrl.error as Error).message}</p>}
+            {addUrl.isError && <p className="text-sm text-error-text">{(addUrl.error as Error).message}</p>}
             <Button type="submit" variant="primary" className="w-full" disabled={addUrl.isPending || !url.trim()}>
               {addUrl.isPending && <Loader2 className="size-4 animate-spin" />} Fetch & ingest
             </Button>
@@ -365,7 +365,7 @@ export default function KnowledgeDetailPage() {
               onChange={(e) => setText(e.target.value)}
               rows={8}
             />
-            {addText.isError && <p className="text-sm text-error">{(addText.error as Error).message}</p>}
+            {addText.isError && <p className="text-sm text-error-text">{(addText.error as Error).message}</p>}
             <Button type="submit" variant="primary" className="w-full" disabled={addText.isPending || !text.trim()}>
               {addText.isPending && <Loader2 className="size-4 animate-spin" />} Add & ingest
             </Button>

@@ -178,7 +178,7 @@ export function AcceptInvitation() {
   if (status === "working") {
     return (
       <div className="flex items-center gap-3 text-sm text-muted">
-        <Loader2 className="size-4 animate-spin text-accent-soft" />
+        <Loader2 className="size-4 animate-spin text-accent" />
         Joining…
       </div>
     );
@@ -197,7 +197,7 @@ export function AcceptInvitation() {
     const mismatch = errorCode === "org.invite_email_mismatch";
     return (
       <div className="rounded-lg border border-border bg-surface p-6">
-        <Icon className="mb-3 size-6 text-warn" aria-hidden />
+        <Icon className="mb-3 size-6 text-warn-text" aria-hidden />
         <h1 className="font-display text-lg font-semibold text-text">{failure.title}</h1>
         <p className="mt-2 text-sm text-muted">{failure.detail}</p>
         {mismatch && preview && (
@@ -287,8 +287,8 @@ export function AcceptInvitation() {
           />
         </div>
 
-        {notice && <p className="text-sm text-accent-soft">{notice}</p>}
-        {formError && <p className="text-sm text-error">{formError}</p>}
+        {notice && <p className="text-sm text-accent">{notice}</p>}
+        {formError && <p className="text-sm text-error-text">{formError}</p>}
 
         <Button type="submit" variant="primary" className="w-full" disabled={busy}>
           {busy && <Loader2 className="size-4 animate-spin" />}

@@ -59,7 +59,7 @@ export function RunMacro({ cid, onRan }: { cid: string; onRan: () => void }) {
         </DropdownMenuContent>
       </DropdownMenu>
       {error && (
-        <p role="alert" className="absolute right-0 top-full z-10 mt-1 w-64 rounded-md border border-error/40 bg-surface p-2 text-xs text-error shadow-lg">
+        <p role="alert" className="absolute right-0 top-full z-10 mt-1 w-64 rounded-md border border-error/40 bg-surface p-2 text-xs text-error-text shadow-lg">
           {error}
         </p>
       )}

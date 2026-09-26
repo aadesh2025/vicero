@@ -1,20 +1,27 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/lib/providers";
 
-const display = Space_Grotesk({
+// One family for display and body (docs/20 §6). Two instances only so both existing CSS
+// variables (--font-display, --font-body) keep resolving; next/font ships one file.
+// next/font needs literal options, so the two instances repeat them.
+const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
-const body = Inter({
+const body = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-body",
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {

@@ -221,7 +221,7 @@ export default function HelpCenterPage() {
               </Button>
             )}
           </div>
-          {error && <p className="text-sm text-error">{error}</p>}
+          {error && <p className="text-sm text-error-text">{error}</p>}
         </form>
       </section>
 
@@ -254,7 +254,7 @@ export default function HelpCenterPage() {
               <button
                 onClick={() => remove.mutate(a.id)}
                 aria-label={`Delete ${a.title}`}
-                className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
               >
                 <Trash2 className="size-4" />
               </button>

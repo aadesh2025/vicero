@@ -131,12 +131,12 @@ export default function AgentBuilderPage({ params }: { params: Promise<{ id: str
   if (isLoading || !draft) {
     return (
       <div className="flex h-[60vh] items-center justify-center text-muted">
-        <Loader2 className="mr-2 size-5 animate-spin text-accent-soft" /> Loading agent…
+        <Loader2 className="mr-2 size-5 animate-spin text-accent" /> Loading agent…
       </div>
     );
   }
   if (isError) {
-    return <div className="flex h-[60vh] items-center justify-center text-error">Couldn&apos;t load this agent.</div>;
+    return <div className="flex h-[60vh] items-center justify-center text-error-text">Couldn&apos;t load this agent.</div>;
   }
 
   return (

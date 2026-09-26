@@ -163,7 +163,7 @@ export function NewAgentDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              {error && <p className="text-sm text-error">{error}</p>}
+              {error && <p className="text-sm text-error-text">{error}</p>}
               <div className="flex gap-2">
                 <Button type="button" variant="ghost" onClick={() => setStep("template")} disabled={busy}>
                   <ArrowLeft className="size-4" /> Back
@@ -194,7 +194,7 @@ function TemplateCard({
       onClick={onSelect}
       className="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-2/40 p-4 text-left transition-colors hover:border-accent/40 hover:bg-accent/[0.03]"
     >
-      <span className="grid size-9 place-items-center rounded-lg border border-border bg-surface-2 text-muted transition-colors group-hover:text-accent-soft">
+      <span className="grid size-9 place-items-center rounded-lg border border-border bg-surface-2 text-muted transition-colors group-hover:text-accent">
         <Icon className="size-4" />
       </span>
       <span className="text-sm font-medium text-text">{template.label}</span>

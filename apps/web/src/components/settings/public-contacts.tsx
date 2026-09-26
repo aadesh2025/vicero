@@ -84,7 +84,7 @@ export function PublicContacts() {
                   onClick={() => removeAt(contact)}
                   disabled={save.isPending}
                   aria-label={`Remove ${contact}`}
-                  className="rounded p-0.5 text-faint transition-colors hover:text-error disabled:opacity-40"
+                  className="rounded p-0.5 text-faint transition-colors hover:text-error-text disabled:opacity-40"
                 >
                   <X className="size-3.5" />
                 </button>
@@ -115,7 +115,7 @@ export function PublicContacts() {
         </div>
       )}
 
-      {error && <p className="mt-2 text-sm text-error">{error}</p>}
+      {error && <p className="mt-2 text-sm text-error-text">{error}</p>}
       <p className="mt-2 text-xs text-faint">
         Email addresses and phone numbers only — those are what the reply filter recognises.
         Anything else would be accepted into the list and then quietly ignored.

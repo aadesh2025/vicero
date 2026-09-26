@@ -32,7 +32,7 @@ function NameCell({
     return <span className="flex items-center gap-2">{children}</span>;
   }
   return (
-    <Link href={`/agents/${agentId}?tab=analytics`} className="flex items-center gap-2 hover:text-accent-soft">
+    <Link href={`/agents/${agentId}?tab=analytics`} className="flex items-center gap-2 hover:text-accent">
       {children}
     </Link>
   );

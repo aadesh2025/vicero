@@ -61,7 +61,7 @@ export default function ApiKeysPage() {
           {(keys ?? []).length === 0 && <p className="p-4 text-sm text-muted">No API keys yet.</p>}
           {(keys ?? []).map((k) => (
             <div key={k.id} className="flex items-center gap-3 p-4">
-              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                 <KeyRound className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
@@ -81,7 +81,7 @@ export default function ApiKeysPage() {
               {canManage && (
                 <button
                   onClick={() => remove.mutate(k.id)}
-                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                  className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                   title="Delete"
                 >
                   <Trash2 className="size-4" />
@@ -109,7 +109,7 @@ export default function ApiKeysPage() {
               }}
               className="rounded-md p-1.5 text-faint hover:text-text"
             >
-              {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
+              {copied ? <Check className="size-4 text-success-text" /> : <Copy className="size-4" />}
             </button>
           </div>
           <Button variant="primary" className="w-full" onClick={() => setCreated(null)}>

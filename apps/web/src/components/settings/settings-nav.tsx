@@ -32,7 +32,7 @@ export function SettingsNav() {
               active ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2/60 hover:text-text",
             )}
           >
-            <Icon className={cn("size-4", active ? "text-accent-soft" : "text-faint")} />
+            <Icon className={cn("size-4", active ? "text-accent" : "text-faint")} />
             {item.label}
           </Link>
         );

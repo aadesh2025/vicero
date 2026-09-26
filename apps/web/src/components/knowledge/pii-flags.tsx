@@ -40,7 +40,7 @@ export function PiiBadge({ flags }: { flags: Record<string, number> | null }) {
   return (
     <span
       title={`Contains ${detail}. Retrievable by this agent — remove it from the document if it should not be.`}
-      className="inline-flex items-center gap-1 rounded-md border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn"
+      className="inline-flex items-center gap-1 rounded-md border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-[11px] font-medium text-warn-text"
     >
       <AlertTriangle className="size-3" />
       {detail}
@@ -63,7 +63,7 @@ export function PiiSummary({ documents }: { documents: ApiDocument[] }) {
   if (flagged.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/40 px-4 py-2.5 text-sm text-muted">
-        <ShieldCheck className="size-4 text-success" />
+        <ShieldCheck className="size-4 text-success-text" />
         <span>
           No contact details or secrets found in {scanned.length}{" "}
           {scanned.length === 1 ? "document" : "documents"}.
@@ -80,7 +80,7 @@ export function PiiSummary({ documents }: { documents: ApiDocument[] }) {
 
   return (
     <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/[0.06] px-4 py-2.5 text-sm">
-      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" />
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn-text" />
       <div>
         <p className="font-medium text-text">
           {flagged.length} {flagged.length === 1 ? "document contains" : "documents contain"}{" "}

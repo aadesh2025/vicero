@@ -78,7 +78,7 @@ export function KnowledgeTab() {
         ) : (kbs ?? []).length === 0 ? (
           <div className="rounded-md border border-dashed border-border-strong bg-surface-2/40 p-6 text-center text-sm text-muted">
             No knowledge bases yet.{" "}
-            <Link href="/knowledge" className="text-accent-soft hover:underline">
+            <Link href="/knowledge" className="text-accent hover:underline">
               Create one
             </Link>{" "}
             to attach it here.
@@ -92,7 +92,7 @@ export function KnowledgeTab() {
                   key={kb.id}
                   className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3"
                 >
-                  <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                  <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                     <BookOpen className="size-4" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -164,7 +164,7 @@ export function KnowledgeTab() {
         {!firstAttached && (
           <p className="text-xs text-muted">Attach a knowledge base above to test retrieval.</p>
         )}
-        {search.isError && <p className="text-xs text-error">{(search.error as Error).message}</p>}
+        {search.isError && <p className="text-xs text-error-text">{(search.error as Error).message}</p>}
         {results && results.length === 0 && (
           <p className="text-xs text-muted">No chunks passed the threshold for that query.</p>
         )}

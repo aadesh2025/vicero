@@ -117,7 +117,7 @@ export function InboxView({ initialId }: { initialId?: string }) {
                 key={f.key}
                 onClick={() => setFilter(f.key)}
                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  filter === f.key ? "bg-accent/15 text-accent-soft" : "text-muted hover:bg-surface-2"
+                  filter === f.key ? "bg-accent/15 text-accent" : "text-muted hover:bg-surface-2"
                 }`}
               >
                 {f.label}
@@ -219,7 +219,7 @@ function ChannelTab({
       // Dimmed rather than disabled: "available, not set up yet", still reachable.
       className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
         active
-          ? "border-accent text-accent-soft"
+          ? "border-accent text-accent"
           : connected
             ? "border-transparent text-muted hover:border-border-strong hover:text-text"
             : "border-transparent text-faint opacity-70 hover:border-border hover:text-muted hover:opacity-100"
@@ -281,7 +281,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
             {detail?.contact?.crm_contact_id ? (
               <Link
                 href={`/contacts/${detail.contact.crm_contact_id}`}
-                className="hover:text-accent-soft hover:underline"
+                className="hover:text-accent hover:underline"
               >
                 {contactLabel(detail.contact, detail.channel_user_id)}
               </Link>
@@ -322,9 +322,9 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
                 {who === "user" ? (
                   <User className="size-3.5" />
                 ) : operator ? (
-                  <Headphones className="size-3.5 text-accent-soft" />
+                  <Headphones className="size-3.5 text-accent" />
                 ) : (
-                  <Bot className="size-3.5 text-accent-soft" />
+                  <Bot className="size-3.5 text-accent" />
                 )}
               </span>
               <div
@@ -337,7 +337,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
                 }`}
               >
                 {operator && (
-                  <div className="mb-0.5 text-[10px] uppercase tracking-wide text-accent-soft">Operator</div>
+                  <div className="mb-0.5 text-[10px] uppercase tracking-wide text-accent">Operator</div>
                 )}
                 {m.content}
               </div>

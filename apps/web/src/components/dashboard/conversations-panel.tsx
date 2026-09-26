@@ -51,7 +51,7 @@ export function ConversationsPanel() {
         </div>
         <Link
           href="/conversations"
-          className="inline-flex items-center gap-1 text-sm font-medium text-accent-soft hover:text-accent"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent"
         >
           View all <ArrowUpRight className="size-3.5" />
         </Link>

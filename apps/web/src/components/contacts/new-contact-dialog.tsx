@@ -146,7 +146,7 @@ export function NewContactDialog({
               />
             </div>
           </div>
-          {error && <p className="text-sm text-error">{error}</p>}
+          {error && <p className="text-sm text-error-text">{error}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={create.isPending || !name.trim()}>
             {create.isPending && <Loader2 className="size-4 animate-spin" />} Add contact
           </Button>

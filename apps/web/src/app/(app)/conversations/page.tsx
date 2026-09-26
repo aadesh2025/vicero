@@ -158,7 +158,7 @@ export default function ConversationsPage() {
                   activeCid === c.id && live === null ? "bg-surface-2/60" : ""
                 }`}
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                   <MessagesSquare className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -188,14 +188,14 @@ export default function ConversationsPage() {
             <>
               <div className="flex items-center justify-between border-b border-border p-4">
                 <div className="flex items-center gap-2">
-                  <Bot className="size-4 text-accent-soft" />
+                  <Bot className="size-4 text-accent" />
                   <span className="text-sm font-medium text-text">{agentId ? agentName(agentId) : "Agent"}</span>
                   {detail?.memory_summary && <Badge variant="accent">memory</Badge>}
                 </div>
                 {activeCid && (
                   <button
                     onClick={() => remove.mutate(activeCid)}
-                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                    className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                     title="Delete conversation"
                   >
                     <Trash2 className="size-4" />
@@ -207,7 +207,7 @@ export default function ConversationsPage() {
                 {threadMsgs.map((m, i) => (
                   <div key={i} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                     <span className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-faint">
-                      {m.role === "user" ? <User className="size-3.5" /> : <Bot className="size-3.5 text-accent-soft" />}
+                      {m.role === "user" ? <User className="size-3.5" /> : <Bot className="size-3.5 text-accent" />}
                     </span>
                     <div
                       className={`max-w-[80%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm ${
@@ -216,7 +216,7 @@ export default function ConversationsPage() {
                           : "border-border bg-surface-2/60 text-text"
                       }`}
                     >
-                      {m.content || (m.streaming ? <Loader2 className="size-4 animate-spin text-accent-soft" /> : "")}
+                      {m.content || (m.streaming ? <Loader2 className="size-4 animate-spin text-accent" /> : "")}
                     </div>
                   </div>
                 ))}

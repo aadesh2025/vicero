@@ -109,7 +109,7 @@ function SaveIndicator({
   if (saving) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-muted">
-        <Loader2 className="size-3.5 animate-spin text-accent-soft" /> Saving…
+        <Loader2 className="size-3.5 animate-spin text-accent" /> Saving…
       </span>
     );
   }
@@ -117,21 +117,21 @@ function SaveIndicator({
   // the more useful of the two states.
   if (saveError) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-error" title={saveError} role="status">
+      <span className="flex items-center gap-1.5 text-xs text-error-text" title={saveError} role="status">
         <AlertTriangle className="size-3.5" /> Couldn&apos;t save
       </span>
     );
   }
   if (dirty) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-warn">
+      <span className="flex items-center gap-1.5 text-xs text-warn-text">
         <Cloud className="size-3.5" /> Unsaved changes
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1.5 text-xs text-faint">
-      <Check className="size-3.5 text-success" />
+      <Check className="size-3.5 text-success-text" />
       Saved{lastSavedAt ? ` ${relativeTime(new Date(lastSavedAt).toISOString())}` : ""}
     </span>
   );

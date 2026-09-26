@@ -14,10 +14,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  // Light-first: the palette is built around a #F3F4F6 page, so `:root` holds the light values
-  // and `.dark` is the override.
+  // Light by default; "System" is a third option in the toggle. `:root` holds the light values and
+  // `.dark` is the override.
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </ThemeProvider>
   );

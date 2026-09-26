@@ -87,7 +87,7 @@ export function OrgSwitcher({ collapsed }: { collapsed: boolean }) {
                 {org.name[0]?.toUpperCase()}
               </span>
               <span className="flex-1 truncate text-text">{org.name}</span>
-              {org.id === active.id && <Check className="size-4 text-accent-soft" />}
+              {org.id === active.id && <Check className="size-4 text-accent" />}
             </DropdownMenuItem>
           ))}
           {isStaff && (

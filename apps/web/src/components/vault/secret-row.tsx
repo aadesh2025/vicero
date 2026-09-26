@@ -84,7 +84,7 @@ export function SecretRow({ name, description, needsHuman, available, masked }: 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <code className="font-mono text-[13px] text-text">{name}</code>
         {needsHuman && (
-          <span className="rounded border border-warn/40 bg-surface px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warn">
+          <span className="rounded border border-warn/40 bg-surface px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warn-text">
             needs a human
           </span>
         )}
@@ -122,7 +122,7 @@ export function SecretRow({ name, description, needsHuman, available, masked }: 
         </pre>
       )}
       {error && (
-        <p role="alert" className="mt-1 text-xs text-error">
+        <p role="alert" className="mt-1 text-xs text-error-text">
           {error}
         </p>
       )}

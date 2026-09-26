@@ -135,7 +135,7 @@ export function ReplyBox({
                   i === selected ? "bg-surface-2" : ""
                 }`}
               >
-                <code className="shrink-0 font-mono text-xs text-accent-soft">/{c.shortcut}</code>
+                <code className="shrink-0 font-mono text-xs text-accent">/{c.shortcut}</code>
                 <span className="min-w-0 flex-1 truncate text-xs text-muted">{c.content}</span>
               </button>
             </li>
@@ -164,7 +164,7 @@ export function ReplyBox({
           {doReply.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         </Button>
       </div>
-      {error && <p className="mt-2 text-xs text-error">{error}</p>}
+      {error && <p className="mt-2 text-xs text-error-text">{error}</p>}
     </form>
   );
 }
@@ -209,7 +209,7 @@ function TemplateComposer({
         role="status"
         className="mb-3 flex items-start gap-2 rounded-md border border-warn/40 bg-warn/[0.08] p-2.5 text-xs text-text"
       >
-        <AlertTriangle className="mt-px size-4 shrink-0 text-warn" aria-hidden />
+        <AlertTriangle className="mt-px size-4 shrink-0 text-warn-text" aria-hidden />
         <div>
           <p className="font-medium">The 24-hour reply window has closed.</p>
           <p className="mt-0.5 text-muted">
@@ -261,7 +261,7 @@ function TemplateComposer({
           </Button>
         </form>
       )}
-      {error && <p className="mt-2 text-xs text-error">{error}</p>}
+      {error && <p className="mt-2 text-xs text-error-text">{error}</p>}
     </div>
   );
 }

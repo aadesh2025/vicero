@@ -71,7 +71,7 @@ export function VaultLoginForm() {
         />
       </div>
       {error && (
-        <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+        <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">
           {error}
         </p>
       )}

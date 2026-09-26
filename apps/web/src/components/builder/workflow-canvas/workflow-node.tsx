@@ -50,8 +50,8 @@ export function WorkflowNode({ data, selected }: NodeProps) {
           <p className="truncate text-xs font-semibold">{meta?.label ?? d.nodeType}</p>
           {d.label && <p className="truncate text-[11px] text-muted">{d.label}</p>}
         </div>
-        {d.runStatus === "completed" && <CheckCircle2 className="ml-auto size-3.5 shrink-0 text-success" />}
-        {d.runStatus === "failed" && <AlertCircle className="ml-auto size-3.5 shrink-0 text-error" />}
+        {d.runStatus === "completed" && <CheckCircle2 className="ml-auto size-3.5 shrink-0 text-success-text" />}
+        {d.runStatus === "failed" && <AlertCircle className="ml-auto size-3.5 shrink-0 text-error-text" />}
       </div>
 
       {!isEnd && branches.length === 0 && (

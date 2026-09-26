@@ -60,7 +60,7 @@ export function DeleteKnowledgeBase({
   return (
     <section className="rounded-lg border border-error/30 bg-surface">
       <div className="border-b border-error/20 p-5">
-        <h3 className="font-display text-base font-semibold text-error">Danger zone</h3>
+        <h3 className="font-display text-base font-semibold text-error-text">Danger zone</h3>
         <p className="mt-0.5 text-sm text-muted">
           Deleting this knowledge base is permanent. {docs}
         </p>
@@ -82,7 +82,7 @@ export function DeleteKnowledgeBase({
           {attachedAgents.length > 0 && (
             <div className="mt-4 rounded-md border border-warn/30 bg-warn/[0.06] p-3">
               <p className="flex items-start gap-2 text-sm text-text">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn-text" />
                 {/* One expression rather than text interleaved with ternaries: JSX drops the
                     whitespace around an expression in some positions, which silently produced
                     "keepsanswering" here. */}
@@ -96,7 +96,7 @@ export function DeleteKnowledgeBase({
                 {attachedAgents.map((a) => (
                   <li key={a.id} className="text-sm text-muted">
                     {a.name}
-                    {a.is_live && <span className="ml-1.5 text-xs text-warn">· live</span>}
+                    {a.is_live && <span className="ml-1.5 text-xs text-warn-text">· live</span>}
                   </li>
                 ))}
               </ul>
@@ -109,7 +109,7 @@ export function DeleteKnowledgeBase({
           )}
 
           {error && (
-            <p role="alert" className="mt-3 text-sm text-error">
+            <p role="alert" className="mt-3 text-sm text-error-text">
               {error}
             </p>
           )}

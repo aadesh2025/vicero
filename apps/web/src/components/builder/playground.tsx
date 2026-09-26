@@ -121,7 +121,7 @@ export function Playground() {
   return (
     <div className="flex h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <Sparkles className="size-4 text-accent-soft" />
+        <Sparkles className="size-4 text-accent" />
         <span className="font-display text-sm font-semibold text-text">Playground</span>
         <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-faint">draft</span>
         <button
@@ -143,14 +143,14 @@ export function Playground() {
           ) : (
             <div key={m.id} className="flex flex-col gap-1.5">
               {m.handoff && (
-                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent-soft">
+                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent">
                   <Headphones className="size-3" /> Handed off to a human — status set to &quot;handoff&quot;
                 </div>
               )}
               {m.tool && (
                 <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-muted">
-                  <Wrench className="size-3 text-accent-soft" />
-                  called <span className="font-mono text-accent-soft">{m.tool}</span>
+                  <Wrench className="size-3 text-accent" />
+                  called <span className="font-mono text-accent">{m.tool}</span>
                 </div>
               )}
               <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-border bg-surface-2 px-3.5 py-2 text-sm leading-relaxed text-text">
@@ -160,7 +160,7 @@ export function Playground() {
                 )}
               </div>
               {m.citation && !m.streaming && (
-                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent-soft">
+                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent">
                   <FileText className="size-3" /> {m.citation}
                 </div>
               )}

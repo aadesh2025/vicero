@@ -32,7 +32,7 @@ function TemplateNextStep({ templateId }: { templateId: string }) {
 
   return (
     <div className="flex items-start gap-3 rounded-lg border border-accent/25 bg-accent/[0.04] px-4 py-3">
-      <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent-soft" />
+      <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" />
       <p className="flex-1 text-sm leading-relaxed text-muted">
         <span className="font-medium text-text">Suggested next step. </span>
         {step}

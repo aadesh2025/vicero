@@ -93,7 +93,7 @@ function HealthPanel({ health }: { health: { database: boolean; redis: boolean }
   return (
     <section className="rounded-lg border border-border bg-surface p-5">
       <div className="mb-4 flex items-center gap-2">
-        <Activity className="size-4 text-accent-soft" />
+        <Activity className="size-4 text-accent" />
         <h3 className="font-display text-base font-semibold text-text">System health</h3>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -269,9 +269,9 @@ type AdminUser = {
  *  to a client's live agent; `viewer` cannot. Staff scanning this list are looking for the
  *  first two, so those are the ones that carry colour. */
 const ROLE_STYLE: Record<string, string> = {
-  owner: "border-ember/40 bg-ember/10 text-ember-soft",
-  admin: "border-warn/40 bg-warn/10 text-warn",
-  editor: "border-info/30 bg-info/10 text-info",
+  owner: "border-ember/40 bg-ember/10 text-accent",
+  admin: "border-warn/40 bg-warn/10 text-warn-text",
+  editor: "border-info/30 bg-info/10 text-info-text",
   operator: "border-border bg-surface-2 text-muted",
   viewer: "border-border bg-surface-2 text-faint",
 };

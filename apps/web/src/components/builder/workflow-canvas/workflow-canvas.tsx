@@ -312,7 +312,7 @@ function CanvasInner({ workflow, agentId }: { workflow: ApiWorkflow; agentId: st
               Run: {run.status}
               {run.is_test ? " (test)" : ""}
             </span>
-            {run.error && <span className="max-w-[220px] truncate text-error">{run.error}</span>}
+            {run.error && <span className="max-w-[220px] truncate text-error-text">{run.error}</span>}
             {run.status === "paused_approval" && (
               <div className="flex gap-1.5">
                 <Button

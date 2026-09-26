@@ -52,7 +52,7 @@ export function AutomationsTable() {
       ) : data?.error ? (
         // An unreachable or keyless n8n must not render as "no automations exist".
         <div className="flex items-start gap-3 p-5 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn" />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warn-text" />
           <div>
             <p className="font-medium text-text">Couldn&apos;t reach n8n.</p>
             <p className="text-muted">{data.error}</p>

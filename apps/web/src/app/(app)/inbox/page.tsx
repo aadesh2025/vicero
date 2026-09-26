@@ -58,8 +58,8 @@ export default function InboxPage() {
             <span
               className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
                 hasCrisis
-                  ? "border border-error/40 bg-error/15 text-error"
-                  : "border border-warn/40 bg-warn/15 text-warn"
+                  ? "border border-error/40 bg-error/15 text-error-text"
+                  : "border border-warn/40 bg-warn/15 text-warn-text"
               }`}
             >
               {count}

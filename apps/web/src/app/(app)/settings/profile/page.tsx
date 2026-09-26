@@ -135,7 +135,7 @@ export default function ProfilePage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-error hover:text-error"
+                      className="text-error-text hover:text-error-text"
                       disabled={revoking === s.id}
                       onClick={() => revoke.mutate(s.id)}
                     >

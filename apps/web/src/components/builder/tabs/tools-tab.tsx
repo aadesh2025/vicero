@@ -94,7 +94,7 @@ function ToolsTabInner() {
               const on = byName.has(b.name);
               return (
                 <li key={b.name} className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3">
-                  <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+                  <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                     <Zap className="size-4" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -113,7 +113,7 @@ function ToolsTabInner() {
         <ul className="space-y-2">
           {httpTools.map((t) => (
             <li key={t.id} className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3">
-              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent-soft">
+              <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-accent">
                 <Globe className="size-4" />
               </span>
               <div className="min-w-0 flex-1">
@@ -127,7 +127,7 @@ function ToolsTabInner() {
               </Button>
               <button
                 onClick={() => removeTool.mutate(t.id)}
-                className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error"
+                className="rounded-md p-1.5 text-faint transition-colors hover:bg-surface-2 hover:text-error-text"
                 title="Delete tool"
               >
                 <Trash2 className="size-4" />
@@ -230,7 +230,7 @@ function NewHttpToolDialog({
               onChange={(e) => setUrl(e.target.value)}
             />
           </div>
-          {create.isError && <p className="text-sm text-error">{(create.error as Error).message}</p>}
+          {create.isError && <p className="text-sm text-error-text">{(create.error as Error).message}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={create.isPending || !name.trim() || !url.trim()}>
             {create.isPending && <Loader2 className="size-4 animate-spin" />} Create tool
           </Button>
@@ -274,7 +274,7 @@ function TestToolDialog({ tool, onClose }: { tool: ApiTool | null; onClose: () =
               </pre>
             </div>
           )}
-          {run.isError && <p className="text-sm text-error">{(run.error as Error).message}</p>}
+          {run.isError && <p className="text-sm text-error-text">{(run.error as Error).message}</p>}
         </div>
       </DialogContent>
     </Dialog>

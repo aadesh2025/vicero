@@ -137,7 +137,7 @@ function NoWorkspace() {
               <Input id="workspace-name" required maxLength={255} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             {error && (
-              <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+              <p role="alert" className="rounded-md border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">
                 {error}
               </p>
             )}

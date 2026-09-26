@@ -78,7 +78,7 @@ function LoginForm() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-accent-soft hover:text-accent">
+            <Link href="/forgot-password" className="text-xs text-accent hover:text-accent">
               Forgot password?
             </Link>
           </div>
@@ -94,7 +94,7 @@ function LoginForm() {
 
       <p className="mt-5 text-center text-sm text-muted">
         New here?{" "}
-        <Link href="/signup" className="font-medium text-accent-soft hover:text-accent">
+        <Link href="/signup" className="font-medium text-accent hover:text-accent">
           Start your free trial
         </Link>
       </p>

@@ -64,7 +64,7 @@ export function CopyButton({
         className,
       )}
     >
-      {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+      {copied ? <Check className="size-4 text-success-text" aria-hidden /> : <Copy className="size-4" aria-hidden />}
       <span role="status" className="sr-only">
         {copied ? "Copied to clipboard" : ""}
       </span>

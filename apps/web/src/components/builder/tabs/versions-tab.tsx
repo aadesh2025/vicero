@@ -83,10 +83,10 @@ export function VersionsTab({
                   className={
                     "z-10 mt-0.5 grid size-8 shrink-0 place-items-center rounded-full border " +
                     (isCurrent
-                      ? "border-accent/40 bg-accent/15 text-accent-soft"
+                      ? "border-accent/40 bg-accent/15 text-accent"
                       : v.is_published
                         ? "border-border bg-surface-2 text-muted"
-                        : "border-warn/40 bg-warn/10 text-warn")
+                        : "border-warn/40 bg-warn/10 text-warn-text")
                   }
                 >
                   <GitBranch className="size-4" />

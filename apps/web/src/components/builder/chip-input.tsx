@@ -33,7 +33,7 @@ export function ChipInput({
             className={cn(
               "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
               variant === "accent"
-                ? "border-accent/30 bg-accent/10 text-accent-soft"
+                ? "border-accent/30 bg-accent/10 text-accent"
                 : "border-border bg-surface-2 text-muted",
             )}
           >
@@ -41,7 +41,7 @@ export function ChipInput({
             <button
               type="button"
               onClick={() => onChange(values.filter((x) => x !== v))}
-              className="text-faint transition-colors hover:text-error"
+              className="text-faint transition-colors hover:text-error-text"
               aria-label={`Remove ${v}`}
             >
               <X className="size-3" />

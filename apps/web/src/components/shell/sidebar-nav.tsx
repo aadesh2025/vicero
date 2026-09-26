@@ -60,12 +60,12 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
                 <Icon
                   className={cn(
                     "size-[18px] shrink-0 transition-colors",
-                    active ? "text-accent-soft" : "text-faint group-hover:text-muted",
+                    active ? "text-accent" : "text-faint group-hover:text-muted",
                   )}
                 />
                 {!collapsed && <span className="flex-1">{item.label}</span>}
                 {!collapsed && item.href === "/inbox" && waiting ? (
-                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent-soft">
+                  <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
                     {waiting}
                   </span>
                 ) : null}

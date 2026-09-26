@@ -59,7 +59,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
         aria-label="Contact details"
         className="flex w-[360px] shrink-0 items-center justify-center border-l border-border"
       >
-        <Loader2 className="size-5 animate-spin text-accent-soft" />
+        <Loader2 className="size-5 animate-spin text-accent" />
       </aside>
     );
   }
@@ -175,7 +175,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
               <button
                 onClick={() => labels.mutate(contact.labels.filter((x) => x !== l))}
                 aria-label={`Remove label ${l}`}
-                className="text-faint hover:text-error"
+                className="text-faint hover:text-error-text"
               >
                 <X className="size-3" />
               </button>

@@ -24,13 +24,13 @@ const SEVERITY: Record<string, { label: string; row: string; chip: string; icon:
   crisis: {
     label: "Crisis",
     row: "border-error/50 bg-error/[0.06]",
-    chip: "border-error/40 bg-error/15 text-error",
+    chip: "border-error/40 bg-error/15 text-error-text",
     icon: ShieldAlert,
   },
   elevated: {
     label: "Elevated",
     row: "border-warn/40 bg-warn/[0.05]",
-    chip: "border-warn/40 bg-warn/15 text-warn",
+    chip: "border-warn/40 bg-warn/15 text-warn-text",
     icon: AlertTriangle,
   },
   mild: {
@@ -93,7 +93,7 @@ export function AttentionQueue() {
   if (!items || items.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-surface p-10 text-center">
-        <Check className="mx-auto size-6 text-success" />
+        <Check className="mx-auto size-6 text-success-text" />
         <p className="mt-2 text-sm text-text">Nothing needs attention.</p>
         <p className="mt-1 text-xs text-faint">
           Conversations appear here when a customer sounds angry, under real pressure, or in
@@ -115,7 +115,7 @@ export function AttentionQueue() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Icon className={`size-4 ${item.attention_level === "crisis" ? "text-error" : "text-warn"}`} />
+                  <Icon className={`size-4 ${item.attention_level === "crisis" ? "text-error-text" : "text-warn-text"}`} />
                   <span className="font-medium text-text">
                     {item.contact?.display_name || item.channel_user_id || "Visitor"}
                   </span>
@@ -125,7 +125,7 @@ export function AttentionQueue() {
                   {/* Never ambiguous who is replying to the customer right now. */}
                   {item.bot_still_answering ? (
                     <span
-                      className="inline-flex items-center gap-1 rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[11px] text-info"
+                      className="inline-flex items-center gap-1 rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[11px] text-info-text"
                       title="The bot has not been paused — it is still replying while you decide."
                     >
                       <Bot className="size-3" /> AI is still responding

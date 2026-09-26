@@ -23,7 +23,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center text-center">
-      <span className="grid size-14 place-items-center rounded-xl border border-border bg-surface-2 text-accent-soft">
+      <span className="grid size-14 place-items-center rounded-xl border border-border bg-surface-2 text-accent">
         <Bot className="size-7" />
       </span>
       <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight text-text">

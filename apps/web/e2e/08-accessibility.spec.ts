@@ -34,6 +34,13 @@ test.describe("accessibility (axe, serious+critical)", () => {
     await page.goto("/docs/api/reference");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await scan(page)).toEqual([]);
+
+    // The page with language tabs and copy buttons — the easiest place to get roles wrong.
+    await page.goto("/docs/api/authentication");
+    await expect(page.getByRole("tablist", { name: "Language" })).toBeVisible();
+    expect(await scan(page)).toEqual([]);
+    await page.getByRole("tab", { name: "Python" }).click();
+    expect(await scan(page)).toEqual([]);
   });
 
   test("private area login", async ({ page }) => {

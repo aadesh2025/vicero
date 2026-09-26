@@ -172,6 +172,17 @@
   background-color: var(--shiki-dark-bg);
 }
 
+/* Code inside a block is not an inline-code chip. The docs give bare `code` a bordered,
+   tinted chip; without this it also applied to the `code` element Shiki puts inside every
+   `pre`, boxing each block in one rounded rectangle. Specificity beats the utility classes. */
+.prose pre code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
 /* An anchored heading stays a heading: the wrapping link inherits colour and only reveals
    the `#` affordance on hover, so the prose reads unchanged. */
 .heading-anchor {

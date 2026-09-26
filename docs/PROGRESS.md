@@ -38,6 +38,16 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Public Authentication docs rewritten with placeholders only (2026-09-26, ADR-098).** `/docs/api/authentication` now reads
+  like a developer portal: what an API key is, how authentication works, an example request in cURL / JavaScript / Python
+  tabs with copy buttons, a security note, and a "Manage API keys" link to `/settings/api-keys`. Every example uses
+  `YOUR_API_KEY` and `YOUR_API_HOST`; the copy button copies exactly what is shown. Audited the docs frontend for key
+  exposure first (none: no storage, cookie, env, network or logging code) and re-scanned the build against all 9 real
+  credentials in `.env` (0 leaks). New: `CodeTabs`, `CodeBlock`, `CopyButton`. Verified in a real browser — copy contents
+  per language, nothing written to `localStorage`/`sessionStorage`, no key in the URL — and 18 pages x 2 themes x every tab
+  pass axe (which found and fixed two contrast failures in the code themes). **Not done:** no authenticated "Try it" (needs
+  the secret in browser JS — left as a future architecture task, as briefed); the example host is `YOUR_API_HOST`, not
+  `api.botforge.ai`, because the real host differs per deployment; not run in the Docker dev container (Docker was down).
 - **API-key explanation moved to the admin area (2026-09-26, ADR-097 addendum).** Reported as "the API key is public".
   Checked in a real browser and by searching every public page and the build output for any real `.env` credential: no
   actual key value was ever public — the page in question explained how `bf_` keys, scopes and revocation work, with

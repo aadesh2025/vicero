@@ -1,18 +1,103 @@
 ---
 title: API authentication
-description: Sign in, get a short-lived session token, and say which organization you mean.
+description: How to authenticate requests to the BotForge API with an API key.
 group: API
 order: 1
 ---
 
-The BotForge REST API is served under `/v1`. Everything is JSON.
+The BotForge REST API is served under `/v1`. Everything is JSON, and every request must be
+authenticated.
 
-Requests act on behalf of a signed-in person, using a short-lived **session token**. Access for
-servers and integrations is arranged by your workspace administrator.
+## Authentication
 
-## Session tokens
+BotForge API requests require an **API key**. Send it with every request in the
+`Authorization` header:
 
-Signing in returns a short-lived **access token** and a long-lived **refresh token**:
+```http
+Authorization: Bearer YOUR_API_KEY
+```
+
+`YOUR_API_KEY` is a placeholder used throughout this documentation. Replace it with a key from
+your own workspace. This page never shows a real key and never fills one in for you.
+
+## API key
+
+An API key identifies your workspace to the API, so requests are made inside your organization
+and you do not need to say which one you mean. You create and manage keys in the dashboard, under
+**Settings → API Keys** — that is the only place a key is created, shown, rotated or revoked.
+
+<DocButton href="/settings/api-keys">Manage API keys</DocButton>
+
+## How authentication works
+
+1. Create a key in **Settings → API Keys** and store it somewhere safe. A key is shown when it is
+   created, so copy it then.
+2. Send it as a bearer token in the `Authorization` header of every request.
+3. BotForge checks the key and runs the request as your workspace.
+4. A missing, wrong or revoked key is refused with a `401` and a typed error — see
+   [Errors](/docs/api/errors).
+
+Always call the API over HTTPS. A request over plain HTTP exposes the key to anyone on the path.
+
+## Example request
+
+List your agents:
+
+<CodeTabs labels="cURL,JavaScript,Python">
+
+```bash
+curl https://YOUR_API_HOST/v1/agents \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript
+const response = await fetch("https://YOUR_API_HOST/v1/agents", {
+  headers: {
+    Authorization: "Bearer YOUR_API_KEY",
+  },
+});
+const agents = await response.json();
+```
+
+```python
+import requests
+
+response = requests.get(
+    "https://YOUR_API_HOST/v1/agents",
+    headers={
+        "Authorization": "Bearer YOUR_API_KEY",
+    },
+)
+agents = response.json()
+```
+
+</CodeTabs>
+
+The copy button copies the example exactly as shown, placeholder included. Replace
+`YOUR_API_KEY` yourself — ideally by reading it from an environment variable rather than typing it
+into the code.
+
+## Security recommendations
+
+<Callout type="danger" title="Keep your API key secret">
+Do not commit it to source control, expose it in client-side applications, or include it in
+URLs. For production applications, store it in a secure server-side environment variable or
+secret manager.
+</Callout>
+
+- **Keep it on the server.** Anything that runs in a browser or a mobile app can be inspected;
+  call BotForge from your backend instead.
+- **Never put it in a URL.** URLs end up in logs, browser history and proxy caches.
+- **Use a separate key for each environment**, so a leak in one does not touch the others.
+- **Revoke a key the moment you suspect it has leaked**, from **Settings → API Keys**, and
+  create a new one.
+
+<DocButton href="/settings/api-keys">Manage API keys</DocButton>
+
+## Other ways to authenticate
+
+**Signing in as a person.** The dashboard and the widget authenticate people rather than
+servers. Signing in returns a short-lived access token and a refresh token:
 
 ```bash
 curl -X POST https://YOUR_API_HOST/v1/auth/login \
@@ -20,43 +105,13 @@ curl -X POST https://YOUR_API_HOST/v1/auth/login \
   -d '{"email":"me@acme.com","password":"…"}'
 ```
 
-```json
-{ "access_token": "…", "refresh_token": "…", "user": { } }
-```
+Send the access token as `Authorization: Bearer <access_token>` together with an `X-Org-Id`
+header naming the organization. The access token expires after about fifteen minutes; exchange
+the refresh token at `POST /v1/auth/refresh` for a new pair. Refresh tokens **rotate**: each
+exchange invalidates the one you used, so always store the new one.
 
-Send the access token as `Authorization: Bearer <access_token>`. It expires after about
-fifteen minutes; exchange the refresh token at `POST /v1/auth/refresh` for a new pair.
-
-**Refresh tokens rotate.** Each exchange invalidates the one you used and issues a new one,
-so a stolen refresh token is usable only until the legitimate client next refreshes — at
-which point one of the two stops working and you have a signal that something is wrong.
-Always store the token you get back.
-
-### Choosing the organization
-
-A person can belong to several organizations, so requests must say which one they mean:
-
-```bash
-curl https://YOUR_API_HOST/v1/agents \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "X-Org-Id: $ORG_ID"
-```
-
-Get the list from `GET /v1/orgs`. Omitting the header on an organization-scoped route is an
-error, not a default.
-
-## Other sign-in methods
-
-Sign-up, OAuth with Google, GitHub or Facebook, magic links, password reset and email
-verification are all available. They are rate-limited per source address.
-
-## Public endpoints
-
-The widget talks to `/v1/public/agents/{public_key}/…` with no token at all — the public
-key in the path identifies one published agent's public chat and grants nothing else.
-Channel webhooks are verified by signature rather than by token.
-
-These are the only unauthenticated routes that touch your data, and both are rate-limited.
+**The widget.** It talks to `/v1/public/agents/{public_key}/…` with no credential at all. The
+public key in the path identifies one published agent's public chat and grants nothing else.
 
 ## Next
 

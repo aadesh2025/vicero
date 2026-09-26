@@ -18,6 +18,32 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-098: The public authentication page teaches with placeholders only; key detail stays admin-only
+- **Date:** 2026-09-26
+- **Status:** accepted (refines the addendum to ADR-097)
+- **Context:** The previous step moved every mention of API keys off the public docs. The operator then asked for
+  the opposite half of the same principle: a proper public *Authentication* section, like any developer portal, that
+  tells a developer how to authenticate — without ever showing, filling in or handling a real key. The two are
+  compatible if the line is drawn between *how to authenticate* (public, generic) and *how keys are scoped, stored and
+  revoked* (admin-only).
+- **Decision:** `/docs/api/authentication` is rewritten as Authentication → API key → How it works → Example request
+  (cURL, JavaScript and Python tabs with a copy button) → Security recommendations → a link to the existing
+  key-management page, using `Authorization: Bearer YOUR_API_KEY` and `https://YOUR_API_HOST` throughout. The internal
+  `bf_` format, the `X-API-Key` header, scopes, revocation detail and the management routes stay in `/vault`.
+  `public-content.test.ts` now enforces the line instead of banning the phrase: no `bf_`, no `X-API-Key`, no key-management
+  route, nothing shaped like a real secret, no non-placeholder bearer value, no key in a URL, and the page must carry the
+  placeholder, all three languages, the security note and the link. The docs frontend never reads a credential: no network
+  call, cookie, environment read, storage write or logging (audited), and the copy button reads text from the displayed
+  code block at click time.
+- **Alternatives considered:** an authenticated "Try it" or "Use my key" feature (rejected by the brief and by design —
+  it needs the secret in browser JavaScript); `https://api.botforge.ai` as the example host (rejected — the host differs per
+  deployment and self-hosted or white-label installs have their own, so `YOUR_API_HOST` matches the rest of the docs);
+  remembering the selected language in `localStorage` (rejected — a docs page should not write to the reader's browser).
+- **Consequences:** Code blocks across all docs pages gain a copy button. The light and dark code themes changed to GitHub's
+  high-contrast variants, because the standard ones fail WCAG AA for some tokens (Python keyword arguments at 3.5:1,
+  comments at 3.0:1); all 18 pages pass axe in both themes with every tab selected. Inline-code chip styling no longer
+  applies inside code blocks. No backend, authentication, key-management or database change.
+
 ### ADR-097: The public API reference is an allow-list of tags, and hides key and credential management
 - **Date:** 2026-09-26
 - **Status:** accepted

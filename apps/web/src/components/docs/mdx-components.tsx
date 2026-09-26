@@ -1,7 +1,10 @@
 import Link from "next/link";
 import type { ComponentPropsWithoutRef } from "react";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { Callout } from "./callout";
+import { CodeBlock } from "./code-block";
+import { CodeTabs } from "./code-tabs";
 
 /**
  * How MDX elements render inside the docs.
@@ -33,15 +36,9 @@ export const docsComponents = {
     return <Link {...props} href={href} className={cn(link, className)} />;
   },
 
-  pre: ({ className, ...props }: ComponentPropsWithoutRef<"pre">) => (
-    <pre
-      {...props}
-      className={cn(
-        "overflow-x-auto rounded-lg border border-border bg-surface-2 p-4 text-[13px] leading-relaxed",
-        className,
-      )}
-    />
-  ),
+  // A code block with a copy button. Highlighting is Shiki's, done on the server; the client
+  // wrapper only adds the button (see code-block.tsx).
+  pre: CodeBlock,
 
   code: ({ className, ...props }: ComponentPropsWithoutRef<"code">) => (
     <code
@@ -75,4 +72,15 @@ export const docsComponents = {
 
   // Available to any page as <Callout type="warn">…</Callout>.
   Callout,
+
+  // <CodeTabs labels="cURL,JavaScript,Python"> around one fenced block per label.
+  CodeTabs,
+
+  // A call-to-action that is a link. Used to send a reader to a page that already exists
+  // (e.g. key management) instead of duplicating that page's behaviour inside the docs.
+  DocButton: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <Link href={href} className={cn(buttonVariants({ variant: "primary" }), "no-underline")}>
+      {children}
+    </Link>
+  ),
 };

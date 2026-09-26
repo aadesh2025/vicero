@@ -65,6 +65,84 @@ test.describe("public docs", () => {
   });
 });
 
+test.describe("API authentication page", () => {
+  test("explains authentication with placeholders only — never a real key", async ({ page }) => {
+    await page.goto(`${WEB}/docs/api/authentication`);
+    // `exact`: "How authentication works" would otherwise match by substring too.
+    await expect(page.getByRole("heading", { name: "Authentication", level: 2, exact: true })).toBeVisible();
+    await expect(page.getByText("Authorization: Bearer YOUR_API_KEY").first()).toBeVisible();
+
+    const html = await page.content();
+    expect(html).toContain("YOUR_API_KEY");
+    // No internal key format or header, no key-management routes, nothing key-shaped in a URL.
+    expect(html).not.toMatch(/bf_[A-Za-z0-9]/);
+    expect(html).not.toMatch(/x-api-key/i);
+    expect(html).not.toContain("/v1/apikeys");
+    expect(page.url()).not.toMatch(/[?&](key|token|api_?key|secret)=/i);
+  });
+
+  test("shows cURL, JavaScript and Python, each with the placeholder", async ({ page }) => {
+    await page.goto(`${WEB}/docs/api/authentication`);
+    const tabs = page.getByRole("tablist", { name: "Language" });
+    await expect(tabs.getByRole("tab")).toHaveText(["cURL", "JavaScript", "Python"]);
+    for (const [name, needle] of [
+      ["cURL", "curl https://YOUR_API_HOST/v1/agents"],
+      ["JavaScript", "fetch("],
+      ["Python", "requests.get("],
+    ] as const) {
+      await tabs.getByRole("tab", { name }).click();
+      const panel = page.getByRole("tabpanel");
+      await expect(panel).toContainText(needle);
+      await expect(panel).toContainText("YOUR_API_KEY");
+    }
+  });
+
+  test("the copy button copies the example as displayed, placeholder included", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(`${WEB}/docs/api/authentication`);
+
+    for (const name of ["cURL", "JavaScript", "Python"]) {
+      await page.getByRole("tab", { name }).click();
+      const shown = (await page.getByRole("tabpanel").locator("pre").innerText()).trim();
+      await page.getByRole("button", { name: `Copy ${name} example` }).click();
+      // Windows hands clipboard text back with CRLF line breaks; the content is otherwise identical.
+      const copied = (await page.evaluate(() => navigator.clipboard.readText())).replaceAll("\r\n", "\n");
+      expect(copied.trim()).toBe(shown);
+      expect(copied).toContain("YOUR_API_KEY");
+      expect(copied).not.toMatch(/bf_/);
+    }
+  });
+
+  test("leaves nothing in the reader's browser storage", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.goto(`${WEB}/docs/api/authentication`);
+    await page.getByRole("tab", { name: "Python" }).click();
+    await page.getByRole("button", { name: "Copy Python example" }).click();
+
+    const stored = await page.evaluate(() => ({
+      session: Object.entries(sessionStorage),
+      // `theme` is the light/dark preference — the only thing this site ever stores.
+      local: Object.entries(localStorage).filter(([k]) => k !== "theme"),
+    }));
+    expect(stored.session).toEqual([]);
+    expect(stored.local).toEqual([]);
+  });
+
+  test("links to the existing key-management page and does not duplicate it", async ({ page }) => {
+    await page.goto(`${WEB}/docs/api/authentication`);
+    const cta = page.getByRole("link", { name: "Manage API keys" }).first();
+    await expect(cta).toHaveAttribute("href", "/settings/api-keys");
+    // Nothing on this page creates, reveals or rotates a key.
+    await expect(page.getByRole("button", { name: /create|reveal|show|rotate|regenerate/i })).toHaveCount(0);
+  });
+
+  test("shows the security note", async ({ page }) => {
+    await page.goto(`${WEB}/docs/api/authentication`);
+    await expect(page.getByText("Keep your API key secret")).toBeVisible();
+    await expect(page.getByText(/secure server-side environment variable or\s+secret manager/)).toBeVisible();
+  });
+});
+
 test.describe("private admin area", () => {
   test("sends a signed-out visitor to its own login page, not BotForge's", async ({ page }) => {
     const response = await page.goto(`${WEB}/vault`);

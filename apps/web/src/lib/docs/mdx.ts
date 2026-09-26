@@ -23,7 +23,10 @@ type MdxOptions = NonNullable<NonNullable<MDXRemoteProps["options"]>["mdxOptions
  *  of the two modes. `defaultColor: false` stops Shiki inlining one theme as the default and
  *  leaves both on CSS variables for globals.css to switch. */
 const shikiOptions = {
-  themes: { light: "github-light", dark: "github-dark" },
+  // The standard GitHub themes fail AA in places — `github-light` sets Python keyword
+  // arguments at ~3.5:1 on white, and `github-dark` sets comments at ~3.0:1 — and the axe
+  // gate catches both. The high-contrast variants are GitHub's own accessible palettes.
+  themes: { light: "github-light-high-contrast", dark: "github-dark-high-contrast" },
   defaultColor: false,
   cssVariablePrefix: "--shiki-",
 } as const;

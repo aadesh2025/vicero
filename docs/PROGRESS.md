@@ -38,6 +38,14 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Public API reference narrowed to an allow-list (2026-09-26, ADR-097).** `/docs/api/reference` previously listed ~190
+  of 215 operations — including the endpoints that manage API keys and provider credentials, OAuth callbacks, sessions,
+  channel webhook receivers and the n8n callback. No secret value was on it (scanned), but it was a map nobody meant to
+  publish, and a hide-list that would have shown any new router by default. It now shows 8 customer-facing tags only
+  (agents, knowledge, conversations, public, webhooks, inbox, contacts, analytics); everything else, including future
+  tags, is hidden and still fully listed in `/vault`. Verified on a production build: 0 occurrences of any hidden route,
+  page down from ~395 KB to ~143 KB; 31 tests pin it. The self-hosting page no longer explains how `SECRET_KEY`
+  protects stored credentials. **Not verified in the Docker dev container** (Docker Desktop was down this session).
 - **Private admin area with its own login, `/vault` (2026-09-25, ADR-096).** Replaces the `is_staff` page: a
   **separate sign-in, unconnected to BotForge accounts**, where only addresses in `VAULT_ADMIN_EMAILS` can enter, with a
   scrypt-hashed password (`make vault-password`) and an 8-hour signed session. Inside: the internal architecture, all

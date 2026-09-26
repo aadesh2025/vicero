@@ -18,6 +18,30 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-097: The public API reference is an allow-list of tags, and hides key and credential management
+- **Date:** 2026-09-26
+- **Status:** accepted
+- **Context:** The public `/docs/api/reference` listed every operation except two tags (`admin`, `mcp`) — so it
+  published the endpoints that manage API keys and provider credentials, the OAuth callbacks, session management,
+  the channel webhook receivers and the n8n callback, about 190 of the 215 operations. No secret value was ever on it
+  (scanned: no key-shaped strings), but a public map of how keys, credentials and sessions are managed, and where the
+  platform receives inbound calls, serves an attacker rather than an integrator. And because it was a hide-list, any
+  newly added router would have appeared on a public page with nobody having decided that it should.
+- **Decision:** `PUBLIC_TAGS` in `lib/docs/openapi.ts` is the only thing the public reference shows: `agents`,
+  `knowledge`, `conversations`, `public`, `webhooks`, `inbox`, `contacts`, `analytics`. Everything else — including any
+  future tag — is hidden by default; the private area (`/vault`) still lists all 215. `openapi.test.ts` (31 cases)
+  fails if the allow-list ever names `apikeys`, `credentials`, `auth`, `orgs`, `audit`, `admin`, `mcp`, `channels`,
+  `tools` or `system`, or if any of those path prefixes, the n8n callback or an OAuth route reaches the public view. The
+  self-hosting page also stopped describing how `SECRET_KEY` protects stored credentials; it keeps the warning that
+  changing it breaks them.
+- **Alternatives considered:** keeping the deny-list and adding tags to it (rejected — fails open, which is how
+  this happened); filtering by path prefix instead of tag (rejected — a tag is the unit a router author already
+  chooses, and the test still pins the prefixes); putting the whole reference behind login (rejected — the customer-
+  facing chat, knowledge and webhook APIs are exactly what a public reference is for).
+- **Consequences:** Customers lose the reference for workflows, campaigns, macros, canned responses, help-center
+  and agent tests; those are dashboard features today with no documented integration story, and each is one line to
+  add to `PUBLIC_TAGS` if that changes. Hiding a route is not protecting it: all of them remain authenticated.
+
 ### ADR-096: Production database is the bundled Postgres on the Oracle VM again — supersedes ADR-086's hosting decision
 - **Date:** 2026-09-25
 - **Status:** accepted (owner instruction, 2026-09-25). **Supersedes ADR-086 for database hosting only.** ADR-086's auth decision (a) — BotForge keeps its own auth, Supabase Auth is not adopted — is unchanged.

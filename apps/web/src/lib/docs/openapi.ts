@@ -10,15 +10,40 @@ export type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
 
 const METHODS: HttpMethod[] = ["get", "post", "put", "patch", "delete"];
 
-/** Tags the public reference does not show.
+/** The only tags the **public** reference shows. Everything else is private.
  *
- * `admin` is platform-staff only — publishing its shape tells every reader which
- * cross-tenant operations exist and what they take. `mcp` registers tool servers and is
- * partly staff-gated. Both are documented in the internal reference instead, which is why
- * this is a presentation filter and not a claim that the routes are secret: they are
- * authenticated, and hiding them here is about not advertising them, not about relying on
- * it. */
-const PRIVATE_TAGS = new Set(["admin", "mcp"]);
+ * An allow-list, deliberately, not a list of things to hide. The reference is generated from
+ * whatever the API serves, so a hide-list fails open: the day someone adds a router for
+ * provider credentials, an internal callback or a new admin surface, it appears on a public
+ * page with nobody having decided that it should. Here, a new tag is invisible until a person
+ * adds it below — and `openapi.test.ts` fails if this list ever names a tag that is not
+ * customer-facing.
+ *
+ * What is left out and why:
+ *   - `apikeys`, `credentials`, `auth`, `orgs`, `audit`: how keys, provider credentials,
+ *     sessions and membership are managed. Customers use these from the dashboard; a public
+ *     map of them serves an attacker, not an integrator.
+ *   - `channels`, `tools`: include the inbound webhook receivers and the n8n callback, whose
+ *     paths and verification behaviour are internal.
+ *   - `admin`, `mcp`, `system`: platform operation.
+ *   - `workflows`, `agent-tests`, `workflow-tests`, `campaigns`, `macros`, `canned-responses`,
+ *     `help-center`: dashboard features with no documented public integration story yet.
+ *
+ * Hiding a route here is about not advertising it, not about protecting it — every one of
+ * these is authenticated. The private area (`/vault`) lists all of them. */
+const PUBLIC_TAGS = new Set([
+  "agents",
+  "knowledge",
+  "conversations",
+  "public",
+  "webhooks",
+  "inbox",
+  "contacts",
+  "analytics",
+]);
+
+/** Exposed for the test that keeps this list honest. */
+export const PUBLIC_TAG_NAMES: ReadonlySet<string> = PUBLIC_TAGS;
 
 export interface Parameter {
   name: string;
@@ -101,12 +126,12 @@ function byPathThenMethod(a: Operation, b: Operation): number {
 /**
  * Operations grouped by tag.
  *
- * `audience: "public"` drops the staff-only tags; `"internal"` returns everything, which is
- * what the staff-gated reference renders.
+ * `audience: "public"` keeps only `PUBLIC_TAGS`; `"internal"` returns everything, which is
+ * what the private area (`/vault`) renders.
  */
 export function operationsByTag(audience: "public" | "internal"): TagGroup[] {
   const operations = readOperations().filter(
-    (op) => audience === "internal" || !PRIVATE_TAGS.has(op.tag),
+    (op) => audience === "internal" || PUBLIC_TAGS.has(op.tag),
   );
 
   const groups = new Map<string, Operation[]>();

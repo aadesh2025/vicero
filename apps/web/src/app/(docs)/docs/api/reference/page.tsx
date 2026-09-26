@@ -7,7 +7,7 @@ import { groupDocs, listDocs } from "@/lib/docs/content";
 
 export const metadata: Metadata = {
   title: "Endpoint reference",
-  description: "Every public BotForge REST endpoint, generated from the API's own schema.",
+  description: "The customer-facing BotForge REST endpoints, generated from the API's own schema.",
 };
 
 /**
@@ -34,8 +34,10 @@ export default async function ApiReferencePage() {
             Endpoint reference
           </h1>
           <p className="mt-3 text-base text-muted">
-            {total} endpoints, generated from the API&apos;s own schema — so this page cannot drift
-            from what the server actually serves. Base path is <code>/v1</code>. See{" "}
+            {total} customer-facing endpoints, generated from the API&apos;s own schema — so this page
+            cannot drift from what the server actually serves. Account, key and credential management,
+            channel and automation plumbing, and platform operation are not listed here. Base path is{" "}
+            <code>/v1</code>. See{" "}
             <Link href="/docs/api/authentication" className="underline decoration-border-strong">
               authentication
             </Link>{" "}

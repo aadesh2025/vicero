@@ -200,3 +200,6 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
   variables. Showing production secrets means mounting the root `.env` (`VAULT_ENV_FILE`), which widens what a web-tier
   compromise exposes — a deliberate opt-in, not a default.
 - ⚠️ **Not built:** a second factor; per-reveal re-authentication; an alert on repeated lockouts.
+- ✅ **The public API reference is an allow-list** (ADR-097): 8 customer-facing tags; key, credential, session and org
+  management, OAuth, channel and n8n receivers, admin, MCP and platform routes are never on it, and a new tag is hidden
+  until someone adds it. Hiding is not protection — those routes stay authenticated — it is not advertising them.

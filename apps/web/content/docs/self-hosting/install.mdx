@@ -28,7 +28,7 @@ Three values you must set before anything works:
 
 | Variable | Why |
 |---|---|
-| `SECRET_KEY` | Signs tokens **and** derives the key that encrypts stored credentials |
+| `SECRET_KEY` | A long random secret that protects sessions and stored credentials |
 | `POSTGRES_PASSWORD` | No default — compose refuses to start without it |
 | `GROQ_API_KEY` | Or another provider. Without one, every chat turn fails |
 
@@ -38,11 +38,10 @@ Generate secrets with something that is actually random:
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-<Callout type="danger" title="SECRET_KEY is not just a signing key">
-The encryption key for stored provider credentials and channel tokens is derived from
-`SECRET_KEY`. Changing it does not merely log everyone out — it makes every stored
-credential undecryptable, and they must all be re-entered. Set it once, back it up, and
-treat rotating it as a migration rather than a config change.
+<Callout type="danger" title="Set SECRET_KEY once and keep a backup">
+Changing it later does not merely sign everyone out — every stored provider key and channel
+credential stops working and has to be entered again. Treat changing it as a migration, not
+a config change.
 </Callout>
 
 ## Start it

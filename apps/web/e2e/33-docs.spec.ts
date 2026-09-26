@@ -43,14 +43,25 @@ test.describe("public docs", () => {
     await expect(page.locator("table").first()).toBeVisible();
   });
 
-  test("list endpoints without exposing the staff-only ones", async ({ page }) => {
+  test("list customer-facing endpoints only, never key or credential management", async ({ page }) => {
     await page.goto(`${WEB}/docs/api/reference`);
     await expect(page.getByRole("heading", { name: "Endpoint reference", level: 1 })).toBeVisible();
     const body = await page.content();
     expect(body).toContain("/v1/agents");
-    // The public reference filters the admin and mcp tags.
-    expect(body).not.toContain("/v1/admin");
-    expect(body).not.toContain("/v1/mcp");
+    // The public reference is an allow-list: nothing that manages keys, credentials or
+    // sessions, no platform routes, and none of the internal receivers.
+    for (const hidden of [
+      "/v1/admin",
+      "/v1/mcp",
+      "/v1/apikeys",
+      "/v1/credentials",
+      "/v1/auth",
+      "/v1/orgs",
+      "/v1/channels",
+      "/v1/tools/n8n/callback",
+    ]) {
+      expect(body, `public reference leaked ${hidden}`).not.toContain(hidden);
+    }
   });
 });
 

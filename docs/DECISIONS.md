@@ -38,6 +38,12 @@ Format each entry as below. Newest at the top.
   this happened); filtering by path prefix instead of tag (rejected — a tag is the unit a router author already
   chooses, and the test still pins the prefixes); putting the whole reference behind login (rejected — the customer-
   facing chat, knowledge and webhook APIs are exactly what a public reference is for).
+- **Addendum (2026-09-26):** the operator also asked that the explanation of API keys itself not be public. The
+  "API keys" section of the authentication page, the `bf_` examples, the scope table and the security and concepts
+  entries moved to `/vault` (Secrets and configuration → Customer API keys). `public-content.test.ts` scans every public
+  page for the `bf_` prefix, the `X-API-Key` header, the phrase "API key" and the key-management routes, and also asserts
+  the explanation still exists in the private collection. Env-variable names in the self-hosting guide (`_API_KEY`,
+  with an underscore) are deliberately not matched: an operator has to be told what to set.
 - **Consequences:** Customers lose the reference for workflows, campaigns, macros, canned responses, help-center
   and agent tests; those are dashboard features today with no documented integration story, and each is one line to
   add to `PUBLIC_TAGS` if that changes. Hiding a route is not protecting it: all of them remain authenticated.

@@ -8,7 +8,7 @@ order: 3
 ## Organization
 
 Your workspace. It owns everything else: agents, knowledge bases, channels, contacts,
-conversations, API keys and team members.
+conversations and team members.
 
 Isolation between organizations is enforced at the database query layer, not in the
 interface. A request for an object belonging to another organization returns **404**, never
@@ -103,9 +103,3 @@ Every tool call is logged with its inputs, outputs, latency and any error.
 The moment a conversation stops being the agent's. It can be triggered by the visitor
 asking, by the agent deciding, or by a rule you set. The conversation appears in the
 **Inbox**; an operator takes over, replies as a person, and can hand back when done.
-
-## API key
-
-A `bf_`-prefixed credential for calling the API from your own code, scoped to one
-organization. Shown once when created. See
-[API authentication](/docs/api/authentication).

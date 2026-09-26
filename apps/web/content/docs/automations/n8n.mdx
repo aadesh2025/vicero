@@ -77,8 +77,8 @@ signed with the same secret. That resolves the pending tool run.
 
 ## Calling BotForge from n8n
 
-For the other direction, create a BotForge API key under **Settings → API keys** and call
-the REST API from an HTTP Request node. See
+For the other direction, call the BotForge REST API from an HTTP Request node, using a
+credential your workspace administrator provides. See
 [API authentication](/docs/api/authentication).
 
 BotForge also emits **outbound webhooks** — `message.created`, `handoff.requested`,
@@ -89,7 +89,7 @@ See [Webhooks](/docs/api/webhooks).
 
 | Symptom | Usual cause |
 |---|---|
-| Workflows do not appear in Automations | The workspace has no n8n API key configured, or the base URL is wrong. Bind by webhook URL instead. |
+| Workflows do not appear in Automations | The workspace has no n8n connection configured, or the base URL is wrong. Bind by webhook URL instead. |
 | The tool call returns an error | The workflow is not **Active**, or a sync workflow has no *Respond to Webhook* node. |
 | An async callback is rejected | The signature or `run_id` does not match. Sign with the same secret BotForge sends. |
 

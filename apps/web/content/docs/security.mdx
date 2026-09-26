@@ -26,16 +26,9 @@ caller names the organization they would like to be.
 - **OAuth** uses PKCE, and links an account only on a verified email address.
 - **Repeated failed logins** lock the account for a window.
 
-## API keys
-
-Created once, shown once, stored as a hash — BotForge cannot show you a key again because
-it does not have it. Keys carry a scope, and a key can never exceed the permissions of the
-person who created it. No API key, at any scope, can delete an organization or transfer
-ownership.
-
 ## Encryption at rest
 
-Provider API keys and channel tokens are encrypted before they are stored and masked
+Provider credentials and channel tokens are encrypted before they are stored and masked
 whenever they are read back. An operator with database access sees ciphertext; a user
 editing a channel sees a masked value and can only replace it, never read it.
 

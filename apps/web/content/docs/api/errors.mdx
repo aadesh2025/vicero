@@ -29,7 +29,7 @@ Stack traces are never returned in production.
 | Status | Meaning | What to do |
 |---|---|---|
 | `400` | The request is malformed or the operation is not valid in this state | Read `code` — it says which |
-| `401` | Missing, expired or invalid credentials | Refresh the token, or check the API key |
+| `401` | Missing, expired or invalid credentials | Refresh the token, or check your credentials |
 | `403` | Authenticated, but not allowed | The role or scope is insufficient — this will not change on retry |
 | `404` | No such object **in this organization** | See below |
 | `409` | Conflict with existing state | Usually a duplicate |
@@ -55,7 +55,6 @@ the ones you will actually meet.
 | `auth.not_authenticated` | No credentials were sent |
 | `auth.invalid_credentials` | Wrong email or password |
 | `auth.invalid_token` | The access token is malformed or expired |
-| `auth.invalid_api_key` | The `bf_` key is unknown, revoked or expired |
 | `auth.account_inactive` | The account is disabled |
 | `auth.email_taken` | Already registered |
 | `auth.weak_password` | Does not meet the policy |
@@ -71,7 +70,7 @@ the ones you will actually meet.
 ### Resource families
 
 `agents.*`, `kb.*`, `conversations.*`, `tools.*`, `channels.*`, `inbox.*`, `workflows.*`,
-`contacts.*`, `webhooks.*`, `apikeys.*`, `credentials.*` each follow the same pattern:
+`contacts.*` and `webhooks.*` each follow the same pattern:
 `*.not_found` for a missing object, plus codes for the states that are specific to them —
 `agents.no_version` when an agent has never been published, `workflows.not_paused` when you
 resume a run that is not waiting, `channels.bad_signature` on a webhook that fails

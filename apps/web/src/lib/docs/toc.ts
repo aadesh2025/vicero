@@ -41,7 +41,9 @@ export function extractToc(body: string): TocEntry[] {
     // text: `**Bold**`, `` `code` ``, and `[label](href)` all reduce to their text.
     const text = match[2]
       .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-      .replace(/[*_`]/g, "")
+      // Not underscores: they are usually part of an identifier (`bf_`), and removing one
+      // changes the slug, so the contents link would point at an id the page does not have.
+      .replace(/[*`]/g, "")
       .trim();
     if (!text) continue;
 

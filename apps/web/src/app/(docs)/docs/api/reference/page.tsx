@@ -34,7 +34,7 @@ export default async function ApiReferencePage() {
             Endpoint reference
           </h1>
           <p className="mt-3 text-base text-muted">
-            {total} customer-facing endpoints, generated from the API&apos;s own schema — so this page
+            {total}{" "}customer-facing endpoints, generated from the API&apos;s own schema — so this page
             cannot drift from what the server actually serves. Account, key and credential management,
             channel and automation plumbing, and platform operation are not listed here. Base path is{" "}
             <code>/v1</code>. See{" "}

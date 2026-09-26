@@ -38,6 +38,16 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **API-key explanation moved to the admin area (2026-09-26, ADR-097 addendum).** Reported as "the API key is public".
+  Checked in a real browser and by searching every public page and the build output for any real `.env` credential: no
+  actual key value was ever public — the page in question explained how `bf_` keys, scopes and revocation work, with
+  `bf_live_xxx` placeholders. That explanation is now only in `/vault` (Secrets and configuration → Customer API keys);
+  the public authentication, errors, concepts, security and n8n pages no longer mention API keys, and a test fails if one
+  does. Verified in a browser: 18 public pages clean, the admin page redirects when signed out and shows the full
+  explanation when signed in. Also fixed: the on-page contents dropped underscores from heading text, so the link for
+  "(bf_)" pointed at an id the page does not have; and the reference page ran "76" into the next word.
+  **Found while checking (not changed):** one of the n8n passwords in `.env` is a plain word that is also the product
+  name — weak, and worth replacing.
 - **Public API reference narrowed to an allow-list (2026-09-26, ADR-097).** `/docs/api/reference` previously listed ~190
   of 215 operations — including the endpoints that manage API keys and provider credentials, OAuth callbacks, sessions,
   channel webhook receivers and the n8n callback. No secret value was on it (scanned), but it was a map nobody meant to

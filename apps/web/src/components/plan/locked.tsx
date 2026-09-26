@@ -51,17 +51,19 @@ export function LockedPanel({
 
 export function UpgradeNotice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-accent/25 bg-accent/[0.05] px-4 py-4 sm:flex-row sm:items-center">
-      <span className="grid size-9 shrink-0 place-items-center rounded-md border border-accent/30 bg-accent/10 text-accent">
-        <Lock className="size-4" />
+    // Neutral, not red: a locked feature is an upsell, not an error (docs/20 §8).
+    <div className="flex flex-col gap-3 rounded-card border border-border bg-surface px-4 py-4 shadow-card sm:flex-row sm:items-center">
+      <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-ai-soft text-ai">
+        <Lock className="size-4" aria-hidden />
       </span>
       <div className="flex-1 text-sm">
-        <p className="font-medium text-text">{title}</p>
-        <p className="mt-0.5 text-muted">{children}</p>
+        <p className="font-extrabold text-text">{title}</p>
+        <p className="mt-0.5 font-medium text-muted">{children}</p>
       </div>
-      <Button asChild variant="primary" size="sm">
-        <Link href={UPGRADE_PATH}>Upgrade</Link>
-      </Button>
+      {/* The name stays "Upgrade": e2e and unit tests find the link by it. */}
+      <Link href={UPGRADE_PATH} className="text-sm font-extrabold text-ai-text hover:underline">
+        Upgrade
+      </Link>
     </div>
   );
 }
@@ -86,7 +88,7 @@ export function LockedButton({
       </TooltipTrigger>
       <TooltipContent>
         {reason}{" "}
-        <Link href={UPGRADE_PATH} className="font-medium text-accent underline">
+        <Link href={UPGRADE_PATH} className="font-extrabold text-ai-text underline">
           Upgrade
         </Link>
       </TooltipContent>

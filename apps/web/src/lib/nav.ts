@@ -3,6 +3,7 @@ import {
   Bot,
   BookOpen,
   Contact,
+  CreditCard,
   Inbox,
   BarChart3,
   MessagesSquare,
@@ -45,6 +46,9 @@ export const nav: NavGroup[] = [
   },
   {
     heading: "Workspace",
-    items: [{ label: "Settings", href: "/settings/org", icon: Settings }],
+    items: [
+      { label: "Settings", href: "/settings/org", icon: Settings },
+      { label: "Billing", href: "/billing/upgrade", icon: CreditCard },
+    ],
   },
 ];

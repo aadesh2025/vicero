@@ -62,11 +62,11 @@ export function OrgSwitcher({ collapsed }: { collapsed: boolean }) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(
-            "flex w-full items-center gap-2.5 rounded-md border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-surface-2",
+            "flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface px-2.5 py-2 text-left transition-colors hover:border-border-strong hover:bg-surface-2",
             collapsed && "justify-center px-0",
           )}
         >
-          <span className="grid size-7 shrink-0 place-items-center rounded-md bg-accent-strong text-[13px] font-bold text-on-accent">
+          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent-strong text-[13px] font-extrabold text-on-accent">
             {active.name[0]?.toUpperCase()}
           </span>
           {!collapsed && (
@@ -74,7 +74,7 @@ export function OrgSwitcher({ collapsed }: { collapsed: boolean }) {
               {/* Name only. The plan line under it ("Free plan") named a tier that does not
                   exist — every org brings its own provider keys, so there is nothing to be
                   on and nothing to upgrade to. */}
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text">{active.name}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-text">{active.name}</span>
               <ChevronsUpDown className="size-4 shrink-0 text-faint" />
             </>
           )}
@@ -83,7 +83,7 @@ export function OrgSwitcher({ collapsed }: { collapsed: boolean }) {
           <DropdownMenuLabel>Organizations</DropdownMenuLabel>
           {orgs.map((org) => (
             <DropdownMenuItem key={org.id} onSelect={() => switchOrg(org.id)}>
-              <span className="grid size-6 shrink-0 place-items-center rounded bg-surface-3 text-[11px] font-bold text-muted">
+              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-3 text-[11px] font-extrabold text-muted">
                 {org.name[0]?.toUpperCase()}
               </span>
               <span className="flex-1 truncate text-text">{org.name}</span>

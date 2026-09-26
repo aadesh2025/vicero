@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { authenticateBrowser, createAccount } from "./helpers";
 
-// The nav must scroll internally (min-h-0 on the flex child) so the footer — plan card +
+// The nav must scroll internally (min-h-0 on the flex child) so the footer — account row +
 // Collapse button — stays visible without scrolling, even at a short viewport height. And the new
 // header collapse button must toggle the same `collapsed` state as the existing footer one.
 test("sidebar footer stays visible at short height; header toggle collapses/expands", async ({ page, context, request }) => {
@@ -15,9 +15,10 @@ test("sidebar footer stays visible at short height; header toggle collapses/expa
   const aside = page.locator("aside");
   await expect(aside).toBeVisible({ timeout: 20_000 });
 
-  // Footer is reachable with no scrolling: plan card + Collapse button both in the viewport.
-  // The card shows the org's *real* plan (a fresh E2E org is Free), not a hardcoded tier.
-  await expect(page.getByText(/^(Free|Pro|Scale|Enterprise) plan$/)).toBeInViewport();
+  // Footer is reachable with no scrolling: account row + Collapse button both in the viewport.
+  // (This used to assert a "<tier> plan" label the sidebar had already stopped rendering; the
+  // redesign's footer is the account row, and the trial card appears only on trial workspaces.)
+  await expect(page.getByRole("button", { name: "Account menu" })).toBeInViewport();
   await expect(page.getByRole("button", { name: "Collapse sidebar" }).last()).toBeInViewport();
 
   // Header collapse button (first with this accessible name; the footer one is .last()).

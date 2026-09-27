@@ -80,14 +80,44 @@ handoff %). Charts (Recharts): messages over time, tokens & cost over time by pr
 latency distribution, top questions, unanswered questions. CSV export buttons.
 
 ## 8. Design system
-- **Tokens**: colors (brand primary + neutrals, semantic success/warn/error), spacing scale,
-  radius, shadows, typography scale. Support light/dark via CSS variables + `next-themes`.
-- **Components** (shadcn/ui base + custom): Button, Input, Textarea, Select, Slider, Switch,
-  Tabs, Dialog/Sheet, DropdownMenu, Table (with pagination), Badge, Toast, Card, Avatar,
-  Tooltip, Skeleton, EmptyState, FileDropzone, CodeBlock/SnippetCopy, ChatBubble, Streaming
-  message, StatusBadge, Chart wrappers, OrgSwitcher, RoleGuard.
-- **Motion**: subtle enter/exit, streaming caret, skeleton loaders. Respect
-  `prefers-reduced-motion`.
+
+Superseded by the dual-theme redesign (`docs/20-UI-REDESIGN-DUAL-THEME.md`, shipped R0–R8,
+2026-09). This section describes what's actually built, not the original spec above.
+
+- **Tokens** (`src/app/globals.css`, RGB triplets under `:root` / `.dark`, consumed via
+  `tailwind.config.ts`'s `rgb(var(--x) / <alpha-value>)`): base surfaces/text (`bg`, `surface`
+  /`-2`/`-3`, `sidebar`, `border`/`-strong`, `text`, `muted`, `faint`), one blue primary
+  (`accent`, `accent-strong` for filled buttons, `accent-2`, `accent-soft` — a background tint,
+  not text), and five meaning colours each with a `DEFAULT`/`text`/`soft` triple: `ai` (purple —
+  anything the AI does), `success`, `warn`, `error`, `info`. Chart tokens (`chart-grid`,
+  `chart-axis`, `chart-5`, `chart-fill`) and per-channel tokens (`ch-<key>`, `-text`, `-soft` for
+  widget/whatsapp/instagram/facebook/telegram/email/slack/discord, plus `ch-instagram-gradient`)
+  round it out. `ember` remains a compatibility alias for `accent`.
+- **Status → colour**: one map, `STATUS_TONE` in `src/lib/status.ts` (`statusTone`,
+  `statusLabel`), rendered by `<StatusPill status>` (`src/components/shared/status-pill.tsx`).
+  Covers both the API's raw status strings and the older mock-shaped ones (`live`/`draft`/
+  `paused`) so callers never hand-roll a status → colour switch.
+- **Channel → colour**: `channelTone(key)` in `src/lib/channel-meta.ts` returns `{dot, text,
+  soft, gradient?}` CSS values for a channel; `<ChannelBadge>`, `<ChannelDot>`, `<ChannelIcon>`,
+  `<ChannelText>` (`src/components/shared/channel.tsx`) are the only sanctioned way to render a
+  channel anywhere in the app. Channel colour is never used as general UI colour (docs/20 §5).
+- **Components** (`src/components/ui/*`): Button (`primary`/`secondary`/`outline`/`ghost`/
+  `destructive`/`ai`, plus a `loading` prop), Badge, Tabs (segmented-control look), Input,
+  Textarea, Select, Dialog, DropdownMenu, Switch, Slider, Skeleton, Tooltip, Avatar, Card, Label.
+  Chart primitives live in `src/components/charts/`: `<LineAreaChart>` (multi-series, gradient
+  fill, hover tooltip), `<Sparkline>`, `<Donut>`, `<ChartTooltip>`, plus the shared
+  `smoothPath` (monotone cubic) and `colors.ts` (`SERIES_ORDER`).
+- **Typography**: Plus Jakarta Sans for both `--font-display` and `--font-body` (400–800),
+  JetBrains Mono for `--font-mono`/code/ids. Type scale and weights follow docs/20 §6 (page
+  title 22px/800, KPI numbers 26–28px/800 tabular-nums, overlines 10.5–11px/800 uppercase).
+- **Theme**: `next-themes`, `attribute="class"`, Light/Dark/**System** (`<ThemeToggle>` in
+  `src/components/shell/theme-toggle.tsx` cycles all three; preference persists via
+  `localStorage`, no flash on load).
+- **Guardrail**: `src/style-guardrails.test.ts` fails the build on any raw hex or Tailwind
+  palette class under `src/components`/`src/app`, with a small allow-list for real third-party
+  brand marks (Google/Facebook/n8n) and the embeddable widget's own client-owned colours.
+- **Motion**: subtle enter/exit (`animate-fade-up`), streaming caret, skeleton shimmer. Respects
+  `prefers-reduced-motion` globally (`globals.css`).
 - **States**: every list/detail has loading (skeleton), empty, and error states.
 
 ## 9. Frontend testing

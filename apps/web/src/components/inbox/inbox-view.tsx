@@ -227,7 +227,7 @@ function ChannelTab({
           ? "border-current"
           : connected
             ? "border-transparent text-muted hover:border-border-strong hover:text-text"
-            : "border-transparent text-faint opacity-70 hover:border-border hover:text-muted hover:opacity-100"
+            : "border-transparent text-faint hover:border-border hover:text-muted"
       }`}
       style={active ? { color: tone?.text ?? "rgb(var(--accent))" } : undefined}
     >

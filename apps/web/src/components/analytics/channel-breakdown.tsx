@@ -65,7 +65,9 @@ export function ChannelBreakdown({
               <th scope="row" className="whitespace-nowrap px-5 py-2.5 text-left font-normal">
                 <span className="flex items-center gap-2">
                   <ChannelIcon channel={b.channel} size="sm" />
-                  <ChannelText channel={b.channel} className={idle ? "opacity-60" : ""} />
+                  {/* Full colour even when idle — the "no traffic" chip carries that meaning;
+                      an opacity cut here previously pushed the channel-text colour below AA. */}
+                  <ChannelText channel={b.channel} />
                   {idle && (
                     <span className="rounded-md bg-surface-3 px-1.5 py-px text-[10px] font-bold text-faint">
                       no traffic

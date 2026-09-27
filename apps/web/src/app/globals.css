@@ -22,7 +22,9 @@
     shade; every text usage now reads `text-accent`. The `ember` alias in tailwind.config.ts
     still points at `accent`.
   - **Filled primary buttons use `--accent-strong`**, not `--accent`: white on the dark-mode
-    accent (#60A5FA) fails AA, white on #3B82F6 passes.
+    accent (#60A5FA) fails AA. `--accent-strong` is the same blue in both themes — a lighter
+    dark-mode value read as "brighter" but dropped white text on it below 4.5:1 (measured by
+    the R8 axe pass); this shade is the darkest that still reads as "the accent" and clears it.
   - **Dark "soft" values are pre-blended solids** (the main colour at ~14% over `--surface`),
     so they stay plain RGB triplets and never need an alpha channel.
   - **Channel colours (`--ch-*`) are only for channel contexts** — a chip, a chart bar, an
@@ -39,7 +41,8 @@
   --border-strong: 209 213 219; /* #D1D5DB */
   --text: 17 24 39; /* #111827 */
   --muted: 71 85 105; /* #475569 */
-  --faint: 100 116 139; /* #64748B */
+  --faint: 91 107 130; /* #5B6B82 — darker than docs/20's #64748B: that shade cleared surface but
+     not the surface-3/bg pairings faint text actually sits on (measured by the R8 axe pass) */
   --sidebar: 255 255 255; /* #FFFFFF */
   --accent: 37 99 235; /* #2563EB */
   --accent-strong: 37 99 235; /* #2563EB */
@@ -119,7 +122,7 @@
   --faint: 148 163 184; /* #94A3B8 */
   --sidebar: 14 17 22; /* #0E1116 */
   --accent: 96 165 250; /* #60A5FA */
-  --accent-strong: 59 130 246; /* #3B82F6 */
+  --accent-strong: 37 99 235; /* #2563EB — same as light; #3B82F6 put white text below 4.5:1 */
   --accent-2: 147 197 253; /* #93C5FD */
   --accent-soft: 32 45 62; /* #202D3E */
   --on-accent: 255 255 255; /* #FFFFFF */

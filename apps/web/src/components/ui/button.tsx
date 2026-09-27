@@ -12,7 +12,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // The one filled blue action per view. `accent-strong`, not `accent`: white on the
-        // dark-mode accent (#60A5FA) fails AA.
+        // dark-mode accent fails AA.
         primary: "bg-accent-strong text-on-accent hover:bg-accent-strong/90 active:bg-accent-strong/80",
         // `default` and `secondary` are the same look; `default` predates the redesign and is
         // what most callers pass.

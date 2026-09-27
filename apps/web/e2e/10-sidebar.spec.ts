@@ -12,7 +12,9 @@ test("sidebar footer stays visible at short height; header toggle collapses/expa
   await page.setViewportSize({ width: 1280, height: 520 });
   await page.goto("/dashboard");
 
-  const aside = page.locator("aside");
+  // Scoped by aria-label: at this width the AI Builder rail (docs/20 §9.3) is its own
+  // labelled <aside> too, so a bare "aside" locator is now ambiguous.
+  const aside = page.getByRole("complementary", { name: "Sidebar" });
   await expect(aside).toBeVisible({ timeout: 20_000 });
 
   // Footer is reachable with no scrolling: account row + Collapse button both in the viewport.

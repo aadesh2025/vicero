@@ -18,6 +18,44 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-099: UI redesign — dual-theme tokens, meaning colours, and a channel/status colour system
+- **Date:** 2026-09-27
+- **Status:** accepted
+- **Context:** The app shipped monochrome (light `--accent` was grey, dark was a lone ember
+  accent) — the two themes shared no brand colour, and no colour meant anything (`docs/20-UI-
+  REDESIGN-DUAL-THEME.md`). The redesign was scoped as visual-only: no API, routing, or feature
+  changes except the AI Builder quick-links rail.
+- **Decision:**
+  - One blue primary (`--accent`/`--accent-strong`) in both themes, plus a purple `--ai` meaning
+    colour and four semantic ones (success/warn/error/info), each with a `DEFAULT`/`text`/`soft`
+    triple so a colour used as text always clears AA independently of its background tint.
+    `--accent-soft` changed meaning from a text colour to a background tint; all 83 prior
+    text-accent-soft usages became `text-accent`.
+  - `STATUS_TONE` (`src/lib/status.ts`) and `channelTone`/`channelMeta` (`src/lib/channel-
+    meta.ts`) are the single source of truth for status and channel colour respectively, exposed
+    through `<StatusPill>` and `<ChannelBadge>`/`<ChannelDot>`/`<ChannelIcon>`/`<ChannelText>`.
+    Channel colour is used only in channel contexts, never as general UI colour.
+  - Plus Jakarta Sans replaces Space Grotesk + Inter for both display and body type; JetBrains
+    Mono is unchanged. Theme gains a third state, System, via `next-themes`' `enableSystem`.
+  - A vitest guardrail (`src/style-guardrails.test.ts`) fails the build on any raw hex or
+    Tailwind palette class under `src/components`/`src/app`, allow-listing only real third-party
+    brand marks (Google/Facebook/n8n) and the embeddable widget's own client-owned colours.
+- **Alternatives considered:** Keeping the ember accent for dark mode only (rejected — the two
+  themes would still share no brand colour, which was the original complaint). An ESLint rule
+  instead of a vitest file scan for the hard-coded-colour guardrail (rejected — a plain file scan
+  needed no new lint infra and is easier to read).
+- **Consequences:** `--accent-strong`'s dark value had to move from `#3B82F6` to `#2563EB` (the
+  same hex as light mode) after the R8 axe pass measured white text on it at 3.68:1, below AA;
+  the light `--faint` token similarly moved from the spec's literal `#64748B` to `#5B6B82` after
+  measuring it against `surface-3`, not just `surface`. Both are documented inline in
+  `globals.css`. Two e2e specs needed updates for structural changes: `10-sidebar.spec.ts`'s
+  bare `aside` locator became ambiguous once the AI Builder rail added a second landmark, and
+  the sidebar's retired "Free plan" text assertion was replaced with a role-based one. Not
+  built: docs/20 §10.8 assumed `/conversations` is a channel-filterable browse-all-conversations
+  table; the real page is a persisted per-agent chat console, so that was restyled as itself
+  rather than turned into a different feature. docs/20 §10.9's dedicated contact/CRM side panel
+  on the Inbox doesn't exist either — new structure, correctly out of scope for a visual pass.
+
 ### ADR-098: The public authentication page teaches with placeholders only; key detail stays admin-only
 - **Date:** 2026-09-26
 - **Status:** accepted (refines the addendum to ADR-097)
@@ -206,13 +244,20 @@ Format each entry as below. Newest at the top.
   in the dev compose file as the prod file already did; `.env.example` ships a placeholder that says how to generate a
   value. On this machine the role was rotated in place (`ALTER USER`, since the volume keeps the old one) and the new
   value lives only in the git-ignored root `.env` (`POSTGRES_PASSWORD` and inside `DATABASE_URL`).
-- **Alternatives considered:** a Redis `requirepass` (deferred: needs `REDIS_URL` updates in every consumer and the
-  Celery broker; loopback binding removes the exposure it would guard against on a dev box); keeping a default and
-  documenting it (rejected — it is the whole problem).
-- **Consequences:** Every running consumer of the old password had to be recreated (api, worker, beat). A fresh clone
-  must set `POSTGRES_PASSWORD` before `make up`. CI is unchanged (its own throw-away service containers). **Not
-  changed, still bound to all interfaces:** the compose `api` (8000), `web` (3001), `n8n` (5679) and `ollama` (11435)
-  mappings — dev servers a LAN peer can reach; worth the same treatment. The k8s manifests were not audited.
+  **Follow-up, same day:** the compose `api` (8000), `web` (3001), `n8n` (`N8N_HOST_PORT`) and `ollama` (11435)
+  mappings are also `127.0.0.1:…` now, and **Redis has a password** (`REDIS_PASSWORD`, required by compose; the server
+  starts with `--requirepass`, read from its environment so it is not in `docker inspect` args). `REDIS_URL` carries it
+  (`redis://:<password>@…`) in the compose `api`/`worker`/`beat` env and in the host `.env`; the API, Celery worker
+  and beat were confirmed connecting, and unauthenticated / wrong-password access is refused.
+- **Alternatives considered:** keeping a default and documenting it (rejected — it is the whole problem); leaving Redis
+  on loopback without a password (rejected once asked for: it is also the Celery broker and the rate-limit store, so
+  anything on the machine that can reach 6379 could read or forge both).
+- **Consequences:** Every running consumer of the old passwords had to be recreated (api, worker, beat, web, n8n,
+  ollama for the port changes). A fresh clone must set `POSTGRES_PASSWORD` and `REDIS_PASSWORD` before `make up`. CI is
+  unchanged (its own throw-away service containers, no password). Verified from this machine: on `localhost` the web app,
+  API, n8n and Ollama answer; on the Ethernet and hotspot addresses every published port (8000, 3001, 5679, 11435, 5750,
+  6379) is refused. The prod compose file's Redis is not published but also has no password yet, and the k8s manifests
+  were not audited.
 
 ### ADR-092: The client's real IP comes from `X-Forwarded-For` only when the TCP peer is a configured trusted proxy
 - **Date:** 2026-09-25

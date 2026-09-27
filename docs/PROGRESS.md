@@ -38,6 +38,37 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Dual-theme UI redesign, R0–R8 complete (2026-09-27, ADR-099).** `docs/20-UI-REDESIGN-
+  DUAL-THEME.md` executed phase by phase: **R0** baseline (35 routes × 2 themes screenshotted,
+  hard-coded-colour/`accent-soft`/ad-hoc-map audit, `docs/21-REDESIGN-BASELINE.md`). **R1** one
+  blue primary + purple `ai` + 4 semantic colours in both themes, Plus Jakarta Sans, System
+  theme. **R2** restyled `components/ui/*`, `<StatusPill>`/`STATUS_TONE`, `<ChannelBadge>`/
+  `<ChannelDot>`/`<ChannelIcon>`/`<ChannelText>`/`channelTone`, chart primitives
+  (`LineAreaChart`/`Sparkline`/`Donut`/`ChartTooltip`). **R3** sidebar/topbar/theme-toggle
+  (Light/Dark/System)/plan card/account row. **R4** Dashboard + Analytics + the AI Builder
+  quick-links rail (real-data "smart insight", no invented copy, no chat input). **R5**
+  Conversations/Inbox/Contacts — channel colour everywhere a channel appears, StatusPill,
+  neutral lock chip for plan-limited handoffs, a handoff banner. **R6** Agents/builder/
+  Knowledge/Automations — playground and workflow-canvas bubble/node colours were the only
+  real changes needed, everything else inherited the R1/R2 tokens (verified by screenshot).
+  **R7** all 21 remaining routes, same result — 2 one-line fixes (a callout tone, an onboarding
+  icon chip). **R8**: added `src/style-guardrails.test.ts` (fails the build on raw hex/Tailwind
+  palette classes, small brand-mark allow-list), ran the full axe contrast pass in both themes
+  and fixed two real findings it caught — dark `--accent-strong` (`#3B82F6`) put white button/
+  avatar text at 3.68:1, and light `--faint` (`#64748B`) failed on `surface-3`/`bg` even though
+  it cleared plain `surface` — both documented inline in `globals.css`. Full suite verified:
+  tsc/eslint/597 vitest tests/163-file guardrail scan all green; **96/104 Playwright e2e green**,
+  the other 8 confirmed pre-existing and unrelated to the redesign (n8n not configured in this
+  test rig; a `next dev`-only devtools storage key a production build won't have; a pre-existing
+  duplicate "No agents yet" string across two dashboard widgets; a pre-existing test regex that
+  clicks an inbox tab instead of a conversation row; a pre-existing backend run-status timing
+  issue) — each isolated by diff before being called out rather than assumed. Two e2e specs
+  needed real updates for the redesign's own structural changes (10-sidebar.spec.ts's `aside`
+  locator, once the AI Builder rail added a second one). See ADR-099 for the full decision
+  record, including the two token corrections. **Not built:** docs/20 §10.8 assumed
+  `/conversations` is a channel-filterable browse-all-conversations table; the real page is a
+  persisted per-agent chat console, restyled as itself. §10.9's dedicated Inbox contact/CRM side
+  panel doesn't exist — new structure, correctly out of scope for a visual-only pass.
 - **Public Authentication docs rewritten with placeholders only (2026-09-26, ADR-098).** `/docs/api/authentication` now reads
   like a developer portal: what an API key is, how authentication works, an example request in cURL / JavaScript / Python
   tabs with copy buttons, a security note, and a "Manage API keys" link to `/settings/api-keys`. Every example uses

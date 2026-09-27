@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { InboxView } from "@/components/inbox/inbox-view";
 import { AttentionQueue } from "@/components/inbox/attention-queue";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { listAttention } from "@/lib/api/inbox";
 import { useSession } from "@/lib/store/session";
 
@@ -28,19 +29,14 @@ export default function InboxPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-text">Inbox</h1>
-        <p className="text-sm text-muted">
-          Live conversations across every channel. Take over when the bot needs a hand.
-        </p>
-      </div>
+      <PageHeader title="Inbox" description="Live conversations across every channel. Take over when the bot needs a hand." />
 
-      <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
+      <div className="flex items-center gap-0.5 rounded-[10px] bg-surface-3 p-[3px]">
         <button
           onClick={() => setTab("inbox")}
           aria-current={tab === "inbox"}
-          className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-            tab === "inbox" ? "bg-surface-2 text-text" : "text-muted hover:text-text"
+          className={`rounded-lg px-3 py-1.5 text-[13px] font-bold transition-colors ${
+            tab === "inbox" ? "bg-surface text-text shadow-card dark:bg-surface-2" : "text-muted hover:text-text"
           }`}
         >
           Conversations
@@ -49,17 +45,15 @@ export default function InboxPage() {
           onClick={() => setTab("attention")}
           aria-current={tab === "attention"}
           aria-label={`Needs attention${count ? ` (${count})` : ""}`}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
-            tab === "attention" ? "bg-surface-2 text-text" : "text-muted hover:text-text"
+          className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-bold transition-colors ${
+            tab === "attention" ? "bg-surface text-text shadow-card dark:bg-surface-2" : "text-muted hover:text-text"
           }`}
         >
           Needs attention
           {count > 0 && (
             <span
-              className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                hasCrisis
-                  ? "border border-error/40 bg-error/15 text-error-text"
-                  : "border border-warn/40 bg-warn/15 text-warn-text"
+              className={`rounded-full px-1.5 py-0.5 text-[11px] font-extrabold ${
+                hasCrisis ? "bg-error-soft text-error-text" : "bg-warn-soft text-warn-text"
               }`}
             >
               {count}

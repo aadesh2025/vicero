@@ -9,6 +9,7 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { AgentsPanel } from "@/components/dashboard/agents-panel";
 import { ConversationsPanel } from "@/components/dashboard/conversations-panel";
 import { NewAgentDialog, type NewAgentSubmit } from "@/components/agents/new-agent-dialog";
+import { AiBuilderRail } from "@/components/dashboard/ai-builder-rail";
 import { Button } from "@/components/ui/button";
 import { createAgent } from "@/lib/api/agents";
 
@@ -23,40 +24,44 @@ export default function DashboardPage() {
     router.push(`/agents/${agent.id}?tab=persona`);
   }
 
-  return (
-    <div className="mx-auto max-w-[1400px] space-y-6">
-      {/* Header with a single restrained accent glow */}
-      <div className="relative -mx-4 -mt-6 overflow-hidden px-4 pt-6 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
-        <div className="glow-accent pointer-events-none absolute inset-0 -z-10" />
-        <PageHeader
-          title="Dashboard"
-          description="Everything your agents did in the last 30 days, at a glance."
-        >
-          <Button variant="outline" size="default" asChild>
-            <Link href="/analytics">
-              <BarChart3 /> View reports
-            </Link>
-          </Button>
-          <Button variant="primary" size="default" onClick={() => setCreating(true)}>
-            <Plus /> New agent
-          </Button>
-        </PageHeader>
+return (
+    <div className="flex items-start gap-6">
+      <div className="min-w-0 flex-1 space-y-6">
+        {/* Header with a single restrained accent glow */}
+        <div className="relative -mx-4 -mt-6 overflow-hidden px-4 pt-6 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+          <div className="glow-accent pointer-events-none absolute inset-0 -z-10" />
+          <PageHeader
+            title="Dashboard"
+            description="Everything your agents did in the last 30 days, at a glance."
+          >
+            <Button variant="secondary" size="default" asChild>
+              <Link href="/analytics">
+                <BarChart3 /> View reports
+              </Link>
+            </Button>
+            <Button variant="primary" size="default" onClick={() => setCreating(true)}>
+              <Plus /> New agent
+            </Button>
+          </PageHeader>
+        </div>
+
+        {/* Stat row, usage chart, per-channel and per-agent breakdowns — all live */}
+        <DashboardStats />
+
+        {/* Two-column body */}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="space-y-6 xl:col-span-2">
+            <AgentsPanel />
+          </div>
+          <div className="xl:col-span-1">
+            <ConversationsPanel />
+          </div>
+        </div>
+
+        <NewAgentDialog open={creating} onOpenChange={setCreating} onSubmit={onCreate} />
       </div>
 
-      {/* Stat row, usage chart, per-channel and per-agent breakdowns — all live */}
-      <DashboardStats />
-
-      {/* Two-column body */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <AgentsPanel />
-        </div>
-        <div className="xl:col-span-1">
-          <ConversationsPanel />
-        </div>
-      </div>
-
-      <NewAgentDialog open={creating} onOpenChange={setCreating} onSubmit={onCreate} />
+      <AiBuilderRail className="hidden xl:flex" />
     </div>
   );
 }

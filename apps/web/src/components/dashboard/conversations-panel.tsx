@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, MessagesSquare } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChannelBadge } from "@/components/shared/channel";
+import { StatusPill } from "@/components/shared/status-pill";
 import { listConversations } from "@/lib/api/conversations";
 import { listAgents } from "@/lib/api/agents";
 import { useSession } from "@/lib/store/session";
-import { channelMeta } from "@/lib/channel-meta";
-import { apiConvoStatusMeta } from "@/lib/display";
 import { relativeTime } from "@/lib/utils";
 
 const MAX_ROWS = 6;
@@ -43,17 +42,14 @@ export function ConversationsPanel() {
   const rows = (conversations ?? []).slice(0, MAX_ROWS);
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-border bg-surface">
+    <div className="flex h-full flex-col rounded-card border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border p-5">
         <div>
-          <h3 className="font-display text-base font-semibold text-text">Recent conversations</h3>
-          <p className="text-sm text-muted">Live across every channel</p>
+          <h3 className="font-display text-[15px] font-extrabold text-text">Recent conversations</h3>
+          <p className="text-[13px] font-medium text-muted">Live across every channel</p>
         </div>
-        <Link
-          href="/conversations"
-          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent"
-        >
-          View all <ArrowUpRight className="size-3.5" />
+        <Link href="/conversations" className="inline-flex items-center gap-1 text-sm font-bold text-accent hover:underline">
+          View all <ArrowUpRight className="size-3.5" aria-hidden />
         </Link>
       </div>
 
@@ -69,12 +65,12 @@ export function ConversationsPanel() {
         </ul>
       ) : rows.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-10 text-center">
-          <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2 text-muted">
-            <MessagesSquare className="size-5" />
+          <span className="grid size-11 place-items-center rounded-[10px] bg-info-soft text-info">
+            <MessagesSquare className="size-5" aria-hidden />
           </span>
           <div>
-            <p className="text-sm font-medium text-text">No conversations yet</p>
-            <p className="text-sm text-muted">
+            <p className="text-sm font-bold text-text">No conversations yet</p>
+            <p className="text-sm font-medium text-muted">
               Chats will appear here once someone messages one of your agents.
             </p>
           </div>
@@ -82,28 +78,18 @@ export function ConversationsPanel() {
       ) : (
         <ul className="flex-1 divide-y divide-border">
           {rows.map((c) => {
-            const status = apiConvoStatusMeta[c.status];
-            const { label: channelName, Icon } = channelMeta(c.channel);
             // A handed-off thread belongs to the operator inbox; everything else only
             // exists in the conversations browser.
             const href = c.status === "handoff" ? `/inbox/${c.id}` : "/conversations";
             return (
               <li key={c.id}>
-                <Link
-                  href={href}
-                  className="flex flex-col gap-1.5 px-5 py-3.5 transition-colors hover:bg-surface-2/50"
-                >
+                <Link href={href} className="flex flex-col gap-1.5 px-5 py-3.5 transition-colors hover:bg-surface-2">
                   <div className="flex items-center gap-2">
-                    <span className="grid size-5 shrink-0 place-items-center rounded border border-border bg-surface-2 text-faint">
-                      <Icon className="size-3" />
-                    </span>
-                    <span className="truncate font-mono text-xs text-muted">{channelName}</span>
-                    <Badge variant={status?.variant ?? "default"} className="ml-auto shrink-0">
-                      {status?.label ?? c.status}
-                    </Badge>
+                    <ChannelBadge channel={c.channel} size="sm" />
+                    <StatusPill status={c.status} className="ml-auto shrink-0" />
                   </div>
-                  <p className="line-clamp-1 text-sm text-text">{c.title || "Untitled conversation"}</p>
-                  <div className="flex items-center gap-2 text-[11px] text-faint">
+                  <p className="line-clamp-1 text-sm font-semibold text-text">{c.title || "Untitled conversation"}</p>
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-faint">
                     <span className="truncate">{agentName.get(c.agent_id) ?? "Unknown agent"}</span>
                     <span className="text-border-strong">·</span>
                     <span>{c.message_count} messages</span>

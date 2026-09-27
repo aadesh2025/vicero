@@ -1,6 +1,7 @@
 "use client";
 
-import { channelMeta } from "@/lib/channel-meta";
+import { ChannelIcon, ChannelText } from "@/components/shared/channel";
+import { channelTone } from "@/lib/channel-meta";
 import type { ChannelBucket } from "@/lib/api/analytics";
 import { compact, usd } from "@/lib/utils";
 
@@ -14,7 +15,8 @@ export function formatRate(rate: number, conversations: number): string {
   return `${Math.round(rate * 100)}%`;
 }
 
-/** Per-channel performance, shared by the Dashboard summary and the Analytics page. */
+/** Per-channel performance, shared by the Dashboard summary and the Analytics page. Bars and
+ *  icons use each channel's own colour (docs/20 §4.5, §5) — never a generic series colour. */
 export function ChannelBreakdown({
   buckets,
   isLoading = false,
@@ -26,11 +28,11 @@ export function ChannelBreakdown({
   const busiest = Math.max(...rows.map((b) => b.conversations), 1);
 
   if (isLoading) {
-    return <p className="px-5 py-4 text-sm text-muted">Loading…</p>;
+    return <p className="px-5 py-4 text-sm font-medium text-muted">Loading…</p>;
   }
   if (rows.length === 0) {
     return (
-      <p className="px-5 py-4 text-sm text-muted">
+      <p className="px-5 py-4 text-sm font-medium text-muted">
         No channels connected yet — connect one from an agent’s Channels tab.
       </p>
     );
@@ -39,35 +41,33 @@ export function ChannelBreakdown({
   return (
     <table className="w-full min-w-[340px] text-sm">
       <thead>
-        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-faint">
-          <th scope="col" className="px-5 py-2.5 font-medium">
+        <tr className="border-b border-border text-left text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">
+          <th scope="col" className="px-5 py-2.5">
             Channel
           </th>
-          <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right font-medium">
+          <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right">
             Convos
           </th>
-          <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right font-medium">
+          <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right">
             Resolved
           </th>
-          <th scope="col" className="px-5 py-2.5 text-right font-medium">
+          <th scope="col" className="px-5 py-2.5 text-right">
             Cost
           </th>
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
         {rows.map((b) => {
-          const { label, Icon } = channelMeta(b.channel);
           const idle = b.conversations === 0;
+          const tone = channelTone(b.channel);
           return (
-            <tr key={b.channel} className="transition-colors hover:bg-surface-2/40">
+            <tr key={b.channel} className="transition-colors hover:bg-surface-2">
               <th scope="row" className="whitespace-nowrap px-5 py-2.5 text-left font-normal">
                 <span className="flex items-center gap-2">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
-                    <Icon className="size-3.5" aria-hidden />
-                  </span>
-                  <span className={idle ? "text-muted" : "text-text"}>{label}</span>
+                  <ChannelIcon channel={b.channel} size="sm" />
+                  <ChannelText channel={b.channel} className={idle ? "opacity-60" : ""} />
                   {idle && (
-                    <span className="rounded border border-border px-1 py-px text-[10px] text-faint">
+                    <span className="rounded-md bg-surface-3 px-1.5 py-px text-[10px] font-bold text-faint">
                       no traffic
                     </span>
                   )}
@@ -76,19 +76,19 @@ export function ChannelBreakdown({
               <td className="px-3 py-2.5 text-right">
                 <span className="flex items-center justify-end gap-2">
                   {/* Proportional bar, so relative volume reads at a glance. */}
-                  <span className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-surface-3 sm:block">
+                  <span className="hidden h-1.5 w-16 overflow-hidden rounded bg-surface-3 sm:block">
                     <span
-                      className="block h-full rounded-full bg-gradient-to-r from-accent to-accent-2"
-                      style={{ width: `${(b.conversations / busiest) * 100}%` }}
+                      className="block h-full rounded"
+                      style={{ width: `${(b.conversations / busiest) * 100}%`, backgroundColor: tone.dot }}
                     />
                   </span>
-                  <span className="font-mono text-xs text-text">{compact(b.conversations)}</span>
+                  <span className="text-xs font-bold tabular-nums text-text">{compact(b.conversations)}</span>
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-right font-mono text-xs text-muted">
+              <td className="px-3 py-2.5 text-right text-xs font-semibold tabular-nums text-muted">
                 {formatRate(b.resolution_rate, b.conversations)}
               </td>
-              <td className="px-5 py-2.5 text-right font-mono text-xs text-muted">
+              <td className="px-5 py-2.5 text-right text-xs font-semibold tabular-nums text-muted">
                 {usd(b.cost_micros / 1_000_000)}
               </td>
             </tr>

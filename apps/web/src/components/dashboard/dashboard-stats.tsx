@@ -20,6 +20,7 @@ export function DashboardStats() {
     enabled,
   });
   // The chart's own source: gap-filled, one point per day, with real conversation counts.
+  // The KPI sparklines reuse it rather than issuing four more requests.
   const { data: series, isLoading: seriesLoading } = useQuery({
     queryKey: ["dash-series", activeOrgId],
     queryFn: () => getSeries(),
@@ -37,33 +38,50 @@ export function DashboardStats() {
   // say which, because a bare $0.00 next to 14k tokens reads as a bug.
   const costHint = tokens > 0 && cost === 0 ? "free tier — no billable usage" : "last 30d";
 
+  const convoSpark = series?.map((d) => d.conversations);
+  const tokenSpark = series?.map((d) => d.tokens_prompt + d.tokens_completion);
+  const costSpark = series?.map((d) => d.cost_micros / 1_000_000);
+
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Conversations" value={compact(overview?.conversations ?? 0)} icon={MessagesSquare} hint="last 30d" />
+        <StatCard
+          label="Conversations"
+          value={compact(overview?.conversations ?? 0)}
+          icon={MessagesSquare}
+          hint="last 30d"
+          tone="accent"
+          spark={convoSpark}
+        />
         <StatCard
           label="Resolution rate"
           value={overview?.conversations ? `${Math.round((overview.resolution_rate ?? 0) * 100)}%` : "—"}
           icon={ShieldCheck}
           hint="no human needed"
+          tone="success"
         />
-        <StatCard label="Tokens used" value={compact(tokens)} icon={Zap} hint="across providers" />
-        <StatCard label="Est. cost" value={usd(cost)} icon={CircleDollarSign} hint={costHint} invertDelta />
+        <StatCard label="Tokens used" value={compact(tokens)} icon={Zap} hint="across providers" tone="ai" spark={tokenSpark} />
+        <StatCard
+          label="Est. cost"
+          value={usd(cost)}
+          icon={CircleDollarSign}
+          hint={costHint}
+          invertDelta
+          tone="warn"
+          spark={costSpark}
+        />
       </div>
 
       {/* Side by side only when there's genuinely room; below xl the table would be
           squeezed to the point of clipping, so it stacks full width instead. */}
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_420px]">
         <UsageChart data={series} isLoading={seriesLoading} />
-        <section
-          aria-labelledby="dash-by-channel"
-          className="overflow-hidden rounded-lg border border-border bg-surface"
-        >
+        <section aria-labelledby="dash-by-channel" className="overflow-hidden rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 id="dash-by-channel" className="font-display text-base font-semibold text-text">
+            <h3 id="dash-by-channel" className="font-display text-[15px] font-extrabold text-text">
               By channel
             </h3>
-            <p className="text-sm text-muted">Where your conversations came from.</p>
+            <p className="text-[13px] font-medium text-muted">Where your conversations came from.</p>
           </div>
           <div className="overflow-x-auto">
             <ChannelBreakdown buckets={overview?.by_channel} isLoading={overviewLoading} />
@@ -71,15 +89,12 @@ export function DashboardStats() {
         </section>
       </div>
 
-      <section
-        aria-labelledby="dash-by-agent"
-        className="overflow-hidden rounded-lg border border-border bg-surface"
-      >
+      <section aria-labelledby="dash-by-agent" className="overflow-hidden rounded-card border border-border bg-surface">
         <div className="border-b border-border p-5">
-          <h3 id="dash-by-agent" className="font-display text-base font-semibold text-text">
+          <h3 id="dash-by-agent" className="font-display text-[15px] font-extrabold text-text">
             By agent
           </h3>
-          <p className="text-sm text-muted">
+          <p className="text-[13px] font-medium text-muted">
             How each agent is doing. Open one for its own analytics.
           </p>
         </div>

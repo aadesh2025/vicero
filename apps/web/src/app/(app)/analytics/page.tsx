@@ -11,7 +11,7 @@ import { ChannelBreakdown } from "@/components/analytics/channel-breakdown";
 import { TeamPerformance } from "@/components/analytics/team-performance";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { channelMeta } from "@/lib/channel-meta";
+import { channelMeta, channelTone } from "@/lib/channel-meta";
 import {
   getAgentPerformance,
   getByAgent,
@@ -83,44 +83,47 @@ export default function AnalyticsPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader title="Analytics" description="How your agents are performing across channels.">
-        <Button variant="outline" size="default" onClick={() => downloadCsv("usage")}>
+        <Button variant="secondary" size="default" onClick={() => downloadCsv("usage")}>
           <Download /> Export usage
         </Button>
-        <Button variant="outline" size="default" onClick={() => downloadCsv("channels")}>
+        <Button variant="secondary" size="default" onClick={() => downloadCsv("channels")}>
           <Download /> Export channels
         </Button>
-        <Button variant="outline" size="default" onClick={() => downloadCsv("conversations")}>
+        <Button variant="secondary" size="default" onClick={() => downloadCsv("conversations")}>
           <Download /> Export conversations
         </Button>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Conversations" value={compact(overview?.conversations ?? 0)} icon={MessagesSquare} hint="last 30d" />
+        <StatCard label="Conversations" value={compact(overview?.conversations ?? 0)} icon={MessagesSquare} hint="last 30d" tone="accent" />
         <StatCard
           label="Resolution rate"
           // An em dash, not 0%: nothing has happened yet is not a total failure to resolve.
           value={overview?.conversations ? `${Math.round((overview.resolution_rate ?? 0) * 100)}%` : "—"}
           icon={ShieldCheck}
           hint="no human needed"
+          tone="success"
         />
-        <StatCard label="p50 latency" value={`${latency?.p50_ms ?? 0} ms`} icon={Timer} hint="assistant replies" invertDelta />
+        <StatCard label="p50 latency" value={`${latency?.p50_ms ?? 0} ms`} icon={Timer} hint="assistant replies" invertDelta tone="warn" />
         <StatCard
           label="Est. cost"
           value={usd((overview?.cost_micros ?? 0) / 1_000_000)}
           icon={CircleDollarSign}
           hint="last 30d"
           invertDelta
+          tone="warn"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Messages" value={compact(overview?.messages ?? 0)} icon={MessagesSquare} hint="user + assistant" />
-        <StatCard label="Unique users" value={compact(overview?.users ?? 0)} icon={Users} hint="across channels" />
+        <StatCard label="Messages" value={compact(overview?.messages ?? 0)} icon={MessagesSquare} hint="user + assistant" tone="accent" />
+        <StatCard label="Unique users" value={compact(overview?.users ?? 0)} icon={Users} hint="across channels" tone="accent" />
         <StatCard
           label="Tokens"
           value={compact((overview?.tokens_prompt ?? 0) + (overview?.tokens_completion ?? 0))}
           icon={Zap}
           hint="prompt + completion"
+          tone="ai"
         />
       </div>
 
@@ -128,13 +131,13 @@ export default function AnalyticsPage() {
 
       <section
         aria-labelledby="an-by-agent"
-        className="overflow-hidden rounded-lg border border-border bg-surface"
+        className="overflow-hidden rounded-card border border-border bg-surface"
       >
         <div className="border-b border-border p-5">
-          <h3 id="an-by-agent" className="font-display text-base font-semibold text-text">
+          <h3 id="an-by-agent" className="font-display text-[15px] font-extrabold text-text">
             By agent
           </h3>
-          <p className="text-sm text-muted">
+          <p className="text-[13px] font-medium text-muted">
             Every agent in this workspace. Open one for its own analytics.
           </p>
         </div>
@@ -146,13 +149,13 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section
           aria-labelledby="an-by-channel"
-          className="overflow-hidden rounded-lg border border-border bg-surface"
+          className="overflow-hidden rounded-card border border-border bg-surface"
         >
           <div className="border-b border-border p-5">
-            <h3 id="an-by-channel" className="font-display text-base font-semibold text-text">
+            <h3 id="an-by-channel" className="font-display text-[15px] font-extrabold text-text">
               By channel
             </h3>
-            <p className="text-sm text-muted">
+            <p className="text-[13px] font-medium text-muted">
               Every connected channel, including ones still waiting on their first message.
             </p>
           </div>
@@ -161,19 +164,20 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Tokens by channel</h3>
+            <h3 className="font-display text-[15px] font-extrabold text-text">Tokens by channel</h3>
           </div>
           <div className="p-5">
             {(usageChannel ?? []).length === 0 ? (
-              <p className="text-sm text-muted">No usage yet.</p>
+              <p className="text-[13px] font-medium text-muted">No usage yet.</p>
             ) : (
               <BarList
                 items={(usageChannel ?? []).map((b) => ({
                   id: b.key,
                   label: channelMeta(b.key).label,
                   value: b.tokens_prompt + b.tokens_completion,
+                  color: channelTone(b.key).dot,
                 }))}
                 format={(n) => compact(n)}
               />
@@ -183,16 +187,16 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Tokens by agent</h3>
-            <p className="text-sm text-muted">
+            <h3 className="font-display text-[15px] font-extrabold text-text">Tokens by agent</h3>
+            <p className="text-[13px] font-medium text-muted">
               Prompt + completion, as reported by the provider for each reply.
             </p>
           </div>
           <div className="p-5">
             {(byAgent ?? []).every((b) => b.tokens_prompt + b.tokens_completion === 0) ? (
-              <p className="text-sm text-muted">No usage yet.</p>
+              <p className="text-[13px] font-medium text-muted">No usage yet.</p>
             ) : (
               <BarList
                 items={(byAgent ?? [])
@@ -210,13 +214,13 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Tokens by provider</h3>
+            <h3 className="font-display text-[15px] font-extrabold text-text">Tokens by provider</h3>
           </div>
           <div className="p-5">
             {(usageProvider ?? []).length === 0 ? (
-              <p className="text-sm text-muted">No usage yet.</p>
+              <p className="text-[13px] font-medium text-muted">No usage yet.</p>
             ) : (
               <BarList
                 items={(usageProvider ?? []).map((b) => ({
@@ -230,9 +234,9 @@ export default function AnalyticsPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Latency</h3>
+            <h3 className="font-display text-[15px] font-extrabold text-text">Latency</h3>
           </div>
           <div className="grid grid-cols-3 gap-4 p-5 text-center">
             <div>
@@ -253,13 +257,13 @@ export default function AnalyticsPage() {
 
       <section
         aria-labelledby="an-team"
-        className="overflow-hidden rounded-lg border border-border bg-surface"
+        className="overflow-hidden rounded-card border border-border bg-surface"
       >
         <div className="border-b border-border p-5">
-          <h3 id="an-team" className="font-display text-base font-semibold text-text">
+          <h3 id="an-team" className="font-display text-[15px] font-extrabold text-text">
             Team performance
           </h3>
-          <p className="text-sm text-muted">
+          <p className="text-[13px] font-medium text-muted">
             How your teammates are handling conversations the bot escalated.
           </p>
         </div>
@@ -269,10 +273,10 @@ export default function AnalyticsPage() {
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Top questions</h3>
-            <p className="text-sm text-muted">Most asked by your users.</p>
+            <h3 className="font-display text-[15px] font-extrabold text-text">Top questions</h3>
+            <p className="text-[13px] font-medium text-muted">Most asked by your users.</p>
           </div>
           <ul className="divide-y divide-border">
             {(top ?? []).length === 0 && <li className="px-5 py-4 text-sm text-muted">No data yet.</li>}
@@ -286,10 +290,10 @@ export default function AnalyticsPage() {
           </ul>
         </section>
 
-        <section className="rounded-lg border border-border bg-surface">
+        <section className="rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
-            <h3 className="font-display text-base font-semibold text-text">Escalated questions</h3>
-            <p className="text-sm text-muted">Questions that needed a human — gaps to fill.</p>
+            <h3 className="font-display text-[15px] font-extrabold text-text">Escalated questions</h3>
+            <p className="text-[13px] font-medium text-muted">Questions that needed a human — gaps to fill.</p>
           </div>
           <ul className="divide-y divide-border">
             {(unanswered ?? []).length === 0 && <li className="px-5 py-4 text-sm text-muted">None — nice.</li>}

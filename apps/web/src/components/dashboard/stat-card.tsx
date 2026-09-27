@@ -1,5 +1,16 @@
 import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
+import { Sparkline } from "@/components/charts/sparkline";
 import { cn } from "@/lib/utils";
+
+/** The meaning colour a KPI wears: chip background, icon and sparkline. */
+export type StatTone = "accent" | "success" | "ai" | "warn";
+
+const TONE: Record<StatTone, { chip: string; spark: "accent" | "success" | "ai" | "warn" }> = {
+  accent: { chip: "bg-info-soft text-info", spark: "accent" },
+  success: { chip: "bg-success-soft text-success", spark: "success" },
+  ai: { chip: "bg-ai-soft text-ai", spark: "ai" },
+  warn: { chip: "bg-warn-soft text-warn", spark: "warn" },
+};
 
 export function StatCard({
   label,
@@ -8,6 +19,8 @@ export function StatCard({
   icon: Icon,
   hint,
   invertDelta = false,
+  tone = "accent",
+  spark,
 }: {
   label: string;
   value: string;
@@ -16,38 +29,41 @@ export function StatCard({
   hint?: string;
   /** For metrics where "down is good" (e.g. cost). */
   invertDelta?: boolean;
+  tone?: StatTone;
+  /** A trend to draw beside the number; omitted when there is no real series behind it. */
+  spark?: number[];
 }) {
   const up = (delta ?? 0) >= 0;
   const good = invertDelta ? !up : up;
+  const t = TONE[tone];
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-surface p-5 transition-colors hover:border-border-strong">
-      {/* accent top hairline reveals on hover */}
-      <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted">{label}</span>
-        <span className="grid size-8 place-items-center rounded-md border border-border bg-surface-2 text-faint transition-colors group-hover:text-accent">
-          <Icon className="size-4" />
+    <div className="rounded-card border border-border bg-surface p-4 shadow-card">
+      <div className="flex items-center gap-2.5">
+        <span className={cn("grid size-[34px] shrink-0 place-items-center rounded-[10px]", t.chip)}>
+          <Icon className="size-[18px]" aria-hidden />
         </span>
+        <span className="text-[13px] font-bold text-muted">{label}</span>
       </div>
-      <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-display text-[28px] font-semibold leading-none tracking-tight text-text">
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <span className="font-display text-[26px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-text">
           {value}
         </span>
+        {spark && spark.length > 1 && <Sparkline values={spark} color={t.spark} />}
       </div>
-      <div className="mt-3 flex items-center gap-2 text-xs">
+      <div className="mt-2.5 flex items-center gap-2 text-xs">
         {delta !== undefined && (
           <span
             className={cn(
-              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium",
-              good ? "bg-success/10 text-success-text" : "bg-error/10 text-error-text",
+              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-extrabold",
+              good ? "bg-success-soft text-success-text" : "bg-error-soft text-error-text",
             )}
           >
-            {up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+            {up ? <ArrowUpRight className="size-3" aria-hidden /> : <ArrowDownRight className="size-3" aria-hidden />}
             {Math.abs(delta)}%
           </span>
         )}
-        {hint && <span className="text-faint">{hint}</span>}
+        {hint && <span className="font-semibold text-faint">{hint}</span>}
       </div>
     </div>
   );

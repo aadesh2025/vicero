@@ -7,7 +7,7 @@ type CalloutType = "note" | "tip" | "warn" | "danger";
 /** Status colours are the only saturated thing in this UI (globals.css), so a callout
  *  earns its colour by carrying a real warning rather than by decorating a paragraph. */
 const STYLES: Record<CalloutType, { icon: typeof Info; className: string; label: string }> = {
-  note: { icon: Info, className: "border-border bg-surface-2 text-muted", label: "Note" },
+  note: { icon: Info, className: "border-info/30 bg-info/5 text-muted", label: "Note" },
   tip: { icon: Lightbulb, className: "border-success/30 bg-success/5 text-muted", label: "Tip" },
   warn: { icon: AlertTriangle, className: "border-warn/40 bg-warn/5 text-muted", label: "Warning" },
   danger: { icon: ShieldAlert, className: "border-error/40 bg-error/5 text-muted", label: "Careful" },

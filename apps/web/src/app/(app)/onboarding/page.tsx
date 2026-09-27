@@ -23,13 +23,13 @@ export default function OnboardingPage() {
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center text-center">
-      <span className="grid size-14 place-items-center rounded-xl border border-border bg-surface-2 text-accent">
+      <span className="grid size-14 place-items-center rounded-2xl bg-ai-soft text-ai">
         <Bot className="size-7" />
       </span>
-      <h1 className="mt-6 font-display text-3xl font-semibold tracking-tight text-text">
+      <h1 className="mt-6 font-display text-3xl font-extrabold tracking-tight text-text">
         {first ? `Welcome, ${first}.` : "Welcome to BotForge."}
       </h1>
-      <p className="mt-2 text-muted">
+      <p className="mt-2 font-medium text-muted">
         Your workspace is ready and your 10-day free trial has started. Create your first agent — pick a role
         to start from, or begin with a blank one.
       </p>

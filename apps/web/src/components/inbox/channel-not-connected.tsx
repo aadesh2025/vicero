@@ -7,7 +7,7 @@ import { Plug, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listAgents } from "@/lib/api/agents";
-import { channelMeta, type InboxChannel } from "@/lib/channel-meta";
+import { channelMeta, channelTone, type InboxChannel } from "@/lib/channel-meta";
 import { useSession } from "@/lib/store/session";
 
 /** Where the builder picks the connect flow back up, with the channel pre-selected. */
@@ -31,25 +31,29 @@ export function ChannelNotConnected({
   compact?: boolean;
 }) {
   const { label, Icon } = channelMeta(channel);
+  const tone = channelTone(channel);
 
   if (compact) {
     return (
       <div className="p-6 text-center">
-        <Icon className="mx-auto mb-2 size-5 text-faint" aria-hidden />
-        <p className="text-sm text-text">{label} isn’t connected yet.</p>
-        <p className="mt-1 text-xs text-muted">Connect it to start receiving messages here.</p>
+        <Icon className="mx-auto mb-2 size-5" style={{ color: tone.text }} aria-hidden />
+        <p className="text-sm font-bold text-text">{label} isn’t connected yet.</p>
+        <p className="mt-1 text-xs font-medium text-muted">Connect it to start receiving messages here.</p>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
-      <span className="grid size-12 place-items-center rounded-full border border-border bg-surface-2 text-faint">
+      <span
+        className="grid size-12 place-items-center rounded-[14px] text-white"
+        style={{ backgroundColor: tone.dot, backgroundImage: tone.gradient }}
+      >
         <Icon className="size-5" aria-hidden />
       </span>
       <div>
-        <p className="text-sm font-medium text-text">{label} isn’t connected yet.</p>
-        <p className="mt-1 max-w-xs text-sm text-muted">
+        <p className="text-sm font-bold text-text">{label} isn’t connected yet.</p>
+        <p className="mt-1 max-w-xs text-sm font-medium text-muted">
           Connect it to start receiving messages here.
         </p>
       </div>

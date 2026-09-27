@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Check, Headphones, User } from "lucide-react";
+import { Bot, Check, Headphones, PauseCircle, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/components/shared/status-pill";
 import {
   closeConversation,
   getInboxDetail,
@@ -19,6 +20,7 @@ import { listChannels } from "@/lib/api/channels";
 import {
   CHANNEL_META,
   channelMeta,
+  channelTone,
   inboxChannelTabs,
   isChannelConnected,
   isNewChannel,
@@ -28,6 +30,7 @@ import { ContactAvatar, contactLabel } from "@/components/inbox/contact-avatar";
 import { ChannelNotConnected } from "@/components/inbox/channel-not-connected";
 import { ReplyBox } from "@/components/inbox/reply-box";
 import { RunMacro } from "@/components/inbox/run-macro";
+import { Lock } from "lucide-react";
 import { handoffReasonLabel, isPlanLimitReason } from "@/lib/inbox-reason";
 import { useSession } from "@/lib/store/session";
 
@@ -37,12 +40,6 @@ const STATUS_FILTERS = [
   { key: "active", label: "Active" },
   { key: "closed", label: "Closed" },
 ];
-
-const statusVariant: Record<string, "success" | "warn" | "default"> = {
-  handoff: "warn",
-  active: "success",
-  closed: "default",
-};
 
 export function InboxView({ initialId }: { initialId?: string }) {
   const qc = useQueryClient();
@@ -85,7 +82,7 @@ export function InboxView({ initialId }: { initialId?: string }) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="flex h-[calc(100vh-220px)] flex-col overflow-hidden rounded-card border border-border bg-surface">
       {/* Every channel, connected or not — an unconnected tab is how you discover it. */}
       <div
         role="tablist"
@@ -98,6 +95,7 @@ export function InboxView({ initialId }: { initialId?: string }) {
           return (
             <ChannelTab
               key={type}
+              channel={type}
               label={meta.label}
               icon={<meta.Icon className="size-3.5" aria-hidden />}
               badge={isNewChannel(channels, type) ? "New" : undefined}
@@ -116,8 +114,8 @@ export function InboxView({ initialId }: { initialId?: string }) {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  filter === f.key ? "bg-accent/15 text-accent" : "text-muted hover:bg-surface-2"
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
+                  filter === f.key ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2"
                 }`}
               >
                 {f.label}
@@ -148,12 +146,10 @@ export function InboxView({ initialId }: { initialId?: string }) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium text-text">
+                    <span className="truncate text-sm font-bold text-text">
                       {contactLabel(it.contact, it.channel_user_id)}
                     </span>
-                    <Badge variant={statusVariant[it.status] ?? "default"} className="ml-auto shrink-0">
-                      {it.status}
-                    </Badge>
+                    <StatusPill status={it.status} className="ml-auto shrink-0" />
                   </div>
                   <div className="truncate text-xs text-muted">{it.title || "Conversation"}</div>
                   <div className="flex items-center gap-2 text-xs text-faint">
@@ -161,11 +157,16 @@ export function InboxView({ initialId }: { initialId?: string }) {
                     {it.handoff && it.handoff.status !== "resolved" && (
                       <span className="ml-auto flex items-center gap-1.5">
                         {isPlanLimitReason(it.handoff.reason) && (
-                          <Badge variant="warn" title={handoffReasonLabel(it.handoff.reason as string)}>
-                            plan limit
-                          </Badge>
+                          <span
+                            title={handoffReasonLabel(it.handoff.reason as string)}
+                            className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-extrabold text-faint"
+                          >
+                            <Lock className="size-2.5" aria-hidden /> plan limit
+                          </span>
                         )}
-                        <Badge variant="accent">{it.handoff.assigned_to ? "assigned" : "needs agent"}</Badge>
+                        <Badge variant={it.handoff.assigned_to ? "ai" : "warn"}>
+                          {it.handoff.assigned_to ? "assigned" : "needs agent"}
+                        </Badge>
                       </span>
                     )}
                   </div>
@@ -192,6 +193,7 @@ export function InboxView({ initialId }: { initialId?: string }) {
 }
 
 function ChannelTab({
+  channel,
   label,
   icon,
   badge,
@@ -199,6 +201,8 @@ function ChannelTab({
   connected = true,
   onClick,
 }: {
+  /** "" for the "All messages" tab, which has no channel colour of its own. */
+  channel?: string;
   label: string;
   icon?: React.ReactNode;
   badge?: string;
@@ -207,6 +211,7 @@ function ChannelTab({
   connected?: boolean;
   onClick: () => void;
 }) {
+  const tone = channel ? channelTone(channel) : null;
   return (
     <button
       role="tab"
@@ -217,13 +222,14 @@ function ChannelTab({
       aria-label={connected ? undefined : `${label} (not connected)`}
       onClick={onClick}
       // Dimmed rather than disabled: "available, not set up yet", still reachable.
-      className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+      className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-bold transition-colors ${
         active
-          ? "border-accent text-accent"
+          ? "border-current"
           : connected
             ? "border-transparent text-muted hover:border-border-strong hover:text-text"
             : "border-transparent text-faint opacity-70 hover:border-border hover:text-muted hover:opacity-100"
       }`}
+      style={active ? { color: tone?.text ?? "rgb(var(--accent))" } : undefined}
     >
       {icon}
       {label}
@@ -268,6 +274,19 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {isHandoff && (
+        <div
+          role="status"
+          className={
+            assigned
+              ? "flex items-center gap-2 border-b border-border bg-warn-soft px-3 py-2 text-xs font-bold text-warn-text"
+              : "flex items-center gap-2 border-b border-border bg-info-soft px-3 py-2 text-xs font-bold text-info-text"
+          }
+        >
+          <PauseCircle className="size-3.5 shrink-0" aria-hidden />
+          {assigned ? "Bot paused — you're replying" : "Waiting for a teammate to take over"}
+        </div>
+      )}
       <div className="flex items-center gap-3 border-b border-border p-3">
         <ContactAvatar
           channel={detail?.channel ?? "widget"}
@@ -275,13 +294,13 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
           avatarUrl={detail?.contact?.avatar_url}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-text">
+          <div className="truncate text-sm font-bold text-text">
             {/* Linked only once this handle is matched to a CRM person — `contact.id` is
                 the per-channel handle, which the CRM (which lists people) can't resolve. */}
             {detail?.contact?.crm_contact_id ? (
               <Link
                 href={`/contacts/${detail.contact.crm_contact_id}`}
-                className="hover:text-accent hover:underline"
+                className="hover:text-accent-2 hover:underline"
               >
                 {contactLabel(detail.contact, detail.channel_user_id)}
               </Link>
@@ -289,7 +308,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
               (detail ? contactLabel(detail.contact, detail.channel_user_id) : "Conversation")
             )}
           </div>
-          <div className="truncate text-xs text-faint">
+          <div className="truncate text-xs font-medium text-faint">
             {detail ? `${channelMeta(detail.channel).label} · ${detail.status}` : ""}
             {handoff?.reason ? ` · reason: ${handoffReasonLabel(handoff.reason)}` : ""}
           </div>
@@ -300,7 +319,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
           </Button>
         )}
         {isHandoff && assigned && (
-          <Button size="sm" variant="outline" onClick={() => doHandback.mutate()} disabled={doHandback.isPending}>
+          <Button size="sm" variant="ai" onClick={() => doHandback.mutate()} disabled={doHandback.isPending}>
             <Bot className="size-4" /> Hand back
           </Button>
         )}
@@ -318,26 +337,24 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
           const operator = m.provider === "operator";
           return (
             <div key={m.id} className={`flex gap-2 ${who === "user" ? "flex-row-reverse" : ""}`}>
-              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-faint">
-                {who === "user" ? (
-                  <User className="size-3.5" />
-                ) : operator ? (
-                  <Headphones className="size-3.5 text-accent" />
-                ) : (
-                  <Bot className="size-3.5 text-accent" />
-                )}
+              <span
+                className={`grid size-7 shrink-0 place-items-center rounded-lg ${
+                  who === "user" ? "bg-surface-3 text-faint" : operator ? "bg-accent-soft text-accent" : "bg-ai-soft text-ai"
+                }`}
+              >
+                {who === "user" ? <User className="size-3.5" /> : operator ? <Headphones className="size-3.5" /> : <Bot className="size-3.5" />}
               </span>
               <div
-                className={`max-w-[80%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm ${
+                className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm font-medium ${
                   who === "user"
-                    ? "border-accent/30 bg-accent/[0.06] text-text"
+                    ? "bg-surface-2 text-text"
                     : operator
-                      ? "border-accent/40 bg-accent/[0.1] text-text"
-                      : "border-border bg-surface-2/60 text-text"
+                      ? "bg-accent-soft text-text"
+                      : "bg-ai-soft text-text"
                 }`}
               >
                 {operator && (
-                  <div className="mb-0.5 text-[10px] uppercase tracking-wide text-accent">Operator</div>
+                  <div className="mb-0.5 text-[10px] font-extrabold uppercase tracking-wide text-accent">Operator</div>
                 )}
                 {m.content}
               </div>
@@ -349,7 +366,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
       {isHandoff && assigned ? (
         <ReplyBox cid={cid} sendWindow={detail?.send_window ?? null} onSent={invalidate} />
       ) : (
-        <div className="border-t border-border p-3 text-center text-xs text-muted">
+        <div className="border-t border-border p-3 text-center text-xs font-semibold text-muted">
           {isHandoff ? "Take over to reply." : "The assistant is handling this conversation."}
         </div>
       )}

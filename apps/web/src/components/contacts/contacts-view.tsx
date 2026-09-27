@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ContactAvatar } from "@/components/inbox/contact-avatar";
+import { ChannelBadge } from "@/components/shared/channel";
 import { ContactDetailPanel } from "@/components/contacts/contact-detail-panel";
 import { NewContactDialog } from "@/components/contacts/new-contact-dialog";
-import { channelMeta } from "@/lib/channel-meta";
 import { listContacts, LEAD_STAGES } from "@/lib/api/contacts";
 import { useSession } from "@/lib/store/session";
 import { relativeTime } from "@/lib/utils";
@@ -75,7 +75,7 @@ export function ContactsView({ initialId }: { initialId?: string }) {
           aria-label="Filter by lead stage"
           value={stage}
           onChange={(e) => applyFilter(() => setStage(e.target.value))}
-          className="h-9 rounded-md border border-border bg-surface-2 px-2 text-sm capitalize text-text"
+          className="h-[38px] rounded-lg border border-border-strong bg-surface px-2 text-sm font-medium capitalize text-text"
         >
           <option value="">All stages</option>
           {LEAD_STAGES.map((s) => (
@@ -86,16 +86,16 @@ export function ContactsView({ initialId }: { initialId?: string }) {
         </select>
       </div>
 
-      <div className="flex overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="flex overflow-hidden rounded-card border border-border bg-surface">
         <div className="min-w-0 flex-1 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-faint">
-                <th scope="col" className="px-4 py-2.5 font-medium">Contact</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Channels</th>
-                <th scope="col" className="px-3 py-2.5 font-medium">Stage</th>
-                <th scope="col" className="px-3 py-2.5 text-right font-medium">Convos</th>
-                <th scope="col" className="px-4 py-2.5 text-right font-medium">Last active</th>
+              <tr className="border-b border-border text-left text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">
+                <th scope="col" className="px-4 py-2.5">Contact</th>
+                <th scope="col" className="px-3 py-2.5">Channels</th>
+                <th scope="col" className="px-3 py-2.5">Stage</th>
+                <th scope="col" className="px-3 py-2.5 text-right">Convos</th>
+                <th scope="col" className="px-4 py-2.5 text-right">Last active</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -120,8 +120,8 @@ export function ContactsView({ initialId }: { initialId?: string }) {
                   <tr
                     key={c.id}
                     onClick={() => setSelected(c.id)}
-                    className={`cursor-pointer transition-colors hover:bg-surface-2/40 ${
-                      selected === c.id ? "bg-surface-2/60" : ""
+                    className={`cursor-pointer transition-colors hover:bg-surface-2 ${
+                      selected === c.id ? "bg-surface-2" : ""
                     }`}
                   >
                     <th scope="row" className="px-4 py-2.5 text-left font-normal">
@@ -133,9 +133,9 @@ export function ContactsView({ initialId }: { initialId?: string }) {
                           size="sm"
                         />
                         <span className="min-w-0">
-                          <span className="block truncate text-text">{name}</span>
+                          <span className="block truncate font-bold text-text">{name}</span>
                           {c.labels.length > 0 && (
-                            <span className="block truncate text-[11px] text-faint">
+                            <span className="block truncate text-[11px] font-semibold text-faint">
                               {c.labels.join(" · ")}
                             </span>
                           )}
@@ -144,11 +144,9 @@ export function ContactsView({ initialId }: { initialId?: string }) {
                     </th>
                     <td className="whitespace-nowrap px-3 py-2.5 text-muted">
                       <span className="flex flex-wrap gap-1">
-                        {c.channels.length === 0 && <span className="text-xs text-faint">—</span>}
+                        {c.channels.length === 0 && <span className="text-xs font-medium text-faint">—</span>}
                         {c.channels.map((ch) => (
-                          <Badge key={ch.id} variant="default">
-                            {channelMeta(ch.channel).label}
-                          </Badge>
+                          <ChannelBadge key={ch.id} channel={ch.channel} size="sm" />
                         ))}
                       </span>
                     </td>
@@ -161,10 +159,10 @@ export function ContactsView({ initialId }: { initialId?: string }) {
                         <span className="text-xs text-faint">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs text-muted">
+                    <td className="px-3 py-2.5 text-right text-xs font-bold tabular-nums text-muted">
                       {c.conversation_count}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-right text-xs text-muted">
+                    <td className="whitespace-nowrap px-4 py-2.5 text-right text-xs font-semibold text-faint">
                       {c.last_active_at ? relativeTime(c.last_active_at) : "—"}
                     </td>
                   </tr>
@@ -174,7 +172,7 @@ export function ContactsView({ initialId }: { initialId?: string }) {
           </table>
 
           {total > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-muted">
+            <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs font-semibold text-muted">
               <span>
                 {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
               </span>

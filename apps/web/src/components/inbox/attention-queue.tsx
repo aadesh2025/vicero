@@ -23,20 +23,20 @@ import { relativeTime } from "@/lib/utils";
 const SEVERITY: Record<string, { label: string; row: string; chip: string; icon: typeof AlertTriangle }> = {
   crisis: {
     label: "Crisis",
-    row: "border-error/50 bg-error/[0.06]",
-    chip: "border-error/40 bg-error/15 text-error-text",
+    row: "border-error/40 bg-error-soft",
+    chip: "bg-error-soft text-error-text",
     icon: ShieldAlert,
   },
   elevated: {
     label: "Elevated",
-    row: "border-warn/40 bg-warn/[0.05]",
-    chip: "border-warn/40 bg-warn/15 text-warn-text",
+    row: "border-warn/40 bg-warn-soft",
+    chip: "bg-warn-soft text-warn-text",
     icon: AlertTriangle,
   },
   mild: {
     label: "Mild",
-    row: "border-border",
-    chip: "border-border bg-surface-2 text-muted",
+    row: "border-border bg-surface",
+    chip: "bg-surface-3 text-muted",
     icon: AlertTriangle,
   },
 };
@@ -49,7 +49,7 @@ function Trajectory({ item }: { item: ApiAttentionItem }) {
         <span key={f.id} className="inline-flex items-center gap-1.5">
           {i > 0 && <span className="text-faint">→</span>}
           <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${SEVERITY[f.severity]?.chip ?? ""}`}
+            className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${SEVERITY[f.severity]?.chip ?? ""}`}
             title={`${f.kind} · ${relativeTime(f.created_at)}`}
           >
             {f.kind === "distress" ? SEVERITY[f.severity]?.label ?? f.severity : f.kind}
@@ -84,7 +84,7 @@ export function AttentionQueue() {
     return (
       <div className="space-y-3">
         {[0, 1].map((i) => (
-          <Skeleton key={i} className="h-28 rounded-lg" />
+          <Skeleton key={i} className="h-28 rounded-card" />
         ))}
       </div>
     );
@@ -92,10 +92,12 @@ export function AttentionQueue() {
 
   if (!items || items.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-surface p-10 text-center">
-        <Check className="mx-auto size-6 text-success-text" />
-        <p className="mt-2 text-sm text-text">Nothing needs attention.</p>
-        <p className="mt-1 text-xs text-faint">
+      <div className="rounded-card border border-border bg-surface p-10 text-center">
+        <span className="mx-auto grid size-11 place-items-center rounded-[10px] bg-success-soft text-success">
+          <Check className="size-5" aria-hidden />
+        </span>
+        <p className="mt-3 text-sm font-bold text-text">Nothing needs attention.</p>
+        <p className="mt-1 text-xs font-medium text-faint">
           Conversations appear here when a customer sounds angry, under real pressure, or in
           distress. An empty queue is the normal state.
         </p>
@@ -111,27 +113,27 @@ export function AttentionQueue() {
         const signals = item.flags.flatMap((f) => f.signals).slice(0, 4);
         const lastCustomer = [...item.recent_messages].reverse().find((m) => m.role === "user");
         return (
-          <div key={item.id} className={`rounded-lg border p-4 ${meta.row}`}>
+          <div key={item.id} className={`rounded-card border p-4 ${meta.row}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Icon className={`size-4 ${item.attention_level === "crisis" ? "text-error-text" : "text-warn-text"}`} />
-                  <span className="font-medium text-text">
+                  <span className="font-bold text-text">
                     {item.contact?.display_name || item.channel_user_id || "Visitor"}
                   </span>
-                  <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${meta.chip}`}>
+                  <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${meta.chip}`}>
                     {meta.label}
                   </span>
                   {/* Never ambiguous who is replying to the customer right now. */}
                   {item.bot_still_answering ? (
                     <span
-                      className="inline-flex items-center gap-1 rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[11px] text-info-text"
+                      className="inline-flex items-center gap-1 rounded-md bg-ai-soft px-1.5 py-0.5 text-[11px] font-bold text-ai-text"
                       title="The bot has not been paused — it is still replying while you decide."
                     >
                       <Bot className="size-3" /> AI is still responding
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-surface-3 px-1.5 py-0.5 text-[11px] font-bold text-muted">
                       <UserCheck className="size-3" /> A human has taken over
                     </span>
                   )}

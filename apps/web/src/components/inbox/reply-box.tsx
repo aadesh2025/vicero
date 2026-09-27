@@ -132,11 +132,11 @@ export function ReplyBox({
                   insert(c.content);
                 }}
                 className={`flex w-full items-start gap-2 border-b border-border px-3 py-2 text-left last:border-0 ${
-                  i === selected ? "bg-surface-2" : ""
+                  i === selected ? "bg-ai-soft" : ""
                 }`}
               >
-                <code className="shrink-0 font-mono text-xs text-accent">/{c.shortcut}</code>
-                <span className="min-w-0 flex-1 truncate text-xs text-muted">{c.content}</span>
+                <code className="shrink-0 font-mono text-xs font-bold text-ai-text">/{c.shortcut}</code>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted">{c.content}</span>
               </button>
             </li>
           ))}
@@ -158,7 +158,7 @@ export function ReplyBox({
           aria-expanded={matches.length > 0}
           aria-controls="canned-response-list"
           autoComplete="off"
-          className="h-10 flex-1 rounded-md border border-border bg-surface-2 px-3 text-sm text-text placeholder:text-faint focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
+          className="h-[38px] flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-text placeholder:font-normal placeholder:text-faint focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
         />
         <Button type="submit" variant="primary" disabled={!text.trim() || doReply.isPending} aria-label="Send reply">
           {doReply.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
@@ -207,12 +207,12 @@ function TemplateComposer({
     <div className="border-t border-border p-3">
       <div
         role="status"
-        className="mb-3 flex items-start gap-2 rounded-md border border-warn/40 bg-warn/[0.08] p-2.5 text-xs text-text"
+        className="mb-3 flex items-start gap-2 rounded-lg bg-warn-soft p-2.5 text-xs font-medium text-text"
       >
         <AlertTriangle className="mt-px size-4 shrink-0 text-warn-text" aria-hidden />
         <div>
-          <p className="font-medium">The 24-hour reply window has closed.</p>
-          <p className="mt-0.5 text-muted">
+          <p className="font-extrabold">The 24-hour reply window has closed.</p>
+          <p className="mt-0.5 font-medium text-muted">
             WhatsApp only delivers free-form messages within 24 hours of the customer’s last
             message{closesAt ? ` (closed ${closesAtLabel(closesAt)})` : ""}. Send an approved
             template to re-open the conversation.
@@ -221,7 +221,7 @@ function TemplateComposer({
       </div>
 
       {templates.length === 0 ? (
-        <p className="text-xs text-muted">
+        <p className="text-xs font-medium text-muted">
           No approved templates on this channel yet. Register them in Meta Business Manager, then
           add their names to the channel’s config in the agent’s Channels tab.
         </p>
@@ -240,7 +240,7 @@ function TemplateComposer({
             id="wa-template"
             value={template}
             onChange={(e) => setTemplate(e.target.value)}
-            className="h-10 rounded-md border border-border bg-surface-2 px-2 text-sm text-text"
+            className="h-[38px] rounded-lg border border-border-strong bg-surface px-2 text-sm font-medium text-text"
           >
             {templates.map((t) => (
               <option key={t} value={t}>
@@ -253,7 +253,7 @@ function TemplateComposer({
             onChange={(e) => setParams(e.target.value)}
             placeholder="Template values, comma-separated"
             aria-label="Template values, comma-separated"
-            className="h-10 min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 text-sm text-text placeholder:text-faint focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
+            className="h-[38px] min-w-0 flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-text placeholder:font-normal placeholder:text-faint focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
           />
           <Button type="submit" variant="primary" disabled={!template || send.isPending}>
             {send.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

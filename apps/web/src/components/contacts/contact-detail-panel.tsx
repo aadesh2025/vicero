@@ -6,9 +6,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { ContactAvatar } from "@/components/inbox/contact-avatar";
-import { channelMeta } from "@/lib/channel-meta";
+import { ChannelText } from "@/components/shared/channel";
+import { StatusPill } from "@/components/shared/status-pill";
 import {
   addContactNote,
   getContact,
@@ -57,7 +57,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
     return (
       <aside
         aria-label="Contact details"
-        className="flex w-[360px] shrink-0 items-center justify-center border-l border-border"
+        className="flex w-[360px] shrink-0 items-center justify-center border-l border-border bg-surface"
       >
         <Loader2 className="size-5 animate-spin text-accent" />
       </aside>
@@ -71,7 +71,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
   return (
     <aside
       aria-label="Contact details"
-      className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-l border-border scroll-thin"
+      className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-l border-border bg-surface scroll-thin"
     >
       <div className="flex items-start gap-3 border-b border-border p-4">
         <ContactAvatar
@@ -80,22 +80,29 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
           avatarUrl={primary?.avatar_url ?? null}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-text">{name}</div>
-          <div className="text-xs text-faint">
-            {contact.channels.map((c) => channelMeta(c.channel).label).join(" · ") || "No channels yet"}
+          <div className="truncate text-sm font-bold text-text">{name}</div>
+          <div className="text-xs font-semibold text-faint">
+            {contact.channels.map((c) => c.channel).length > 0
+              ? contact.channels.map((c, i) => (
+                  <span key={c.id}>
+                    {i > 0 && " · "}
+                    <ChannelText channel={c.channel} className="font-semibold" />
+                  </span>
+                ))
+              : "No channels yet"}
           </div>
         </div>
         <button
           onClick={onClose}
           aria-label="Close contact details"
-          className="rounded-md p-1 text-faint hover:bg-surface-2 hover:text-text"
+          className="rounded-lg p-1 text-faint hover:bg-surface-2 hover:text-text"
         >
           <X className="size-4" />
         </button>
       </div>
 
       <section className="space-y-3 border-b border-border p-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-faint">About</h3>
+        <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">About</h3>
         <dl className="space-y-1.5 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Email</dt>
@@ -105,10 +112,10 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
             <dt className="text-muted">Phone</dt>
             <dd className="truncate text-text">{contact.phone || "—"}</dd>
           </div>
-          {/* Every handle this person has been recognised on. */}
+          {/* Every handle this person has been recognised on, in that channel's colour. */}
           {contact.channels.map((c) => (
-            <div key={c.id} className="flex justify-between gap-3">
-              <dt className="text-muted">{channelMeta(c.channel).label}</dt>
+            <div key={c.id} className="flex items-center justify-between gap-3">
+              <dt><ChannelText channel={c.channel} /></dt>
               <dd className="truncate font-mono text-xs text-text">{c.external_id}</dd>
             </div>
           ))}
@@ -120,16 +127,16 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
       </section>
 
       <section className="space-y-3 border-b border-border p-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-faint">Activity</h3>
+        <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">Activity</h3>
         <div>
-          <label htmlFor="lead-stage" className="mb-1 block text-xs text-muted">
+          <label htmlFor="lead-stage" className="mb-1 block text-xs font-semibold text-muted">
             Lead stage
           </label>
           <select
             id="lead-stage"
             value={contact.lead_stage ?? ""}
             onChange={(e) => patch.mutate({ lead_stage: e.target.value || null })}
-            className="h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm capitalize text-text"
+            className="h-[38px] w-full rounded-lg border border-border-strong bg-surface px-2 text-sm font-medium capitalize text-text"
           >
             <option value="">Not set</option>
             {LEAD_STAGES.map((s) => (
@@ -140,7 +147,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
           </select>
         </div>
         <div>
-          <label htmlFor="order-status" className="mb-1 block text-xs text-muted">
+          <label htmlFor="order-status" className="mb-1 block text-xs font-semibold text-muted">
             Order status
           </label>
           <div className="flex gap-2">
@@ -164,12 +171,12 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
       </section>
 
       <section className="space-y-3 border-b border-border p-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-faint">Labels</h3>
+        <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">Labels</h3>
         <div className="flex flex-wrap gap-1.5">
           {contact.labels.map((l) => (
             <span
               key={l}
-              className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-xs text-text"
+              className="flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-xs font-bold text-text"
             >
               {l}
               <button
@@ -181,7 +188,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
               </button>
             </span>
           ))}
-          {contact.labels.length === 0 && <span className="text-xs text-faint">No labels yet.</span>}
+          {contact.labels.length === 0 && <span className="text-xs font-medium text-faint">No labels yet.</span>}
         </div>
         <form
           onSubmit={(e) => {
@@ -206,15 +213,15 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
       </section>
 
       <section className="space-y-3 border-b border-border p-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-faint">Notes</h3>
+        <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">Notes</h3>
         <ol className="space-y-2">
           {contact.notes.map((n, i) => (
-            <li key={i} className="rounded-md border border-border bg-surface-2/50 p-2.5">
-              <p className="whitespace-pre-wrap text-sm text-text">{n.text}</p>
-              <p className="mt-1 text-[11px] text-faint">{relativeTime(n.at)}</p>
+            <li key={i} className="rounded-lg bg-surface-2 p-2.5">
+              <p className="whitespace-pre-wrap text-sm font-medium text-text">{n.text}</p>
+              <p className="mt-1 text-[11px] font-semibold text-faint">{relativeTime(n.at)}</p>
             </li>
           ))}
-          {contact.notes.length === 0 && <li className="text-xs text-faint">No notes yet.</li>}
+          {contact.notes.length === 0 && <li className="text-xs font-medium text-faint">No notes yet.</li>}
         </ol>
         <form
           onSubmit={(e) => {
@@ -229,7 +236,7 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
-            className="w-full rounded-md border border-border bg-surface-2 p-2 text-sm text-text placeholder:text-faint focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40"
+            className="w-full rounded-lg border border-border-strong bg-surface p-2 text-sm font-medium text-text placeholder:font-normal placeholder:text-faint focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
           />
           <Button type="submit" variant="outline" size="sm" disabled={!note.trim() || addNote.isPending}>
             {addNote.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
@@ -239,21 +246,19 @@ export function ContactDetailPanel({ contactId, onClose }: { contactId: string; 
       </section>
 
       <section className="space-y-2 p-4">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-faint">Conversations</h3>
-        {contact.conversations.length === 0 && <p className="text-xs text-faint">None yet.</p>}
+        <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">Conversations</h3>
+        {contact.conversations.length === 0 && <p className="text-xs font-medium text-faint">None yet.</p>}
         {contact.conversations.map((c) => (
           <Link
             key={c.id}
             href={`/inbox/${c.id}`}
-            className="block rounded-md border border-border bg-surface-2/50 p-2.5 transition-colors hover:border-border-strong"
+            className="block rounded-[13px] border border-border bg-surface p-2.5 transition-colors hover:border-border-strong hover:bg-surface-2"
           >
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm text-text">{c.title || "Conversation"}</span>
-              <Badge variant="default" className="ml-auto shrink-0">
-                {c.status}
-              </Badge>
+              <span className="truncate text-sm font-semibold text-text">{c.title || "Conversation"}</span>
+              <StatusPill status={c.status} className="ml-auto shrink-0" />
             </div>
-            <div className="text-[11px] text-faint">
+            <div className="text-[11px] font-semibold text-faint">
               {relativeTime(c.last_message_at ?? c.created_at)}
             </div>
           </Link>

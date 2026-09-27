@@ -1,7 +1,7 @@
 "use client";
 
 import { UserRound } from "lucide-react";
-import { channelMeta } from "@/lib/channel-meta";
+import { channelMeta, channelTone } from "@/lib/channel-meta";
 import { API_BASE } from "@/lib/api/config";
 
 /** Resolve a stored avatar path: platform CDNs give absolute URLs, we serve our own. */
@@ -26,6 +26,7 @@ export function ContactAvatar({
   size?: "sm" | "md";
 }) {
   const { Icon, label } = channelMeta(channel);
+  const tone = channelTone(channel);
   const src = avatarSrc(avatarUrl);
   const box = size === "sm" ? "size-8" : "size-10";
   const badge = size === "sm" ? "size-3.5" : "size-4";
@@ -43,7 +44,8 @@ export function ContactAvatar({
       </span>
       <span
         title={label}
-        className={`absolute -bottom-0.5 -right-0.5 grid ${badge} place-items-center rounded-full border border-surface bg-surface-2 text-accent`}
+        className={`absolute -bottom-0.5 -right-0.5 grid ${badge} place-items-center rounded-full border-2 border-surface text-white`}
+        style={{ backgroundColor: tone.dot, backgroundImage: tone.gradient }}
       >
         <Icon className={badgeIcon} aria-hidden />
       </span>

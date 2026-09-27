@@ -48,7 +48,7 @@ export default function KnowledgePage() {
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[164px] rounded-lg" />
+            <Skeleton key={i} className="h-[164px] rounded-card" />
           ))}
         </div>
       ) : (
@@ -57,27 +57,26 @@ export default function KnowledgePage() {
             <Link
               key={kb.id}
               href={`/knowledge/${kb.id}`}
-              className="group relative overflow-hidden rounded-lg border border-border bg-surface p-5 transition-colors hover:border-border-strong"
+              className="group relative overflow-hidden rounded-card border border-border bg-surface p-5 shadow-card transition-colors hover:border-border-strong"
             >
-              <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="flex items-start justify-between">
-                <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2 text-accent">
+                <span className="grid size-11 place-items-center rounded-[10px] bg-info-soft text-info">
                   <BookOpen className="size-5" />
                 </span>
-                <span className="text-xs text-faint">{relativeTime(kb.updated_at)}</span>
+                <span className="text-xs font-semibold text-faint">{relativeTime(kb.updated_at)}</span>
               </div>
-              <h3 className="mt-4 font-display text-lg font-semibold text-text">{kb.name}</h3>
+              <h3 className="mt-4 font-display text-lg font-extrabold text-text">{kb.name}</h3>
               {kb.description && (
-                <p className="mt-1 line-clamp-2 text-sm text-muted">{kb.description}</p>
+                <p className="mt-1 line-clamp-2 text-sm font-medium text-muted">{kb.description}</p>
               )}
               <div className="mt-4 flex items-center gap-5 border-t border-border pt-4 text-sm">
                 <div>
-                  <div className="font-semibold text-text">{kb.document_count}</div>
-                  <div className="text-[11px] text-faint">documents</div>
+                  <div className="font-extrabold tabular-nums text-text">{kb.document_count}</div>
+                  <div className="text-[11px] font-semibold text-faint">documents</div>
                 </div>
                 <div>
-                  <div className="font-mono text-xs text-muted">{kb.embedding_model}</div>
-                  <div className="text-[11px] text-faint">embeddings</div>
+                  <div className="font-mono text-xs font-semibold text-muted">{kb.embedding_model}</div>
+                  <div className="text-[11px] font-semibold text-faint">embeddings</div>
                 </div>
               </div>
             </Link>
@@ -85,12 +84,12 @@ export default function KnowledgePage() {
 
           <button
             onClick={() => setCreating(true)}
-            className="flex min-h-[164px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong bg-surface/40 text-muted transition-colors hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent"
+            className="flex min-h-[164px] flex-col items-center justify-center gap-3 rounded-card border border-dashed border-border-strong text-muted transition-colors hover:border-info/40 hover:bg-info-soft hover:text-info"
           >
-            <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2">
+            <span className="grid size-11 place-items-center rounded-[10px] bg-info-soft text-info">
               <Database className="size-5" />
             </span>
-            <span className="text-sm font-medium">Create a knowledge base</span>
+            <span className="text-sm font-bold">Create a knowledge base</span>
           </button>
         </div>
       )}

@@ -358,7 +358,7 @@ function CanvasInner({ workflow, agentId }: { workflow: ApiWorkflow; agentId: st
           elementsSelectable={canWrite}
           fitView
         >
-          <Background gap={16} />
+          <Background gap={16} color="rgb(var(--chart-grid))" />
           <Controls />
           <MiniMap pannable zoomable className="!bg-surface" />
         </ReactFlow>

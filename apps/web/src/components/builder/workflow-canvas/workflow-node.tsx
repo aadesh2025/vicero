@@ -32,23 +32,28 @@ export function WorkflowNode({ data, selected }: NodeProps) {
           ? "ring-2 ring-accent/70 animate-pulse"
           : "";
 
+  // meta.color is a text/border/bg triple ("text-X border-X/40 bg-X/10"); the text class is the
+  // one reused for the top bar and the icon, so the node reads by colour at a glance without a
+  // tinted border fighting the card's own border on every side.
+  const textClass = meta?.color?.split(" ")[0] ?? "text-muted";
+
   return (
     <div
       className={cn(
-        "min-w-[180px] rounded-lg border bg-surface px-3 py-2.5 shadow-sm transition-shadow",
-        meta?.color ?? "border-border text-text",
-        selected && "shadow-md ring-1 ring-accent/50",
+        "relative min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface px-3 py-2.5 shadow-card transition-shadow",
+        selected && "shadow-pop ring-2 ring-ring",
         runRing,
       )}
     >
+      <span className={cn("absolute inset-x-0 top-0 h-[3px] bg-current", textClass)} aria-hidden />
       {!isStart && (
         <Handle type="target" position={Position.Top} className="!size-2.5 !border-border !bg-surface" />
       )}
-      <div className="flex items-center gap-2">
+      <div className={cn("flex items-center gap-2", textClass)}>
         <Icon className="size-4 shrink-0" />
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold">{meta?.label ?? d.nodeType}</p>
-          {d.label && <p className="truncate text-[11px] text-muted">{d.label}</p>}
+          <p className="truncate text-xs font-bold">{meta?.label ?? d.nodeType}</p>
+          {d.label && <p className="truncate text-[11px] font-medium text-muted">{d.label}</p>}
         </div>
         {d.runStatus === "completed" && <CheckCircle2 className="ml-auto size-3.5 shrink-0 text-success-text" />}
         {d.runStatus === "failed" && <AlertCircle className="ml-auto size-3.5 shrink-0 text-error-text" />}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CornerDownLeft, FileText, Headphones, RotateCcw, Sparkles, Wrench } from "lucide-react";
+import { Bot, CornerDownLeft, FileText, Headphones, RotateCcw, Sparkles, User, Wrench } from "lucide-react";
 import { useBuilder } from "@/lib/store/builder";
 import { useSession } from "@/lib/store/session";
 import { playgroundStream } from "@/lib/api/agents";
@@ -119,14 +119,16 @@ export function Playground() {
   const modelLabel = `${providerLabel} · ${draft.model.model}`;
 
   return (
-    <div className="flex h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="flex h-[calc(100vh-8.5rem)] flex-col overflow-hidden rounded-card border border-border bg-surface">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <Sparkles className="size-4 text-accent" />
-        <span className="font-display text-sm font-semibold text-text">Playground</span>
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-faint">draft</span>
+        <span className="grid size-7 place-items-center rounded-lg bg-ai-soft text-ai">
+          <Sparkles className="size-4" />
+        </span>
+        <span className="font-display text-sm font-extrabold text-text">Playground</span>
+        <span className="rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[10px] font-bold text-faint">draft</span>
         <button
           onClick={reset}
-          className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-text"
+          className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-muted transition-colors hover:bg-surface-2 hover:text-text"
         >
           <RotateCcw className="size-3.5" /> Reset
         </button>
@@ -135,42 +137,50 @@ export function Playground() {
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4 scroll-thin">
         {messages.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-accent-strong px-3.5 py-2 text-sm text-on-accent">
+            <div key={m.id} className="flex justify-end gap-2">
+              <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-surface-2 px-3.5 py-2 text-sm font-medium text-text">
                 {m.text}
               </div>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-3 text-faint">
+                <User className="size-3.5" />
+              </span>
             </div>
           ) : (
-            <div key={m.id} className="flex flex-col gap-1.5">
-              {m.handoff && (
-                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent">
-                  <Headphones className="size-3" /> Handed off to a human — status set to &quot;handoff&quot;
+            <div key={m.id} className="flex items-start gap-2">
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-ai-soft text-ai">
+                <Bot className="size-3.5" />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                {m.handoff && (
+                  <div className="inline-flex w-fit items-center gap-1.5 rounded-md bg-warn-soft px-2 py-1 text-[11px] font-bold text-warn-text">
+                    <Headphones className="size-3" /> Handed off to a human — status set to &quot;handoff&quot;
+                  </div>
+                )}
+                {m.tool && (
+                  <div className="inline-flex w-fit items-center gap-1.5 rounded-md bg-surface-3 px-2 py-1 font-mono text-[11px] font-semibold text-muted">
+                    <Wrench className="size-3" />
+                    called {m.tool}
+                  </div>
+                )}
+                <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-ai-soft px-3.5 py-2 text-sm font-medium leading-relaxed text-text">
+                  {m.text}
+                  {m.streaming && (
+                    <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-caret-blink bg-ai" />
+                  )}
                 </div>
-              )}
-              {m.tool && (
-                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] text-muted">
-                  <Wrench className="size-3 text-accent" />
-                  called <span className="font-mono text-accent">{m.tool}</span>
-                </div>
-              )}
-              <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-border bg-surface-2 px-3.5 py-2 text-sm leading-relaxed text-text">
-                {m.text}
-                {m.streaming && (
-                  <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 animate-caret-blink bg-accent" />
+                {m.citation && !m.streaming && (
+                  <div className="inline-flex w-fit items-center gap-1.5 rounded-md bg-info-soft px-2 py-1 text-[11px] font-bold text-info-text">
+                    <FileText className="size-3" /> {m.citation}
+                  </div>
                 )}
               </div>
-              {m.citation && !m.streaming && (
-                <div className="inline-flex w-fit items-center gap-1.5 rounded-md border border-accent/25 bg-accent/[0.07] px-2 py-1 text-[11px] text-accent">
-                  <FileText className="size-3" /> {m.citation}
-                </div>
-              )}
             </div>
           ),
         )}
       </div>
 
       <div className="border-t border-border p-3">
-        <div className="flex items-end gap-2 rounded-lg border border-border bg-surface-2 p-2 focus-within:border-accent/50">
+        <div className="flex items-end gap-2 rounded-lg border border-border-strong bg-surface p-2 focus-within:border-accent">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -182,21 +192,21 @@ export function Playground() {
             }}
             rows={1}
             placeholder="Message the draft agent…"
-            className="max-h-28 flex-1 resize-none bg-transparent px-1 py-1.5 text-sm text-text placeholder:text-faint focus:outline-none"
+            className="max-h-28 flex-1 resize-none bg-transparent px-1 py-1.5 text-sm font-medium text-text placeholder:font-normal placeholder:text-faint focus:outline-none"
           />
           <button
             onClick={send}
             disabled={!input.trim() || busy}
             className={cn(
-              "grid size-8 shrink-0 place-items-center rounded-md transition-colors",
-              input.trim() && !busy ? "bg-accent-strong text-on-accent hover:bg-accent" : "bg-surface-3 text-faint",
+              "grid size-8 shrink-0 place-items-center rounded-lg transition-colors",
+              input.trim() && !busy ? "bg-ai text-white hover:bg-ai/90" : "bg-surface-3 text-faint",
             )}
             aria-label="Send message"
           >
             <CornerDownLeft className="size-4" />
           </button>
         </div>
-        <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] text-faint">
+        <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] font-semibold text-faint">
           <span className="truncate font-mono">{modelLabel}</span>
           <span>temp {draft.model.temperature.toFixed(2)}</span>
         </div>

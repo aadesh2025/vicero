@@ -148,7 +148,7 @@ export default function AgentBuilderPage({ params }: { params: Promise<{ id: str
       <div className={`grid gap-6 pt-6 ${FULL_WIDTH_TABS.includes(tab) ? "" : "xl:grid-cols-3"}`}>
         <div className={FULL_WIDTH_TABS.includes(tab) ? "min-w-0" : "min-w-0 xl:col-span-2"}>
           <Tabs value={tab} onValueChange={onTabChange}>
-            <TabsList className="mb-5 rounded-lg border border-border bg-surface p-1">
+            <TabsList className="mb-5">
               {TABS.map((t) => (
                 <TabsTrigger key={t} value={t} className="capitalize">
                   {t}
@@ -188,7 +188,7 @@ export default function AgentBuilderPage({ params }: { params: Promise<{ id: str
 
         {!FULL_WIDTH_TABS.includes(tab) && (
           <div className="xl:col-span-1">
-            <div className="sticky top-32">
+            <div className="sticky top-[136px]">
               <Playground />
             </div>
           </div>

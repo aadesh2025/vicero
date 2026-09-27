@@ -7,14 +7,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Bot, Plus } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/components/shared/status-pill";
 import { NewAgentDialog, type NewAgentSubmit } from "@/components/agents/new-agent-dialog";
 import { createAgent, listAgents } from "@/lib/api/agents";
 import { LockedButton } from "@/components/plan/locked";
 import { usePlan } from "@/components/plan/use-plan";
 import { useSession } from "@/lib/store/session";
-import { apiAgentStatusMeta as statusMeta } from "@/lib/display";
 import { relativeTime } from "@/lib/utils";
 
 export default function AgentsPage() {
@@ -57,49 +56,42 @@ export default function AgentsPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-[180px] rounded-lg" />
+            <Skeleton key={i} className="h-[180px] rounded-card" />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {(agents ?? []).map((agent) => {
-            const status = statusMeta[agent.status];
-            return (
-              <Link
-                key={agent.id}
-                href={`/agents/${agent.id}`}
-                className="group relative overflow-hidden rounded-lg border border-border bg-surface p-5 transition-colors hover:border-border-strong"
-              >
-                <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                <div className="flex items-start justify-between">
-                  <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2 font-display text-lg font-semibold text-muted">
-                    {agent.name[0]?.toUpperCase()}
-                  </span>
-                  <Badge variant={status?.variant ?? "default"}>
-                    {agent.status === "published" && <span className="size-1.5 rounded-full bg-success" />}
-                    {status?.label ?? agent.status}
-                  </Badge>
-                </div>
-                <h3 className="mt-4 font-display text-lg font-semibold text-text">{agent.name}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-muted">
-                  {agent.description || "No description yet."}
-                </p>
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-faint">
-                  <span className="font-mono">v{agent.draft_version} draft</span>
-                  <span>updated {relativeTime(agent.updated_at)}</span>
-                </div>
-              </Link>
-            );
-          })}
+          {(agents ?? []).map((agent) => (
+            <Link
+              key={agent.id}
+              href={`/agents/${agent.id}`}
+              className="group relative overflow-hidden rounded-card border border-border bg-surface p-5 shadow-card transition-colors hover:border-border-strong"
+            >
+              <div className="flex items-start justify-between">
+                <span className="grid size-11 place-items-center rounded-[10px] bg-ai-soft font-display text-lg font-extrabold text-ai-text">
+                  {agent.name[0]?.toUpperCase()}
+                </span>
+                <StatusPill status={agent.status} />
+              </div>
+              <h3 className="mt-4 font-display text-lg font-extrabold text-text">{agent.name}</h3>
+              <p className="mt-1 line-clamp-2 text-sm font-medium text-muted">
+                {agent.description || "No description yet."}
+              </p>
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs font-semibold text-faint">
+                <span className="font-mono">v{agent.draft_version} draft</span>
+                <span>updated {relativeTime(agent.updated_at)}</span>
+              </div>
+            </Link>
+          ))}
 
           <button
             onClick={() => setCreating(true)}
-            className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-strong bg-surface/40 text-muted transition-colors hover:border-accent/40 hover:bg-accent/[0.03] hover:text-accent"
+            className="flex min-h-[180px] flex-col items-center justify-center gap-3 rounded-card border border-dashed border-border-strong text-muted transition-colors hover:border-ai/40 hover:bg-ai-soft hover:text-ai-text"
           >
-            <span className="grid size-11 place-items-center rounded-lg border border-border bg-surface-2">
+            <span className="grid size-11 place-items-center rounded-[10px] bg-ai-soft text-ai">
               <Bot className="size-5" />
             </span>
-            <span className="text-sm font-medium">Create a new agent</span>
+            <span className="text-sm font-bold">Create a new agent</span>
           </button>
         </div>
       )}

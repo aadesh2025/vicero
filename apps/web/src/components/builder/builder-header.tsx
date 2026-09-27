@@ -5,10 +5,10 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Check, Clock, Cloud, Loader2, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/shared/status-pill";
 import { useBuilder } from "@/lib/store/builder";
 import { publishVersion } from "@/lib/api/agents";
 import { useCan } from "@/lib/rbac";
-import { agentStatusMeta } from "@/lib/display";
 import { relativeTime } from "@/lib/utils";
 
 export function BuilderHeader() {
@@ -27,7 +27,6 @@ export function BuilderHeader() {
   const [publishing, setPublishing] = useState(false);
   const canPublish = useCan("agents:publish");
   if (!draft) return null;
-  const status = agentStatusMeta[draft.status];
 
   async function onPublish() {
     if (!agentId || versionNumber === null) return;
@@ -41,32 +40,29 @@ export function BuilderHeader() {
   }
 
   return (
-    <div className="sticky top-14 z-20 -mx-4 border-b border-border bg-bg/85 px-4 py-3 backdrop-blur-md md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky top-16 z-20 -mx-4 border-b border-border bg-bg/85 px-4 py-3 backdrop-blur-md md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/agents"
-          className="grid size-8 place-items-center rounded-md border border-border bg-surface text-muted transition-colors hover:text-text"
+          className="grid size-8 place-items-center rounded-lg border border-border bg-surface text-muted transition-colors hover:text-text"
           aria-label="Back to agents"
         >
           <ArrowLeft className="size-4" />
         </Link>
-        <span className="grid size-9 place-items-center rounded-md bg-accent-strong font-display text-sm font-bold text-on-accent">
+        <span className="grid size-9 place-items-center rounded-[10px] bg-ai-soft font-display text-sm font-extrabold text-ai-text">
           {draft.name[0]}
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="truncate font-display text-lg font-semibold text-text">{draft.name}</h1>
-            <Badge variant={status.variant}>
-              {draft.status === "live" && <span className="size-1.5 rounded-full bg-success" />}
-              {status.label}
-            </Badge>
+            <h1 className="truncate font-display text-lg font-extrabold text-text">{draft.name}</h1>
+            <StatusPill status={draft.status} />
           </div>
-          <p className="font-mono text-[11px] text-faint">{draft.id}</p>
+          <p className="font-mono text-[11px] font-semibold text-faint">{draft.id}</p>
         </div>
 
         <div className="ml-auto flex items-center gap-3">
           {branchedToDraft !== null && (
-            <Badge variant="accent" title="Your edit created a new editable draft; publish it when ready.">
+            <Badge variant="info" title="Your edit created a new editable draft; publish it when ready.">
               Editing new draft v{branchedToDraft}
             </Badge>
           )}
@@ -108,7 +104,7 @@ function SaveIndicator({
 }) {
   if (saving) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-muted">
+      <span className="flex items-center gap-1.5 text-xs font-semibold text-muted">
         <Loader2 className="size-3.5 animate-spin text-accent" /> Saving…
       </span>
     );
@@ -117,20 +113,20 @@ function SaveIndicator({
   // the more useful of the two states.
   if (saveError) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-error-text" title={saveError} role="status">
+      <span className="flex items-center gap-1.5 text-xs font-bold text-error-text" title={saveError} role="status">
         <AlertTriangle className="size-3.5" /> Couldn&apos;t save
       </span>
     );
   }
   if (dirty) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-warn-text">
+      <span className="flex items-center gap-1.5 text-xs font-bold text-warn-text">
         <Cloud className="size-3.5" /> Unsaved changes
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1.5 text-xs text-faint">
+    <span className="flex items-center gap-1.5 text-xs font-semibold text-faint">
       <Check className="size-3.5 text-success-text" />
       Saved{lastSavedAt ? ` ${relativeTime(new Date(lastSavedAt).toISOString())}` : ""}
     </span>

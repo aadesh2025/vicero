@@ -42,7 +42,7 @@ import { relativeTime } from "@/lib/utils";
 const statusMeta: Record<ApiDocStatus, { label: string; variant: "success" | "info" | "error" | "default" }> = {
   ready: { label: "Ready", variant: "success" },
   processing: { label: "Processing", variant: "info" },
-  queued: { label: "Queued", variant: "default" },
+  queued: { label: "Queued", variant: "info" },
   failed: { label: "Failed", variant: "error" },
 };
 

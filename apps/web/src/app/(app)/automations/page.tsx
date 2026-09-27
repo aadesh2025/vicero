@@ -6,6 +6,7 @@ import { AlertCircle, ExternalLink, Loader2, Webhook, Workflow as WorkflowIcon }
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/shared/status-pill";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -52,11 +53,11 @@ export default function AutomationsPage() {
       </LockedPanel>
 
       {!n8nAllowed ? null : unavailable ? (
-        <div className="flex items-center gap-3 rounded-lg border border-warn/25 bg-warn/[0.05] px-4 py-3 text-sm">
+        <div className="flex items-center gap-3 rounded-card bg-warn-soft px-4 py-3 text-sm">
           <AlertCircle className="size-4 shrink-0 text-warn-text" />
           <div className="flex-1">
-            <span className="font-medium text-text">n8n not reachable.</span>{" "}
-            <span className="text-muted">
+            <span className="font-bold text-text">n8n not reachable.</span>{" "}
+            <span className="font-medium text-muted">
               {unavailable.code === "n8n.unconfigured"
                 ? "Set N8N_API_KEY in your environment."
                 : unavailable.message}
@@ -65,13 +66,18 @@ export default function AutomationsPage() {
           <Badge variant="warn">Offline</Badge>
         </div>
       ) : (
-        <div className="flex items-center gap-3 rounded-lg border border-success/25 bg-success/[0.05] px-4 py-3 text-sm">
-          <span className="grid size-8 place-items-center rounded-md border border-success/30 bg-success/10 text-success-text">
+        <div className="flex items-center gap-3 rounded-card bg-success-soft px-4 py-3 text-sm">
+          {/* n8n's own brand colour, like the Google/Facebook marks on the auth pages — a
+              third-party tool identity, not app UI. */}
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-[10px] text-white"
+            style={{ backgroundColor: "#EA4B71" }}
+          >
             <WorkflowIcon className="size-4" />
           </span>
           <div className="flex-1">
-            <span className="font-medium text-text">n8n connected</span>
-            <span className="text-muted">
+            <span className="font-bold text-text">n8n connected</span>
+            <span className="font-medium text-muted">
               {" "}
               · {N8N_URL} · {workflows?.length ?? 0} workflows
             </span>
@@ -82,7 +88,7 @@ export default function AutomationsPage() {
         </div>
       )}
 
-      <div className={`overflow-hidden rounded-lg border border-border bg-surface ${n8nAllowed ? "" : "hidden"}`}>
+      <div className={`overflow-hidden rounded-card border border-border bg-surface ${n8nAllowed ? "" : "hidden"}`}>
         {isLoading ? (
           <div className="space-y-2 p-5">
             <Skeleton className="h-12 w-full" />
@@ -91,17 +97,17 @@ export default function AutomationsPage() {
         ) : (
           <ul className="divide-y divide-border">
             {(workflows ?? []).map((wf) => (
-              <li key={wf.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-2/40">
-                <span className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-surface-2 text-accent">
+              <li key={wf.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-surface-2">
+                <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-info-soft text-info">
                   <Webhook className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-medium text-text">{wf.name}</span>
-                    <Badge variant={wf.active ? "success" : "default"}>{wf.active ? "Active" : "Inactive"}</Badge>
+                    <span className="truncate font-bold text-text">{wf.name}</span>
+                    <StatusPill status={wf.active ? "active" : "disabled"}>{wf.active ? "Active" : "Inactive"}</StatusPill>
                     {!wf.webhook_url && <Badge variant="warn">no webhook</Badge>}
                   </div>
-                  <div className="mt-0.5 truncate font-mono text-xs text-faint">
+                  <div className="mt-0.5 truncate font-mono text-xs font-semibold text-faint">
                     {wf.webhook_url ?? "add a Webhook trigger node to bind this workflow"}
                   </div>
                 </div>
@@ -116,7 +122,7 @@ export default function AutomationsPage() {
               </li>
             ))}
             {(workflows ?? []).length === 0 && !unavailable && (
-              <li className="px-5 py-10 text-center text-sm text-muted">
+              <li className="px-5 py-10 text-center text-sm font-medium text-muted">
                 No workflows in n8n yet. Import one from <span className="font-mono">infra/n8n/</span>.
               </li>
             )}
@@ -180,15 +186,15 @@ function BindDialog({ workflow, onClose }: { workflow: ApiN8nWorkflow | null; on
           className="space-y-3"
         >
           <div>
-            <label className="mb-1 block text-xs text-muted">Tool name (the model calls this)</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">Tool name (the model calls this)</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="create_ticket" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted">Agent</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">Agent</label>
             <select
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
-              className="h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-text"
+              className="h-[38px] w-full rounded-lg border border-border-strong bg-surface px-2 text-sm font-medium text-text"
             >
               <option value="">Select an agent…</option>
               {(agents ?? []).map((a) => (
@@ -199,11 +205,11 @@ function BindDialog({ workflow, onClose }: { workflow: ApiN8nWorkflow | null; on
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted">Mode</label>
+            <label className="mb-1 block text-xs font-semibold text-muted">Mode</label>
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as "sync" | "async")}
-              className="h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-text"
+              className="h-[38px] w-full rounded-lg border border-border-strong bg-surface px-2 text-sm font-medium text-text"
             >
               <option value="sync">sync — wait for Respond to Webhook</option>
               <option value="async">async — resolve later via callback</option>

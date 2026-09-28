@@ -588,7 +588,7 @@ async def timeseries(
         b[4] += cost
 
     points = [
-        schemas.TimeseriesPoint(bucket_start=key, value=_metric_value(metric, tuple(b)))
+        schemas.TimeseriesPoint(bucket_start=key, value=_metric_value(metric, (b[0], b[1], b[2], b[3], b[4])))
         for key, b in sorted(buckets.items())
     ]
 

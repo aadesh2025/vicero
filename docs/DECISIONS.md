@@ -18,6 +18,28 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-103: Admin roster "near limit" warning threshold — 90% of the effective cap
+- **Date:** 2026-09-28
+- **Status:** accepted
+- **Context:** docs/22 Phase A2's admin `GET /orgs` needed a `?status=near_limit` filter (a
+  warning chip distinct from `at_limit`, so staff can reach out *before* a client's bot goes
+  silent) but docs/22 never pins a number for "near" — it names the filter, not the threshold.
+- **Decision:** `_NEAR_LIMIT_RATIO = 0.9` in `app/modules/admin/service.py`: an org counts as
+  `near_limit` once `messages_used >= 0.9 * effective_max_messages` (and hasn't hit the cap
+  outright, which is `at_limit` instead). Checked against `effective_max_messages` — the plan
+  cap plus any packs bought this period — never the raw plan cap, same rule as everywhere else
+  in this phase. A companion constant, `_EXPIRING_SOON_DAYS = 7`, decides the sibling
+  `?status=expiring` filter the same way (unpinned by docs/22, decided here): a plan counts as
+  expiring once `plan_expires_at` is within 7 days.
+- **Alternatives considered:** A configurable/env-driven threshold — rejected as premature; this
+  is a display filter in a staff console, not a customer-facing enforcement rule, so a hardcoded
+  constant that's easy to find and change later is simpler than a setting nobody would tune
+  without reading the code anyway.
+- **Consequences:** Purely additive to the admin roster's filtering — enforcement itself
+  (`bot_replies`, `messages_remaining` in `app/core/plans.py`) is untouched and still keys off
+  `effective_max_messages` reaching exactly 100%. If 90%/7 days turn out to be the wrong call
+  operationally, change the two constants; nothing else depends on their exact values.
+
 ### ADR-102: Paid-plan billing period, payment ledger and storage accounting (migration 0029, docs/22 Phase A1)
 - **Date:** 2026-09-28
 - **Status:** accepted

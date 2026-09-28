@@ -41,6 +41,29 @@ class OrgAdminOut(BaseModel):
     created_at: dt.datetime
     deleted: bool
 
+    # ── billing (docs/22 §8.2) ────────────────────────────────────────────────
+    plan: str
+    #: The computed status `get_entitlements()` returns — trial | trial_expired | legacy |
+    #: starter | pro | business | plan_expired. Never stored; read fresh every time.
+    status: str
+    plan_source: str
+    plan_expires_at: dt.datetime | None = None
+    plan_note: str | None = None
+    messages_used: int
+    #: `None` = unlimited (legacy). Already includes any packs bought this period
+    #: (`Entitlements.effective_max_messages`) — never the raw plan cap.
+    messages_limit: int | None = None
+    unanswered_messages: int = 0
+    storage_bytes_used: int = 0
+    #: `None` = unlimited (legacy).
+    storage_bytes_limit: int | None = None
+    #: The most recent billing cycle's computed state — paid | pending | overdue | waived.
+    #: `None` when the org has never had a billing cycle (trial, legacy, or never billed).
+    payment_state: str | None = None
+    #: The email on the org's `owner` membership. `None` is a data problem (every org should
+    #: have exactly one), surfaced rather than hidden behind an empty string.
+    owner_email: str | None = None
+
 
 class UserMembershipOut(BaseModel):
     organization_id: uuid.UUID
@@ -169,3 +192,101 @@ class FeatureFlagOut(BaseModel):
 class FeatureFlagUpdate(BaseModel):
     enabled: bool
     description: str | None = None
+
+
+# ── billing: grant / revoke / packs (docs/22 §5, §8.2) ──────────────────────────
+class PlanGrantOut(BaseModel):
+    """One row of billing evidence — `plan_grants` (docs/22 §5)."""
+
+    id: uuid.UUID
+    action: str
+    from_plan: str | None = None
+    to_plan: str | None = None
+    expires_at: dt.datetime | None = None
+    extra_messages: int | None = None
+    amount_usd_cents: int | None = None
+    note: str | None = None
+    actor_email: str | None = None
+    invoiced: bool = False
+    created_at: dt.datetime
+
+
+class BillingCycleOut(BaseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    organization_name: str | None = None
+    plan: str
+    period_start: dt.datetime
+    period_end: dt.datetime
+    amount_usd_cents: int
+    #: The raw stored value — pending | paid | waived.
+    status: str
+    #: The **computed** value `cycles.payment_state()` returns — adds `overdue` when a
+    #: `pending` cycle's `period_end` has passed. This is what the admin panel's filters and
+    #: collections list actually key off.
+    payment_state: str
+    paid_at: dt.datetime | None = None
+    method: str | None = None
+    reference: str | None = None
+    note: str | None = None
+    created_at: dt.datetime
+
+
+class OrgAdminDetailOut(OrgAdminOut):
+    """`OrgAdminOut` plus the billing history (docs/22 §8.2)."""
+
+    recent_grants: list[PlanGrantOut] = []
+    billing_cycles: list[BillingCycleOut] = []
+
+
+class GrantPlanIn(BaseModel):
+    plan: str
+    #: `None` = no expiry (the operator's own workspaces, demos — docs/22 §16.5).
+    expires_at: dt.datetime | None = None
+    note: str
+    #: The normal case: the client already paid, so the opened cycle is `paid`, not `pending`.
+    payment_received: bool = False
+    method: str | None = None
+    reference: str | None = None
+
+
+class RevokePlanIn(BaseModel):
+    note: str
+
+
+class AddPacksIn(BaseModel):
+    #: Number of packs, never a message count — the server computes messages and price from
+    #: the org's *current* plan (docs/22 §8.2 rule 6). A typed positive int, not "a number of
+    #: messages", so the client can never invent its own price.
+    packs: int
+    note: str
+
+
+class MarkCyclePaidIn(BaseModel):
+    method: str
+    reference: str | None = None
+    note: str | None = None
+    #: "Mark paid & renew" — also extends `plan_expires_at` by 30 days and opens the next
+    #: cycle as `pending`, in one transaction (docs/22 §5.1).
+    renew: bool = False
+
+
+class WaiveCycleIn(BaseModel):
+    note: str
+
+
+class PackOut(BaseModel):
+    """One `pack_added` grant, for the admin panel's Uninvoiced packs reconciliation view."""
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    organization_name: str | None = None
+    extra_messages: int | None = None
+    amount_usd_cents: int | None = None
+    note: str | None = None
+    invoiced: bool
+    created_at: dt.datetime
+
+
+class PackInvoicedIn(BaseModel):
+    invoiced: bool

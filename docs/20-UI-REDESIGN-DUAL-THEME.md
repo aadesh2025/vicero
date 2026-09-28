@@ -81,44 +81,47 @@ Write every value as an **RGB triplet** in `globals.css` (existing convention: `
 
 ### 4.1 Base (surfaces and text)
 
+Dark mode is **pure neutral black** — every base value below is R=G=B, no navy/blue tint
+(2026-09-28 feedback, matching `designreference/UI_resign.jfif`'s dark dashboard exactly).
+
 | Token | Light | Dark | Used for |
 |---|---|---|---|
-| `--bg` | `#F7F8FC` | `#0B0D10` | App background |
-| `--surface` | `#FFFFFF` | `#15191F` | Cards, sidebar, topbar, dialogs |
-| `--surface-2` | `#F8FAFC` | `#1B2028` | Hover, table zebra, inset panels |
-| `--surface-3` | `#F1F5F9` | `#222831` | Deep inset, segmented-control track, progress track |
-| `--border` | `#E5E7EB` | `#272D36` | Card borders, dividers |
-| `--border-strong` | `#D1D5DB` | `#343B46` | Inputs, focused outlines (non-ring) |
-| `--text` | `#111827` | `#F1F5F9` | Headings and body |
-| `--muted` | `#475569` | `#CBD5E1` | Secondary text, labels, nav items |
-| `--faint` | `#64748B` | `#94A3B8` | Captions, timestamps, placeholders (AA on surface) |
-| `--sidebar` (new) | `#FFFFFF` | `#0E1116` | Sidebar and AI rail background |
+| `--bg` | `#F7F8FC` | `#000000` | App background |
+| `--surface` | `#FFFFFF` | `#111111` | Cards, sidebar, topbar, dialogs |
+| `--surface-2` | `#F8FAFC` | `#1A1A1A` | Hover, table zebra, inset panels |
+| `--surface-3` | `#F1F5F9` | `#222222` | Deep inset, segmented-control track, progress track |
+| `--border` | `#E5E7EB` | `#262626` | Card borders, dividers |
+| `--border-strong` | `#D1D5DB` | `#333333` | Inputs, focused outlines (non-ring) |
+| `--text` | `#111827` | `#F5F5F5` | Headings and body |
+| `--muted` | `#475569` | `#D4D4D4` | Secondary text, labels, nav items |
+| `--faint` | `#5B6B82` (darker than the original `#64748B` — that cleared plain `surface` but not `surface-3`/`bg`, per the R8 axe pass) | `#A3A3A3` | Captions, timestamps, placeholders (AA everywhere it's used) |
+| `--sidebar` (new) | `#FFFFFF` | `#0A0A0A` | Sidebar and AI rail background |
 
 ### 4.2 Primary (was grey or ember; now blue in both themes)
 
 | Token | Light | Dark | Notes |
 |---|---|---|---|
 | `--accent` | `#2563EB` | `#60A5FA` | Links, active nav text, focus, chart primary line |
-| `--accent-strong` | `#2563EB` | `#3B82F6` | **Filled** primary buttons (white text passes AA in both) |
+| `--accent-strong` | `#2563EB` | `#2563EB` (not `#3B82F6` — see below) | **Filled** primary buttons |
 | `--accent-2` | `#1D4ED8` | `#93C5FD` | Hover and pressed |
-| `--accent-soft` | `#EFF6FF` | `#202D3E` | Active nav background, info pill background, selected rows |
+| `--accent-soft` | `#EFF6FF` | `#1C2632` | Active nav background, info pill background, selected rows |
 | `--on-accent` | `#FFFFFF` | `#FFFFFF` | Text on filled primary |
 | `--ring` | `#2563EB` | `#60A5FA` | Focus ring |
 
 > ⚠️ **`--accent-soft` changes meaning.** Today it's a *text* colour; after the redesign it's a *background tint*. In R1, grep every `accent-soft`/`ember-soft` usage. Where it colours **text**, switch to `text-accent`. Keep the `ember` alias pointing at `accent` (see the comment in `tailwind.config.ts`).
-> Dark-mode button text: **never** put white text on `#60A5FA` (fails AA). Filled buttons use `accent-strong`.
+> Dark-mode button text: **never** put white text on `#60A5FA` (fails AA) — **and not on `#3B82F6` either** (measured 3.68:1 by the R8 axe pass, still under 4.5:1). `--accent-strong` dark is `#2563EB`, the same hex as light: it's the darkest blue that still reads as "the accent" and clears AA with white text.
 
 ### 4.3 Meaning colours (5 only)
 
-Each has a **main** colour (icons, lines, dots), a **text** shade (AA as text on surface and on soft), and a **soft** background. Dark "soft" values are pre-blended solids (the main colour at about 14% over `#15191F`), so they stay plain RGB tokens.
+Each has a **main** colour (icons, lines, dots), a **text** shade (AA as text on surface and on soft), and a **soft** background. Dark "soft" values are pre-blended solids — the main colour at 14% over `--surface` (`#111111`), 16% for the two brand colours that wash out at 14% (Instagram, Email), 18% for the darkest one (Messenger) — so they stay plain RGB tokens. Recompute with `round(main*a + 0x11*(1-a))` per channel if a main colour ever changes; don't hand-tune by eye.
 
 | Meaning | Token base | Light main / text / soft | Dark main / text / soft |
 |---|---|---|---|
-| **AI / agents** (new) | `--ai` | `#7C3AED` / `#6D28D9` / `#F3E8FF` | `#A78BFA` / `#A78BFA` / `#29293E` |
-| **Success** | `--success` | `#16A34A` / `#15803D` / `#F0FDF4` | `#4ADE80` / `#4ADE80` / `#1C352D` |
-| **Warning** | `--warn` | `#D97706` / `#B45309` / `#FFFBEB` | `#FBBF24` / `#FBBF24` / `#353020` |
-| **Error** | `--error` | `#DC2626` / `#B91C1C` / `#FEF2F2` | `#F87171` / `#F87171` / `#35252A` |
-| **Info** | `--info` | `#2563EB` / `#1D4ED8` / `#EFF6FF` | `#60A5FA` / `#60A5FA` / `#202D3E` |
+| **AI / agents** (new) | `--ai` | `#7C3AED` / `#6D28D9` / `#F3E8FF` | `#A78BFA` / `#A78BFA` / `#262232` |
+| **Success** | `--success` | `#16A34A` / `#15803D` / `#F0FDF4` | `#4ADE80` / `#4ADE80` / `#192E21` |
+| **Warning** | `--warn` | `#D97706` / `#B45309` / `#FFFBEB` | `#FBBF24` / `#FBBF24` / `#322914` |
+| **Error** | `--error` | `#DC2626` / `#B91C1C` / `#FEF2F2` | `#F87171` / `#F87171` / `#311E1E` |
+| **Info** | `--info` | `#2563EB` / `#1D4ED8` / `#EFF6FF` | `#60A5FA` / `#60A5FA` / `#1C2632` |
 
 - New tokens to add per meaning: `--<m>-text` and `--<m>-soft`, plus `--ai`, `--ai-text`, `--ai-soft`.
 - Tailwind: `success: { DEFAULT, text, soft }`, same for `warn`, `error`, `info`, `ai`.
@@ -139,8 +142,8 @@ Each has a **main** colour (icons, lines, dots), a **text** shade (AA as text on
 
 | Token | Light | Dark |
 |---|---|---|
-| `--chart-grid` | `#E9ECF2` | `#232A33` |
-| `--chart-axis` | `#64748B` | `#94A3B8` |
+| `--chart-grid` | `#E9ECF2` | `#262626` |
+| `--chart-axis` | `#64748B` | `#A3A3A3` |
 | Series 1 | accent | accent |
 | Series 2 | success | success |
 | Series 3 | ai | ai |
@@ -162,14 +165,14 @@ Brand colours that fail as text get separate **text** shades per theme. Dots, lo
 
 | Channel (code key) | Brand / dot | Light text | Dark text | Light soft | Dark soft |
 |---|---|---|---|---|---|
-| Website (`widget`, `web`) | `#2563EB` | `#1D4ED8` | `#60A5FA` | `#EFF6FF` | `#202D3E` |
-| WhatsApp (`whatsapp`) | `#25D366` | `#15803D` | `#4ADE80` | `#ECFDF3` | `#18372A` |
-| Instagram (`instagram`) | gradient `#F58529 → #DD2A7B → #8134AF` (solid fallback `#DD2A7B`) | `#C13584` | `#F472B6` | `#FDF2F8` | `#351C2E` |
-| Messenger (`facebook`) | `#0866FF` | `#0759DB` | `#4D94FF` | `#EEF4FF` | `#132747` |
-| Telegram (`telegram`) | `#229ED9` | `#1A7FB0` | `#4FC3F7` | `#ECF7FD` | `#172E3D` |
-| Email (`email`) | `#F59E0B` | `#B45309` | `#FBBF24` | `#FFFBEB` | `#392E1C` |
-| Slack (`slack`) | `#611F69` | `#611F69` | `#D79FDA` | `#F8EEF9` | `#302C39` |
-| Discord (`discord`) | `#5865F2` | `#4752C4` | `#8B95F8` | `#EEF0FE` | `#202541` |
+| Website (`widget`, `web`) | `#2563EB` | `#1D4ED8` | `#60A5FA` | `#EFF6FF` | `#1C2632` |
+| WhatsApp (`whatsapp`) | `#25D366` | `#15803D` | `#4ADE80` | `#ECFDF3` | `#142C1D` |
+| Instagram (`instagram`) | gradient `#F58529 → #DD2A7B → #8134AF` (solid fallback `#DD2A7B`) | `#C13584` | `#F472B6` | `#FDF2F8` | `#321522` |
+| Messenger (`facebook`) | `#0866FF` | `#0759DB` | `#4D94FF` | `#EEF4FF` | `#0F203C` |
+| Telegram (`telegram`) | `#229ED9` | `#1A7FB0` | `#4FC3F7` | `#ECF7FD` | `#13252D` |
+| Email (`email`) | `#F59E0B` | `#B45309` | `#FBBF24` | `#FFFBEB` | `#352810` |
+| Slack (`slack`) | `#611F69` | `#611F69` | `#D79FDA` | `#F8EEF9` | `#1C131D` |
+| Discord (`discord`) | `#5865F2` | `#4752C4` | `#8B95F8` | `#EEF0FE` | `#1B1D31` |
 | Unknown / other | `faint` | `muted` | `muted` | `surface-2` | `surface-2` |
 
 **Implementation:**
@@ -279,14 +282,42 @@ Every component must look right in **both themes** and cover these states: defau
 - **Content:**
   - Header: "AI Builder" in `ai` colour with a sparkle icon.
   - Greeting bubble (`ai-soft`).
-  - **4 quick-action cards that link to existing routes:**
-    - Build a new agent → agent create flow
-    - Connect a channel → the channels/credentials settings page
-    - Create an automation → `/automations`
-    - Review waiting chats → `/inbox`
+  - **4 quick-action cards that link to existing routes**, as fixed pastel gradient cards
+    (2026-09-28 feedback, matching `designreference/UI_resign.jfif`'s coloured meeting cards —
+    `--gradient-lavender/-mint/-blue/-peach` in `globals.css`, 135deg, text always
+    `--on-pastel` in **both** themes, never the theme's own `--text`):
+    - Build a new agent → agent create flow (lavender)
+    - Connect a channel → the channels/credentials settings page (mint)
+    - Create an automation → `/automations` (blue)
+    - Review waiting chats → `/inbox` (peach)
   - One insight card (success-soft) **only if real data exists**; otherwise hide it.
 - ❌ **No chat input yet.** The conversational AI builder is a separate future feature. Don't ship a fake input.
-- Hidden on screens under 1280px. Hidden entirely for plans where the linked features are locked? No: show them with the lock treatment from §8.
+- Hidden on screens under 1280px. Hidden entirely for plans where the linked features are locked? No: show them with the lock treatment from §8 — swap the sub-label for the lock reason and route to `/billing/upgrade`, keep the gradient.
+
+#### 9.3.1 "Today" gauge card (2026-09-28 feedback; ADR-100)
+
+A semicircle gauge card on `/dashboard`, matching the reference's "Time Off 10 OUT OF 20" card.
+Layout: a 3-column grid where the gauge card spans both KPI rows in column 1, and the four
+existing KPI cards fill a 2×2 grid across columns 2–3 (`<TodayCard>` +
+`<Gauge>`/`components/charts/gauge.tsx`, wired in `dashboard-stats.tsx`).
+
+- **Title** "Today", subtitle = today's date, a "See all" link. (`/conversations` has no date
+  filter to link into — it's a per-agent chat console, not the filterable browser §10.8
+  assumed exists — so this links to the plain list rather than a query param the page would
+  silently ignore.)
+- **Gauge:** track `surface-3`, fill a gradient arc (`--accent` → `--gauge-to`, a new token:
+  light `#60A5FA`, dark `#BFDBFE`), round caps. Centre = conversations started **today** (local
+  midnight to now); under it, "OUT OF {peak}" where peak = the busiest single day in the last
+  30 days, floored at 10. Arc fill = `today / peak`, capped at 100%.
+- **"Today" is the browser's timezone** (no org timezone is stored yet — ADR-100). The
+  frontend computes local midnight and sends it as a UTC instant; refetches every 60s
+  (`refetchInterval`), so the window itself rolls over once a real midnight passes without a
+  page reload.
+- **Three rows below**, each a `<StatusPill>` + today's count: Resolved by AI (success), Handed
+  to human (warn), Unanswered (error) — see ADR-100 for exactly how a conversation lands in one
+  of the three.
+- **States:** loading = skeleton gauge; zero conversations = an empty-looking arc ("0 OUT OF
+  {peak}") plus a muted "No chats yet today."
 
 ### 9.4 Theme behaviour
 
@@ -451,8 +482,12 @@ Every page gets the shell, the page header pattern (title + subtitle + one prima
 
 ## 11. Dark mode rules (checklist)
 
-- Surfaces step up in lightness: `bg #0B0D10` < `sidebar #0E1116` < `surface #15191F` < `surface-2 #1B2028` < `surface-3 #222831`. Popovers use `surface-2`.
-- **No pure black text or pure white backgrounds** in dark mode (images excepted).
+- Surfaces are pure neutral (R=G=B, no navy tint) and step up in lightness: `bg #000000` <
+  `sidebar #0A0A0A` < `surface #111111` < `surface-2 #1A1A1A` < `surface-3 #222222`. Popovers
+  use `surface-2`.
+- **Pure black `--bg` is intentional here** (matching the reference dashboard exactly) — the
+  usual "no pure black" guidance applies to *text*, not the page background. No pure white
+  backgrounds in dark mode (images excepted).
 - Colours get **brighter**, not more saturated. Soft backgrounds are low-alpha blends (the pre-blended values in §4.3 and §5).
 - No drop shadows in dark mode; separate surfaces with borders.
 - The Instagram gradient stays the same in both themes. It's a brand element.

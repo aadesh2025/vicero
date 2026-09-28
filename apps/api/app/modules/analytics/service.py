@@ -192,6 +192,54 @@ async def _by_channel(
     return buckets
 
 
+async def today_snapshot(
+    session: AsyncSession,
+    ctx: OrgContext,
+    start: dt.datetime,
+    end: dt.datetime,
+) -> schemas.TodaySnapshot:
+    """Conversations created in `[start, end]`, split into resolved/handed-off/unanswered.
+
+    `start`/`end` are whatever the caller means by "today" (ADR-100) — this function does no
+    timezone math of its own, just filters and buckets.
+    """
+    rbac.require_permission(ctx.role, rbac.ANALYTICS_VIEW)
+    conv_conds = [
+        Conversation.organization_id == ctx.org.id,
+        Conversation.created_at >= start,
+        Conversation.created_at <= end,
+    ]
+    total = int(
+        (await session.execute(select(func.count()).select_from(Conversation).where(*conv_conds))).scalar_one()
+    )
+
+    # One row per conversation that has at least one Handoff, "engaged" true if any of its
+    # handoff rows show a human involved (assigned, or resolved by one).
+    engaged_expr = func.bool_or(or_(Handoff.assigned_to.is_not(None), Handoff.status == "resolved"))
+    handoff_sub = (
+        select(Handoff.conversation_id, engaged_expr.label("engaged"))
+        .join(Conversation, Conversation.id == Handoff.conversation_id)
+        .where(*conv_conds, Handoff.organization_id == ctx.org.id)
+        .group_by(Handoff.conversation_id)
+    ).subquery()
+    row = (
+        await session.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(case((handoff_sub.c.engaged.is_(True), 1), else_=0)), 0),
+            ).select_from(handoff_sub)
+        )
+    ).one()
+    with_handoff, handed_to_human = int(row[0]), int(row[1])
+
+    return schemas.TodaySnapshot(
+        conversations=total,
+        resolved_by_ai=total - with_handoff,
+        handed_to_human=handed_to_human,
+        unanswered=with_handoff - handed_to_human,
+    )
+
+
 async def overview(
     session: AsyncSession,
     ctx: OrgContext,

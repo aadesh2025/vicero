@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,24 @@ router = APIRouter(prefix="/v1/analytics", tags=["analytics"])
 # (`web`, `api`) that predate the channel registry, and an unknown value should return an
 # empty result rather than a 422.
 _channel_q = Query(default=None, description="Filter to one channel, e.g. `instagram`.")
+
+
+@router.get("/today", response_model=schemas.TodaySnapshot)
+async def today(
+    start: dt.datetime = Query(..., description="Start of the caller's 'today', as a UTC instant."),
+    end: dt.datetime = Query(..., description="End of the caller's 'today' (usually now), as a UTC instant."),
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> schemas.TodaySnapshot:
+    """Dashboard "Today" gauge (docs/20, ADR-100): resolved/handed-off/unanswered counts for
+    a caller-supplied window. Not date-only, because "today" means the *caller's* local day —
+    the frontend sends its own midnight-to-now as UTC instants rather than this route guessing
+    a timezone. Capped at 48h so a malformed range can't turn into a full-table scan."""
+    if end <= start:
+        raise HTTPException(status_code=422, detail="`end` must be after `start`.")
+    if end - start > dt.timedelta(hours=48):
+        raise HTTPException(status_code=422, detail="Range too wide — `today` means one day.")
+    return await service.today_snapshot(session, ctx, start, end)
 
 
 @router.get("/overview", response_model=schemas.Overview)

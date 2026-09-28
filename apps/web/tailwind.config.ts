@@ -65,6 +65,16 @@ const config: Config = {
         info: { DEFAULT: rgb("--info"), text: rgb("--info-text"), soft: rgb("--info-soft") },
         chart: { grid: rgb("--chart-grid"), axis: rgb("--chart-axis"), 5: rgb("--chart-5") },
         ring: rgb("--ring"),
+        // Fixed dark text for the pastel gradient cards (docs/20 §9.3) — never the theme's
+        // own --text, which would go light-on-light in dark mode.
+        "on-pastel": rgb("--on-pastel"),
+      },
+      backgroundImage: {
+        // AI Builder quick-action gradients — same in both themes, see globals.css.
+        lavender: "var(--gradient-lavender)",
+        mint: "var(--gradient-mint)",
+        "gradient-blue": "var(--gradient-blue)",
+        peach: "var(--gradient-peach)",
       },
       fontFamily: {
         sans: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],

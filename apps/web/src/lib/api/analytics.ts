@@ -110,6 +110,21 @@ export function getOverview(p: AnalyticsParams = {}) {
   return api<Overview>(`/v1/analytics/overview${qs(p)}`, { orgScoped: true });
 }
 
+export interface TodaySnapshot {
+  conversations: number;
+  resolved_by_ai: number;
+  handed_to_human: number;
+  unanswered: number;
+}
+
+/** The dashboard "Today" gauge (ADR-100). `start`/`end` are UTC instants for whatever the
+ *  caller means by "today" — this app has no stored org timezone yet, so the browser's own
+ *  midnight-to-now is what callers should pass. */
+export function getToday(start: Date, end: Date) {
+  const q = `?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`;
+  return api<TodaySnapshot>(`/v1/analytics/today${q}`, { orgScoped: true });
+}
+
 export function getUsage(p: AnalyticsParams & { group_by?: "day" | "provider" | "model" | "channel" } = {}) {
   return api<UsageBucket[]>(`/v1/analytics/usage${qs(p)}`, { orgScoped: true });
 }

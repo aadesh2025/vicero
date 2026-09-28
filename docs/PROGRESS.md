@@ -38,6 +38,36 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **Dashboard follow-up: pure-black dark theme, pastel gradient cards, "Today" gauge
+  (2026-09-28, ADR-100).** Three changes to the R0–R8 redesign below, from a closer look at
+  `designreference/UI_resign.jfif`'s dark mode. **(1)** Dark theme is now pure neutral black
+  (R=G=B) instead of the graphite/navy palette — `--bg #000000` through `--border-strong
+  #333333`, plus every dark "-soft" token recomputed as a solid blend (`round(main*a +
+  0x11*(1-a))`, documented in `globals.css`) so meaning/channel softs stay correct against the
+  new surfaces; re-verified with the axe pass, contrast only improved. **(2)** The AI Builder
+  rail's 4 quick-action cards are fixed pastel gradients (lavender/mint/blue/peach, 135deg,
+  `--on-pastel` dark text in both themes) matching the reference's coloured meeting cards — new
+  `--gradient-*`/`--on-pastel` tokens, allow-listed in `style-guardrails.test.ts` the same way
+  the Instagram gradient already is. **(3)** A new "Today" semicircle gauge card
+  (`components/charts/gauge.tsx` + `components/dashboard/today-card.tsx`): today's
+  conversations out of the 30-day peak (floored at 10), gradient arc, three StatusPill rows
+  (resolved by AI / handed to human / unanswered). Required the **one** new backend surface
+  docs/20 didn't call for — `GET /v1/analytics/today` — because "today" means the *viewer's*
+  local day and no existing endpoint takes a timezone; see ADR-100 for why and its exact
+  resolved/handed-off/unanswered definition. Pytest covers the timezone boundary directly
+  (a conversation one second before/exactly on the window edge); vitest covers the gauge's
+  arithmetic (zero, partial, over-peak, peak-floored-at-10) and `computePeak`; a new Playwright
+  spec (`41-today-gauge.spec.ts`) seeds real resolved/handed-off/unanswered conversations and
+  checks the card in both themes. Full verification: tsc/eslint/608 vitest tests (guardrail
+  scan now 165 files) green; backend ruff/mypy clean, 1453 pytest passed (the one pre-existing
+  `test_no_new_package_import_cycle` failure was isolated by temporarily stashing every file
+  this change touched and confirmed to fail identically without them — unrelated, not fixed
+  here); e2e confirmed via a dedicated screenshot pass against the real dev stack (seeded
+  through the keyless rig, logged in for real) plus `41-today-gauge.spec.ts` passing reliably.
+  A handful of unrelated e2e specs (trial-limit banner, admin-gating, profile page) flaked when
+  run back-to-back in the same session as several `docker restart`s this work needed — each one
+  passes cleanly in isolation and touches no file this change modified; recorded here rather
+  than silently re-run away.
 - **Dual-theme UI redesign, R0–R8 complete (2026-09-27, ADR-099).** `docs/20-UI-REDESIGN-
   DUAL-THEME.md` executed phase by phase: **R0** baseline (35 routes × 2 themes screenshotted,
   hard-coded-colour/`accent-soft`/ad-hoc-map audit, `docs/21-REDESIGN-BASELINE.md`). **R1** one

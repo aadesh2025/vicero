@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ChevronsLeft, ChevronsRight, Inbox, Plug, Sparkles, Workflow } from "lucide-react";
+import { Bot, ChevronsLeft, ChevronsRight, Inbox, Lock, Plug, Sparkles, Workflow } from "lucide-react";
 import { ChannelText } from "@/components/shared/channel";
 import { usePlan } from "@/components/plan/use-plan";
 import { getOverview } from "@/lib/api/analytics";
@@ -17,6 +17,8 @@ interface Action {
   sub: string;
   href: string;
   icon: typeof Bot;
+  /** One of the fixed pastel gradients (docs/20 §9.3), matching the reference's coloured cards. */
+  gradient: "bg-lavender" | "bg-mint" | "bg-gradient-blue" | "bg-peach";
   /** Set when this action is behind a plan limit; swaps the sub-label and the destination. */
   locked?: string;
 }
@@ -65,17 +67,31 @@ export function AiBuilderRail({ className }: { className?: string }) {
       sub: "Give it a persona and a knowledge base",
       href: "/agents",
       icon: Bot,
+      gradient: "bg-lavender",
       locked: plan && !plan.can_create_agent ? "Your plan's agent limit is reached" : undefined,
     },
-    { title: "Connect a channel", sub: "WhatsApp, Instagram, Telegram and more", href: "/settings/credentials", icon: Plug },
+    {
+      title: "Connect a channel",
+      sub: "WhatsApp, Instagram, Telegram and more",
+      href: "/settings/credentials",
+      icon: Plug,
+      gradient: "bg-mint",
+    },
     {
       title: "Create an automation",
       sub: "Wire an agent to n8n",
       href: "/automations",
       icon: Workflow,
+      gradient: "bg-gradient-blue",
       locked: plan && !plan.features.n8n ? "Automations are part of a paid plan" : undefined,
     },
-    { title: "Review waiting chats", sub: "Conversations a human needs to answer", href: "/inbox", icon: Inbox },
+    {
+      title: "Review waiting chats",
+      sub: "Conversations a human needs to answer",
+      href: "/inbox",
+      icon: Inbox,
+      gradient: "bg-peach",
+    },
   ];
 
   // The insight is only ever a real comparison the data supports: at least two channels with
@@ -132,14 +148,17 @@ export function AiBuilderRail({ className }: { className?: string }) {
               <Link
                 key={a.title}
                 href={a.locked ? "/billing/upgrade" : a.href}
-                className="flex items-center gap-3 rounded-[13px] border border-border bg-surface p-2.5 transition-colors hover:bg-surface-2"
+                // Fixed pastel gradient + fixed dark text in BOTH themes (docs/20 §9.3) — these
+                // cards deliberately don't follow the surrounding theme, same as the reference.
+                className={cn("flex items-center gap-3 rounded-[13px] bg-[length:100%_100%] p-2.5 shadow-card transition-transform hover:-translate-y-px", a.gradient)}
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-ai-soft text-ai">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-white/60 text-on-pastel">
                   <a.icon className="size-4" aria-hidden />
                 </span>
-                <span className="flex min-w-0 flex-col text-left">
-                  <span className="text-[13px] font-bold text-text">{a.title}</span>
-                  <span className={cn("truncate text-xs font-semibold", a.locked ? "text-ai-text" : "text-faint")}>
+                <span className="flex min-w-0 flex-col text-left text-on-pastel">
+                  <span className="text-[13px] font-bold">{a.title}</span>
+                  <span className="flex items-center gap-1 truncate text-xs font-semibold opacity-80">
+                    {a.locked && <Lock className="size-3 shrink-0" aria-hidden />}
                     {a.locked ?? a.sub}
                   </span>
                 </span>

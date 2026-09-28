@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, MessagesSquare, ShieldCheck, Zap } from "lucide-react";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { TodayCard } from "@/components/dashboard/today-card";
 import { UsageChart } from "@/components/dashboard/usage-chart";
 import { AgentBreakdown } from "@/components/analytics/agent-breakdown";
 import { ChannelBreakdown } from "@/components/analytics/channel-breakdown";
@@ -44,32 +45,37 @@ export function DashboardStats() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Conversations"
-          value={compact(overview?.conversations ?? 0)}
-          icon={MessagesSquare}
-          hint="last 30d"
-          tone="accent"
-          spark={convoSpark}
-        />
-        <StatCard
-          label="Resolution rate"
-          value={overview?.conversations ? `${Math.round((overview.resolution_rate ?? 0) * 100)}%` : "—"}
-          icon={ShieldCheck}
-          hint="no human needed"
-          tone="success"
-        />
-        <StatCard label="Tokens used" value={compact(tokens)} icon={Zap} hint="across providers" tone="ai" spark={tokenSpark} />
-        <StatCard
-          label="Est. cost"
-          value={usd(cost)}
-          icon={CircleDollarSign}
-          hint={costHint}
-          invertDelta
-          tone="warn"
-          spark={costSpark}
-        />
+      {/* Today gauge spans both KPI rows in one column; the four KPIs fill a 2x2 grid beside
+          it (docs/20 §9.3.1). Below `lg` everything just stacks in document order. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <TodayCard series={series} className="lg:row-span-2" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
+          <StatCard
+            label="Conversations"
+            value={compact(overview?.conversations ?? 0)}
+            icon={MessagesSquare}
+            hint="last 30d"
+            tone="accent"
+            spark={convoSpark}
+          />
+          <StatCard
+            label="Resolution rate"
+            value={overview?.conversations ? `${Math.round((overview.resolution_rate ?? 0) * 100)}%` : "—"}
+            icon={ShieldCheck}
+            hint="no human needed"
+            tone="success"
+          />
+          <StatCard label="Tokens used" value={compact(tokens)} icon={Zap} hint="across providers" tone="ai" spark={tokenSpark} />
+          <StatCard
+            label="Est. cost"
+            value={usd(cost)}
+            icon={CircleDollarSign}
+            hint={costHint}
+            invertDelta
+            tone="warn"
+            spark={costSpark}
+          />
+        </div>
       </div>
 
       {/* Side by side only when there's genuinely room; below xl the table would be

@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import UsageRecord
+from app.models import Conversation, UsageRecord
 from app.worker.rollup import refresh_quota, rollup_usage
 
 
@@ -433,3 +433,105 @@ async def test_by_agent_omits_a_deleted_agent_that_never_had_traffic(client: Asy
     ids = {r["agent_id"] for r in rows}
     assert kept in ids, "a live agent with no traffic is a real zero, not a hidden row"
     assert scrapped not in ids
+
+
+# ── /today (ADR-100, docs/20 dashboard gauge) ───────────────────────────────────────
+def _window() -> tuple[str, str]:
+    """A wide-enough window (start of today UTC to now) to catch conversations this test
+    file creates moments ago, expressed the way the frontend calls this endpoint."""
+    now = dt.datetime.now(dt.UTC)
+    start = dt.datetime.combine(now.date(), dt.time.min, tzinfo=dt.UTC)
+    return start.isoformat(), now.isoformat()
+
+
+async def test_today_splits_resolved_handed_off_and_unanswered(client: AsyncClient) -> None:
+    headers, _ = await _headers(client, "today1@example.com")
+
+    # Resolved by AI: no handoff at all.
+    resolved_aid = await _fake_agent(client, headers)
+    await client.post(f"/v1/agents/{resolved_aid}/chat", json={"message": "hi", "stream": False}, headers=headers)
+
+    # Handed to human: a handoff that's been taken over.
+    handoff_agent = await client.post("/v1/agents", json={"name": "HO Bot"}, headers=headers)
+    haid, hkey = handoff_agent.json()["id"], handoff_agent.json()["public_key"]
+    await client.patch(
+        f"/v1/agents/{haid}/versions/1",
+        json={
+            "model_config": {"provider": "fake", "model": "fake-1"},
+            "features": {"tools_enabled": False, "memory_enabled": True, "handoff_enabled": True},
+        },
+        headers=headers,
+    )
+    assigned = await client.post(
+        f"/v1/public/agents/{hkey}/chat", json={"message": "I want a human agent", "stream": False}
+    )
+    assigned_cid = assigned.json()["conversation_id"]
+    await client.post(f"/v1/inbox/conversations/{assigned_cid}/takeover", headers=headers)
+
+    # Unanswered: a handoff nobody has picked up yet.
+    waiting = await client.post(
+        f"/v1/public/agents/{hkey}/chat", json={"message": "I want a human agent", "stream": False}
+    )
+
+    start, end = _window()
+    res = await client.get("/v1/analytics/today", params={"start": start, "end": end}, headers=headers)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["resolved_by_ai"] == 1
+    assert data["handed_to_human"] == 1
+    assert data["unanswered"] == 1
+    assert data["conversations"] == 3
+    assert data["conversations"] == data["resolved_by_ai"] + data["handed_to_human"] + data["unanswered"]
+    assert waiting.json()["conversation_id"]  # sanity: the fixture actually created a 3rd conversation
+
+
+async def test_today_excludes_conversations_outside_the_window(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The timezone-boundary case: a conversation one second before `start` must not count,
+    and one exactly at `start` must — this is the whole reason the endpoint takes instants
+    from the caller instead of computing a UTC calendar day itself."""
+    headers, _ = await _headers(client, "today2@example.com")
+    aid = await _fake_agent(client, headers)
+
+    before = await client.post(
+        f"/v1/agents/{aid}/chat", json={"message": "yesterday", "stream": False}, headers=headers
+    )
+    inside = await client.post(
+        f"/v1/agents/{aid}/chat", json={"message": "today", "stream": False}, headers=headers
+    )
+
+    start = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    end = start + dt.timedelta(hours=1)
+
+    before_conv = await db_session.get(Conversation, uuid.UUID(before.json()["conversation_id"]))
+    before_conv.created_at = start - dt.timedelta(seconds=1)
+    inside_conv = await db_session.get(Conversation, uuid.UUID(inside.json()["conversation_id"]))
+    inside_conv.created_at = start  # exactly on the boundary — inclusive
+    await db_session.commit()
+
+    res = await client.get(
+        "/v1/analytics/today",
+        params={"start": start.isoformat(), "end": end.isoformat()},
+        headers=headers,
+    )
+    assert res.json()["conversations"] == 1
+
+
+async def test_today_rejects_an_inverted_or_oversized_range(client: AsyncClient) -> None:
+    headers, _ = await _headers(client, "today3@example.com")
+    now = dt.datetime.now(dt.UTC)
+
+    inverted = await client.get(
+        "/v1/analytics/today",
+        params={"start": now.isoformat(), "end": (now - dt.timedelta(hours=1)).isoformat()},
+        headers=headers,
+    )
+    assert inverted.status_code == 422
+
+    too_wide = await client.get(
+        "/v1/analytics/today",
+        params={"start": (now - dt.timedelta(days=5)).isoformat(), "end": now.isoformat()},
+        headers=headers,
+    )
+    assert too_wide.status_code == 422

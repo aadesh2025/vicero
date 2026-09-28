@@ -8,6 +8,29 @@ import uuid
 from pydantic import BaseModel
 
 
+class TodaySnapshot(BaseModel):
+    """Conversations in a caller-supplied window, split into exactly three buckets
+    (docs/20-UI-REDESIGN-DUAL-THEME.md's dashboard "Today" gauge; ADR-100).
+
+    The window is the *caller's* local day, not the server's: the frontend computes
+    `start`/`end` from the browser's own midnight-to-now (or an org timezone, once one is
+    stored) and sends them as UTC instants, so this endpoint never has to guess a timezone.
+
+    A conversation lands in exactly one bucket:
+    - `resolved_by_ai` — no `Handoff` row at all; the bot handled it start to finish.
+    - `handed_to_human` — a `Handoff` row exists and a human has engaged (`assigned_to` is
+      set, or its status is `resolved`).
+    - `unanswered` — a `Handoff` row exists but no human has picked it up yet.
+
+    `conversations == resolved_by_ai + handed_to_human + unanswered`, always.
+    """
+
+    conversations: int
+    resolved_by_ai: int
+    handed_to_human: int
+    unanswered: int
+
+
 class ChannelBucket(BaseModel):
     """One channel's slice of the overview.
 

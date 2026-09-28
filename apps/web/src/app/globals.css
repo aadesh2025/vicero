@@ -105,72 +105,94 @@
   /* Instagram's brand gradient — same in both themes; it's a brand element. */
   --ch-instagram-gradient: linear-gradient(45deg, #f58529, #dd2a7b, #8134af);
 
+  /* AI Builder quick-action cards (2026-09-28 feedback, matching the reference's coloured
+     meeting cards): fixed pastel gradients, identical in both themes — like the reference,
+     where the coloured cards stay pastel on the dark dashboard instead of inverting. Text on
+     them is always --on-pastel (the light theme's --text), never the theme's own --text. */
+  --gradient-lavender: linear-gradient(135deg, #ede4ff, #dccbff);
+  --gradient-mint: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  --gradient-blue: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  --gradient-peach: linear-gradient(135deg, #ffedd5, #fed7aa);
+  --on-pastel: 17 24 39; /* #111827 */
+
+  /* The "Today" gauge's arc gradient (docs/20 §9.3.1). `--gauge-from` is just `--accent` in
+     both themes; only the lighter end differs, so it gets its own token. */
+  --gauge-to: 96 165 250; /* #60A5FA */
+
   --radius: 0.75rem;
 }
 
-/* Dark mode is designed, not inverted: its own surfaces (each step lighter than the last),
-   slightly brighter accents, no drop shadows. */
+/* Dark mode is pure neutral black (R=G=B everywhere in the base palette) — no navy tint,
+   per the reference (designreference/UI_resign.jfif) and 2026-09-28 feedback that the
+   previous graphite/navy surfaces read as blue. Meaning colours, channel colours and their
+   `-text` shades are untouched; only the neutral scale and every "-soft" blend moved.
+
+   Every "-soft" value below is a solid blend of that colour's *main* shade over the new
+   --surface (#111111): `round(main*a + 0x11*(1-a))` per channel, a = 0.14 for the five
+   meaning colours + widget/telegram/slack/discord, 0.16 for Instagram and Email (their
+   brand colours are darker/more saturated and wash out at 14%), 0.18 for Messenger (same
+   reason, more so). Recompute with that formula if a brand colour ever changes — don't
+   hand-tune these by eye. */
 .dark {
-  --bg: 11 13 16; /* #0B0D10 */
-  --surface: 21 25 31; /* #15191F */
-  --surface-2: 27 32 40; /* #1B2028 */
-  --surface-3: 34 40 49; /* #222831 */
-  --border: 39 45 54; /* #272D36 */
-  --border-strong: 52 59 70; /* #343B46 */
-  --text: 241 245 249; /* #F1F5F9 */
-  --muted: 203 213 225; /* #CBD5E1 */
-  --faint: 148 163 184; /* #94A3B8 */
-  --sidebar: 14 17 22; /* #0E1116 */
+  --bg: 0 0 0; /* #000000 */
+  --surface: 17 17 17; /* #111111 */
+  --surface-2: 26 26 26; /* #1A1A1A */
+  --surface-3: 34 34 34; /* #222222 */
+  --border: 38 38 38; /* #262626 */
+  --border-strong: 51 51 51; /* #333333 */
+  --text: 245 245 245; /* #F5F5F5 */
+  --muted: 212 212 212; /* #D4D4D4 */
+  --faint: 163 163 163; /* #A3A3A3 */
+  --sidebar: 10 10 10; /* #0A0A0A */
   --accent: 96 165 250; /* #60A5FA */
   --accent-strong: 37 99 235; /* #2563EB — same as light; #3B82F6 put white text below 4.5:1 */
   --accent-2: 147 197 253; /* #93C5FD */
-  --accent-soft: 32 45 62; /* #202D3E */
+  --accent-soft: 28 38 50; /* #1C2632 */
   --on-accent: 255 255 255; /* #FFFFFF */
   --ring: 96 165 250; /* #60A5FA */
   --glow: 96 165 250; /* #60A5FA */
   --ai: 167 139 250; /* #A78BFA */
   --ai-text: 167 139 250; /* #A78BFA */
-  --ai-soft: 41 41 62; /* #29293E */
+  --ai-soft: 38 34 50; /* #262232 */
   --success: 74 222 128; /* #4ADE80 */
   --success-text: 74 222 128; /* #4ADE80 */
-  --success-soft: 28 53 45; /* #1C352D */
+  --success-soft: 25 46 33; /* #192E21 */
   --warn: 251 191 36; /* #FBBF24 */
   --warn-text: 251 191 36; /* #FBBF24 */
-  --warn-soft: 53 48 32; /* #353020 */
+  --warn-soft: 50 41 20; /* #322914 */
   --error: 248 113 113; /* #F87171 */
   --error-text: 248 113 113; /* #F87171 */
-  --error-soft: 53 37 42; /* #35252A */
+  --error-soft: 49 30 30; /* #311E1E */
   --info: 96 165 250; /* #60A5FA */
   --info-text: 96 165 250; /* #60A5FA */
-  --info-soft: 32 45 62; /* #202D3E */
-  --chart-grid: 35 42 51; /* #232A33 */
-  --chart-axis: 148 163 184; /* #94A3B8 */
+  --info-soft: 28 38 50; /* #1C2632 */
+  --chart-grid: 38 38 38; /* #262626 */
+  --chart-axis: 163 163 163; /* #A3A3A3 */
   --chart-5: 34 211 238; /* #22D3EE */
   --ch-widget: 37 99 235; /* #2563EB */
   --ch-widget-text: 96 165 250; /* #60A5FA */
-  --ch-widget-soft: 32 45 62; /* #202D3E */
+  --ch-widget-soft: 28 38 50; /* #1C2632 */
   --ch-whatsapp: 37 211 102; /* #25D366 */
   --ch-whatsapp-text: 74 222 128; /* #4ADE80 */
-  --ch-whatsapp-soft: 24 55 42; /* #18372A */
+  --ch-whatsapp-soft: 20 44 29; /* #142C1D */
   --ch-instagram: 221 42 123; /* #DD2A7B */
   --ch-instagram-text: 244 114 182; /* #F472B6 */
-  --ch-instagram-soft: 53 28 46; /* #351C2E */
+  --ch-instagram-soft: 50 21 34; /* #321522 */
   --ch-facebook: 8 102 255; /* #0866FF */
   --ch-facebook-text: 77 148 255; /* #4D94FF */
-  --ch-facebook-soft: 19 39 71; /* #132747 */
+  --ch-facebook-soft: 15 32 60; /* #0F203C */
   --ch-telegram: 34 158 217; /* #229ED9 */
   --ch-telegram-text: 79 195 247; /* #4FC3F7 */
-  --ch-telegram-soft: 23 46 61; /* #172E3D */
+  --ch-telegram-soft: 19 37 45; /* #13252D */
   --ch-email: 245 158 11; /* #F59E0B */
   --ch-email-text: 251 191 36; /* #FBBF24 */
-  --ch-email-soft: 57 46 28; /* #392E1C */
+  --ch-email-soft: 53 40 16; /* #352810 */
   --ch-slack: 97 31 105; /* #611F69 */
   --ch-slack-text: 215 159 218; /* #D79FDA */
-  --ch-slack-soft: 48 44 57; /* #302C39 */
+  --ch-slack-soft: 28 19 29; /* #1C131D */
   --ch-discord: 88 101 242; /* #5865F2 */
   --ch-discord-text: 139 149 248; /* #8B95F8 */
-  --ch-discord-soft: 32 37 65; /* #202541 */
-
+  --ch-discord-soft: 27 29 49; /* #1B1D31 */
 
   --chart-fill: 0.3;
 

@@ -18,6 +18,47 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-100: One new endpoint (`GET /v1/analytics/today`) for the dashboard "Today" gauge — the one exception to docs/20's "no backend changes"
+- **Date:** 2026-09-28
+- **Status:** accepted
+- **Context:** 2026-09-28 feedback asked for a dashboard gauge card showing today's
+  conversations split into resolved-by-AI/handed-to-human/unanswered, where "today" means the
+  **viewer's own local day**, not a UTC calendar day. Every existing analytics endpoint
+  (`overview`, `series`, …) computes its date range from `dt.datetime.now(tz=dt.UTC).date()`
+  server-side (`_range()` in `app/modules/analytics/service.py`) with no timezone parameter at
+  all — reusing them would have given "today" in UTC, silently wrong for most users and unable
+  to "reset at midnight" in the sense asked for. No endpoint reports the resolved/handed-off/
+  unanswered split either: `overview` only has aggregate `resolution_rate`/`handoff_rate`
+  (complementary, so no third "unanswered" bucket exists), and `/unanswered` reports escalated
+  *questions* (text), not a per-conversation status.
+- **Decision:** One new read-only, org-scoped endpoint, `GET /v1/analytics/today?start&end`
+  (`app/modules/analytics/{router,service,schemas}.py`, `TodaySnapshot`). The **client** computes
+  `start`/`end` as its own local midnight and now, converted to UTC instants (`Date.toISOString()`
+  — no org timezone is stored anywhere in the schema yet, so this is "the browser's timezone" in
+  practice) — the endpoint does no timezone math of its own, just buckets whatever window it's
+  given. A conversation lands in exactly one of three buckets: `resolved_by_ai` (no `Handoff` row
+  at all), `handed_to_human` (a `Handoff` row with `assigned_to` set or `status="resolved"`), or
+  `unanswered` (a `Handoff` row, but neither). Validated: `end` must be after `start`, and the
+  range capped at 48h (a malformed range can't turn into a full-table scan). Same `ANALYTICS_VIEW`
+  RBAC as every other analytics route (viewer role included) — no plan gating, matching the rest
+  of `/v1/analytics/*`.
+- **Alternatives considered:** Reusing `overview(from=today, to=today)` and accepting a UTC-day
+  boundary (rejected — explicitly asked for local-day correctness, and the existing `_range()`
+  has no tz parameter to add without touching every other analytics endpoint's contract).
+  Storing an org timezone now to do the day-boundary math server-side (rejected as scope creep —
+  no other part of the product reads or sets one yet; the client-computed-instant approach works
+  identically once one exists, so it's a non-breaking future addition, not a redo).
+- **Consequences:** The peak-of-last-30-days half of the gauge (`Math.max(10, ...)`) is computed
+  **frontend-only** from the `getSeries()` result the Activity chart already fetches on the same
+  page — no new request for that half, and it *does* use UTC-day buckets (acceptable: a 30-day
+  peak is insensitive to a one-day timezone shift in a way "today's count" is not). Pytest
+  coverage in `tests/test_analytics.py` includes the timezone-boundary case directly (a
+  conversation one second before `start` excluded, one exactly on `start` included) rather than
+  trusting date-only reasoning. Frontend: `getToday()` in `lib/api/analytics.ts`; no OpenAPI
+  client generation step exists in this repo (the client is hand-written per `docs/05-FRONTEND.md
+  §1`), so "regenerate the typed client" meant adding this function by hand, matching every
+  sibling `get*` function already there.
+
 ### ADR-099: UI redesign — dual-theme tokens, meaning colours, and a channel/status colour system
 - **Date:** 2026-09-27
 - **Status:** accepted

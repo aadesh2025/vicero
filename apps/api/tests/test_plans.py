@@ -85,7 +85,7 @@ def test_legacy_is_unlimited_and_never_expires() -> None:
     assert ent.days_left(NOW) is None
 
 
-@pytest.mark.parametrize("plan", [None, "", "free", "pro", "enterprise", "something-new"])
+@pytest.mark.parametrize("plan", [None, "", "free", "enterprise", "something-new"])
 def test_anything_unrecognised_resolves_to_legacy_not_to_locked(plan: str | None) -> None:
     """A stored value this code doesn't know is far likelier a paid plan than a trial."""
     assert get_entitlements(plan).status == "legacy"

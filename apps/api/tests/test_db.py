@@ -26,6 +26,8 @@ EXPECTED_TABLES = {
     "feature_flags", "help_articles", "campaigns", "widget_configs",
     # docs/17 Phase 1 (agentic runtime): the per-turn trace and org-scoped MCP registry.
     "agent_steps", "mcp_servers",
+    # docs/22 Phase A1 (paid plans): admin grant history, the payment ledger, storage accounting.
+    "plan_grants", "billing_cycles", "org_storage_usage",
     # docs/17 Phase 2 (visual workflow builder): draft/publish + execution-trace tables.
     "workflows", "workflow_versions", "workflow_runs", "workflow_steps",
     # docs/17 Phase 3 (agent testing): scenario definitions + per-run actual-vs-expected results.

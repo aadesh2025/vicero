@@ -249,8 +249,11 @@ class InboundTurn:
         # already out; this UPDATE is the authority, so two visitors racing for the last
         # messages cannot both get through (billing/usage.py).
         reserved = False
-        if ent is not None and ent.max_messages is not None and ent.is_metered:
-            if not await usage.reserve(session, org_id, ent.max_messages):
+        # `effective_max_messages`, never `max_messages`: it is the plan's allowance plus any
+        # extra-message packs bought this period (docs/22 §7). Enforcing the raw plan cap here
+        # would take a customer's money for a pack and still leave the bot silent.
+        if ent is not None and ent.is_metered and ent.effective_max_messages is not None:
+            if not await usage.reserve(session, org_id, ent.effective_max_messages):
                 await self._stay_silent("messages")
                 return
             reserved = True

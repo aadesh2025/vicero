@@ -107,10 +107,17 @@ const config: Config = {
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
+        // Dashboard Activity bar chart (docs/20 §9.3.2, ADR-101): bars grow in from a flat
+        // baseline on load. `motion-reduce:animate-none` (used at the call site) disables it.
+        "bar-grow": {
+          from: { transform: "scaleY(0)" },
+          to: { transform: "scaleY(1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both",
         "caret-blink": "caret-blink 1.1s ease-in-out infinite",
+        "bar-grow": "bar-grow 300ms ease-out both",
       },
       // `prose-botforge` maps the typography plugin onto the app's own tokens, so docs
       // inherit the palette instead of introducing a second one. Because every colour is a

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, MessagesSquare, ShieldCheck, Zap } from "lucide-react";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { TodayCard } from "@/components/dashboard/today-card";
-import { UsageChart } from "@/components/dashboard/usage-chart";
+import { ActivityChart } from "@/components/dashboard/activity-chart";
 import { AgentBreakdown } from "@/components/analytics/agent-breakdown";
 import { ChannelBreakdown } from "@/components/analytics/channel-breakdown";
 import { getByAgent, getOverview, getSeries } from "@/lib/api/analytics";
@@ -20,9 +20,9 @@ export function DashboardStats() {
     queryFn: () => getOverview(),
     enabled,
   });
-  // The chart's own source: gap-filled, one point per day, with real conversation counts.
-  // The KPI sparklines reuse it rather than issuing four more requests.
-  const { data: series, isLoading: seriesLoading } = useQuery({
+  // The KPI sparklines' and Today gauge's source — the Activity chart fetches its own
+  // timeseries now (ADR-101), keyed by period/metric, so it no longer reuses this query.
+  const { data: series } = useQuery({
     queryKey: ["dash-series", activeOrgId],
     queryFn: () => getSeries(),
     enabled,
@@ -81,7 +81,7 @@ export function DashboardStats() {
       {/* Side by side only when there's genuinely room; below xl the table would be
           squeezed to the point of clipping, so it stacks full width instead. */}
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_420px]">
-        <UsageChart data={series} isLoading={seriesLoading} />
+        <ActivityChart />
         <section aria-labelledby="dash-by-channel" className="overflow-hidden rounded-card border border-border bg-surface">
           <div className="border-b border-border p-5">
             <h3 id="dash-by-channel" className="font-display text-[15px] font-extrabold text-text">

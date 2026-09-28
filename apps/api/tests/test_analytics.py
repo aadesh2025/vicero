@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Conversation, UsageRecord
+from app.models import Conversation, Message, UsageRecord
 from app.worker.rollup import refresh_quota, rollup_usage
 
 
@@ -535,3 +535,231 @@ async def test_today_rejects_an_inverted_or_oversized_range(client: AsyncClient)
         headers=headers,
     )
     assert too_wide.status_code == 422
+
+
+# ── /timeseries (ADR-101, docs/20 §9.3.2 dashboard bar chart) ─────────────────────────
+async def _set_created_at(db_session: AsyncSession, conversation_id: str, when: dt.datetime) -> None:
+    conv = await db_session.get(Conversation, uuid.UUID(conversation_id))
+    assert conv is not None
+    conv.created_at = when
+    await db_session.commit()
+
+
+async def test_timeseries_zero_fills_daily_gaps_and_counts_exactly(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A 5-day UTC range with conversations on day 1 and day 3 only: every day must appear,
+    quiet days as real zeros, not missing entries."""
+    headers, _ = await _headers(client, "ts1@example.com")
+    aid = await _fake_agent(client, headers)
+    base = dt.datetime(2026, 3, 1, 12, 0, tzinfo=dt.UTC)
+
+    c1 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "d1a", "stream": False}, headers=headers)
+    c2 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "d1b", "stream": False}, headers=headers)
+    c3 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "d3", "stream": False}, headers=headers)
+    await _set_created_at(db_session, c1.json()["conversation_id"], base)
+    await _set_created_at(db_session, c2.json()["conversation_id"], base + dt.timedelta(hours=2))
+    await _set_created_at(db_session, c3.json()["conversation_id"], base + dt.timedelta(days=2))
+
+    res = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "day",
+            "from": "2026-03-01",
+            "to": "2026-03-05",
+            "tz": "UTC",
+        },
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    points = res.json()["points"]
+    assert [p["bucket_start"] for p in points] == [
+        "2026-03-01",
+        "2026-03-02",
+        "2026-03-03",
+        "2026-03-04",
+        "2026-03-05",
+    ]
+    assert [p["value"] for p in points] == [2, 0, 1, 0, 0]
+
+
+async def test_timeseries_buckets_by_the_caller_timezone_not_utc(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """02:00 UTC on Mar 2 is still 21:00 on Mar 1 in America/New_York (UTC-5, no DST in
+    March before the spring-forward date used here) — the whole reason this endpoint takes
+    a `tz` instead of grouping on the stored UTC instant like the old `/series` did."""
+    headers, _ = await _headers(client, "ts2@example.com")
+    aid = await _fake_agent(client, headers)
+    c1 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "boundary", "stream": False}, headers=headers)
+    await _set_created_at(db_session, c1.json()["conversation_id"], dt.datetime(2026, 3, 2, 2, 0, tzinfo=dt.UTC))
+
+    utc = await client.get(
+        "/v1/analytics/timeseries",
+        params={"metric": "conversations", "granularity": "day", "from": "2026-03-01", "to": "2026-03-02", "tz": "UTC"},
+        headers=headers,
+    )
+    utc_points = {p["bucket_start"]: p["value"] for p in utc.json()["points"]}
+    assert utc_points["2026-03-01"] == 0
+    assert utc_points["2026-03-02"] == 1
+
+    ny = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "day",
+            "from": "2026-03-01",
+            "to": "2026-03-02",
+            "tz": "America/New_York",
+        },
+        headers=headers,
+    )
+    ny_points = {p["bucket_start"]: p["value"] for p in ny.json()["points"]}
+    assert ny_points["2026-03-01"] == 1
+    assert ny_points["2026-03-02"] == 0
+
+
+async def test_timeseries_weekly_buckets_are_monday_start_and_sum_their_days(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, _ = await _headers(client, "ts3@example.com")
+    aid = await _fake_agent(client, headers)
+    # 2026-03-02 is a Monday. Two conversations that week, one the following Monday.
+    c1 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "w1a", "stream": False}, headers=headers)
+    c2 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "w1b", "stream": False}, headers=headers)
+    c3 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "w2", "stream": False}, headers=headers)
+    await _set_created_at(db_session, c1.json()["conversation_id"], dt.datetime(2026, 3, 2, 10, tzinfo=dt.UTC))
+    await _set_created_at(db_session, c2.json()["conversation_id"], dt.datetime(2026, 3, 4, 10, tzinfo=dt.UTC))
+    await _set_created_at(db_session, c3.json()["conversation_id"], dt.datetime(2026, 3, 9, 10, tzinfo=dt.UTC))
+
+    res = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "week",
+            "from": "2026-03-02",
+            "to": "2026-03-15",
+            "tz": "UTC",
+        },
+        headers=headers,
+    )
+    points = {p["bucket_start"]: p["value"] for p in res.json()["points"]}
+    assert points == {"2026-03-02": 2, "2026-03-09": 1}
+
+
+async def test_timeseries_monthly_buckets_sum_their_month(client: AsyncClient, db_session: AsyncSession) -> None:
+    headers, _ = await _headers(client, "ts4@example.com")
+    aid = await _fake_agent(client, headers)
+    c1 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "jan", "stream": False}, headers=headers)
+    c2 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "feb-a", "stream": False}, headers=headers)
+    c3 = await client.post(f"/v1/agents/{aid}/chat", json={"message": "feb-b", "stream": False}, headers=headers)
+    await _set_created_at(db_session, c1.json()["conversation_id"], dt.datetime(2026, 1, 15, tzinfo=dt.UTC))
+    await _set_created_at(db_session, c2.json()["conversation_id"], dt.datetime(2026, 2, 3, tzinfo=dt.UTC))
+    await _set_created_at(db_session, c3.json()["conversation_id"], dt.datetime(2026, 2, 20, tzinfo=dt.UTC))
+
+    res = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "month",
+            "from": "2026-01-01",
+            "to": "2026-02-28",
+            "tz": "UTC",
+        },
+        headers=headers,
+    )
+    points = {p["bucket_start"]: p["value"] for p in res.json()["points"]}
+    assert points == {"2026-01-01": 1, "2026-02-01": 2}
+
+
+async def test_timeseries_previous_period_total_is_the_equal_length_prior_window(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, _ = await _headers(client, "ts5@example.com")
+    aid = await _fake_agent(client, headers)
+    current = await client.post(f"/v1/agents/{aid}/chat", json={"message": "now", "stream": False}, headers=headers)
+    prev_a = await client.post(f"/v1/agents/{aid}/chat", json={"message": "prev-a", "stream": False}, headers=headers)
+    prev_b = await client.post(f"/v1/agents/{aid}/chat", json={"message": "prev-b", "stream": False}, headers=headers)
+    # Current window: 2026-04-08..2026-04-14 (7 days). Previous window is the 7 days before it.
+    await _set_created_at(db_session, current.json()["conversation_id"], dt.datetime(2026, 4, 10, tzinfo=dt.UTC))
+    await _set_created_at(db_session, prev_a.json()["conversation_id"], dt.datetime(2026, 4, 1, tzinfo=dt.UTC))
+    await _set_created_at(db_session, prev_b.json()["conversation_id"], dt.datetime(2026, 4, 5, tzinfo=dt.UTC))
+
+    res = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "day",
+            "from": "2026-04-08",
+            "to": "2026-04-14",
+            "tz": "UTC",
+        },
+        headers=headers,
+    )
+    body = res.json()
+    assert sum(p["value"] for p in body["points"]) == 1
+    assert body["previous_period_total"] == 2  # the two backdated to 2026-04-01..04-07
+
+
+async def test_timeseries_messages_and_tokens_metrics_match_the_messages_table(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers, _ = await _headers(client, "ts6@example.com")
+    aid = await _fake_agent(client, headers)
+    conv = await client.post(f"/v1/agents/{aid}/chat", json={"message": "hi", "stream": False}, headers=headers)
+    when = dt.datetime(2026, 5, 5, 12, tzinfo=dt.UTC)
+    await _set_created_at(db_session, conv.json()["conversation_id"], when)
+    await db_session.execute(
+        Message.__table__.update()
+        .where(Message.conversation_id == uuid.UUID(conv.json()["conversation_id"]))
+        .values(created_at=when)
+    )
+    await db_session.commit()
+
+    params = {"from": "2026-05-05", "to": "2026-05-05", "tz": "UTC", "granularity": "day"}
+    messages = await client.get(
+        "/v1/analytics/timeseries", params={**params, "metric": "messages"}, headers=headers
+    )
+    tokens = await client.get("/v1/analytics/timeseries", params={**params, "metric": "tokens"}, headers=headers)
+
+    # 1 user + 1 assistant turn. Cross-checked against /overview for the same window rather
+    # than hand-computed, since the fake provider's exact token split isn't this test's concern.
+    overview = await client.get(
+        "/v1/analytics/overview", params={"from": "2026-05-05", "to": "2026-05-05"}, headers=headers
+    )
+    expected_tokens = overview.json()["tokens_prompt"] + overview.json()["tokens_completion"]
+    assert messages.json()["points"][0]["value"] == 2
+    assert tokens.json()["points"][0]["value"] == expected_tokens
+    assert expected_tokens > 0
+
+
+async def test_timeseries_rejects_bad_range_and_unknown_timezone(client: AsyncClient) -> None:
+    headers, _ = await _headers(client, "ts7@example.com")
+
+    backwards = await client.get(
+        "/v1/analytics/timeseries",
+        params={"metric": "conversations", "granularity": "day", "from": "2026-03-05", "to": "2026-03-01"},
+        headers=headers,
+    )
+    assert backwards.status_code == 422
+
+    bad_tz = await client.get(
+        "/v1/analytics/timeseries",
+        params={
+            "metric": "conversations",
+            "granularity": "day",
+            "from": "2026-03-01",
+            "to": "2026-03-01",
+            "tz": "Not/AZone",
+        },
+        headers=headers,
+    )
+    assert bad_tz.status_code == 422
+
+    bad_metric = await client.get(
+        "/v1/analytics/timeseries",
+        params={"metric": "bogus", "granularity": "day", "from": "2026-03-01", "to": "2026-03-01"},
+        headers=headers,
+    )
+    assert bad_metric.status_code == 422

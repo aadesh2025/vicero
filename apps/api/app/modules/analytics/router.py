@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -75,6 +76,32 @@ async def series(
 ) -> list[schemas.DayPoint]:
     """Daily activity for charting: one point per day in range, quiet days included."""
     return await service.series(session, ctx, agent_id, from_date, to_date, channel)
+
+
+@router.get("/timeseries", response_model=schemas.TimeseriesResponse)
+async def timeseries(
+    metric: str = Query(pattern="^(conversations|messages|tokens|cost)$"),
+    granularity: str = Query(pattern="^(day|week|month)$"),
+    from_date: dt.date = Query(..., alias="from"),
+    to_date: dt.date = Query(..., alias="to"),
+    tz: str = Query(default="UTC", description="IANA zone, e.g. `America/New_York`."),
+    agent_id: uuid.UUID | None = Query(default=None),
+    channel: str | None = _channel_q,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> schemas.TimeseriesResponse:
+    """Dashboard "Activity" bar chart (docs/20 §9.3.2, ADR-101). The frontend sends the
+    browser's own IANA zone (this app has no stored org timezone yet, same gap ADR-100
+    flagged) so a bar labelled "Sep 28" buckets by *that* midnight, not UTC's."""
+    if to_date < from_date:
+        raise HTTPException(status_code=422, detail="`to` must not be before `from`.")
+    if (to_date - from_date).days > 1100:
+        raise HTTPException(status_code=422, detail="Range too wide.")
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown timezone: {tz}") from exc
+    return await service.timeseries(session, ctx, metric, granularity, from_date, to_date, zone, agent_id, channel)
 
 
 @router.get("/by-agent", response_model=list[schemas.AgentBucket])

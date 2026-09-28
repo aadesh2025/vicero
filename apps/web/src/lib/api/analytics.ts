@@ -125,6 +125,39 @@ export function getToday(start: Date, end: Date) {
   return api<TodaySnapshot>(`/v1/analytics/today${q}`, { orgScoped: true });
 }
 
+export type ActivityMetric = "conversations" | "messages" | "tokens" | "cost";
+export type ActivityGranularity = "day" | "week" | "month";
+
+export interface TimeseriesPoint {
+  /** ISO date the bucket starts on, local to the `tz` the request was made with. */
+  bucket_start: string;
+  value: number;
+}
+
+export interface TimeseriesResponse {
+  granularity: ActivityGranularity;
+  metric: ActivityMetric;
+  points: TimeseriesPoint[];
+  /** Sum of the same metric over the equal-length period immediately before `from`. */
+  previous_period_total: number;
+}
+
+/** The dashboard "Activity" bar chart (ADR-101). `tz` should be the browser's own IANA zone —
+ *  this app has no stored org timezone yet, the same gap ADR-100 flagged for the Today gauge. */
+export function getTimeseries(p: {
+  metric: ActivityMetric;
+  granularity: ActivityGranularity;
+  from: string;
+  to: string;
+  tz: string;
+  agent_id?: string;
+  channel?: string;
+}) {
+  const entries = Object.entries(p).filter(([, v]) => v != null && v !== "");
+  const q = "?" + entries.map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&");
+  return api<TimeseriesResponse>(`/v1/analytics/timeseries${q}`, { orgScoped: true });
+}
+
 export function getUsage(p: AnalyticsParams & { group_by?: "day" | "provider" | "model" | "channel" } = {}) {
   return api<UsageBucket[]>(`/v1/analytics/usage${qs(p)}`, { orgScoped: true });
 }

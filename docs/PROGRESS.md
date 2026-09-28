@@ -68,6 +68,39 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   run back-to-back in the same session as several `docker restart`s this work needed — each one
   passes cleanly in isolation and touches no file this change modified; recorded here rather
   than silently re-run away.
+- **Dashboard "Activity" line chart → bar chart, plus two follow-up trims (2026-09-28,
+  ADR-101).** Three more rounds on the dashboard: **(1)** removed the AI Builder rail and the
+  Today gauge's "out of {peak}" caption and its three resolved/handed-off/unanswered rows
+  (kept in `today_snapshot`/ADR-100, just not rendered). **(2)** Replaced `UsageChart` on
+  `/dashboard` only (`/analytics` and the agent Analytics tab keep it) with a new striped/
+  gradient bar chart matching `designreference/ACTIVITYNEW DAHSBOARDDESING.png` —
+  `components/dashboard/activity-chart.tsx` (header, Daily/Weekly/Monthly/Range segmented
+  control, a metric dropdown replacing the old tabs, keyboard-navigable bar selection) +
+  `components/charts/activity-bars.tsx` (presentational SVG, `animate-bar-grow` CSS growth,
+  `motion-reduce` respected). Backed by the **one** new endpoint docs/20 didn't call for,
+  `GET /v1/analytics/timeseries` (ADR-101) — timezone-correct local-day bucketing folded into
+  day/week/month buckets, zero-filled, plus the prior-period total for the header's delta pill;
+  `/series` was left alone since other pages still use it. **(3)** Tightened padding/gaps
+  around the Today card, KPI grid, page header and the new chart (220px → 180px) so Today + KPIs
+  + Activity fit one screen without scrolling through the chart, per feedback that the old
+  layout needed a scroll to see the chart's second half.
+  Verification: tsc/eslint/636 vitest (18 new `activity-chart-math` tests covering bucket keys,
+  period→granularity/range and `niceTicks`/`deltaPct`; 8 new `activity-bars` tests covering the
+  zero-value stub, gradient-vs-stripe fill selection, click/arrow-key selection and clamping)
+  all green; backend ruff clean, 1460 pytest passed (8 new `/timeseries` tests: exact daily
+  zero-fill, a UTC-vs-`America/New_York` midnight-boundary case, Monday-start weekly and
+  monthly bucket sums, the previous-period total, messages/tokens cross-checked against
+  `/overview`, and 422s on a backwards range/bad timezone/bad metric — the one
+  `test_no_new_package_import_cycle` failure is the same pre-existing one ADR-100 already
+  isolated as unrelated); new Playwright spec `42-activity-bar-chart.spec.ts` (both themes,
+  14/12/12 bars for Daily/Weekly/Monthly, arrow-key selection) plus a re-run of
+  `41-today-gauge.spec.ts`, both green; screenshotted against the reference in both themes
+  through the keyless rig. **Root-caused a standing e2e flakiness issue while verifying this**:
+  the real `:8000` API's `--reload` watcher picked up this session's backend edits and got
+  stuck mid-shutdown ("Waiting for background tasks to complete"), so every browser-driven e2e
+  test hung on "Loading your workspace…" regardless of what it tested — not a code regression.
+  Fixed by restarting `botforge-api-1`/`botforge-worker-1`; also found and killed a duplicate
+  uvicorn+Celery pair on the keyless :8010 rig left over from earlier in the same long session.
 - **Dual-theme UI redesign, R0–R8 complete (2026-09-27, ADR-099).** `docs/20-UI-REDESIGN-
   DUAL-THEME.md` executed phase by phase: **R0** baseline (35 routes × 2 themes screenshotted,
   hard-coded-colour/`accent-soft`/ad-hoc-map audit, `docs/21-REDESIGN-BASELINE.md`). **R1** one

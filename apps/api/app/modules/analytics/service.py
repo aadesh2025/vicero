@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date, String, case, cast, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -443,6 +444,163 @@ async def series(
         )
         day += dt.timedelta(days=1)
     return points
+
+
+async def _local_day_totals(
+    session: AsyncSession,
+    ctx: OrgContext,
+    agent_id: uuid.UUID | None,
+    channel: str | None,
+    tz: ZoneInfo,
+    local_start: dt.date,
+    local_end: dt.date,
+) -> dict[dt.date, tuple[int, int, int, int, int]]:
+    """(conversations, messages, tokens_prompt, tokens_completion, cost_micros) per *local*
+    calendar day in `[local_start, local_end]`, for the caller's `tz`.
+
+    Grouping happens on `timezone(:tz, created_at)` rather than the naive UTC `Date` cast
+    `series()` uses — that's what makes a bucket's local midnight-to-midnight match what the
+    caller actually means by "Sep 28", the same fix ADR-100 made for the "Today" gauge.
+    """
+    start_dt = dt.datetime.combine(local_start, dt.time.min, tzinfo=tz).astimezone(dt.UTC)
+    end_dt = dt.datetime.combine(local_end, dt.time.max, tzinfo=tz).astimezone(dt.UTC)
+    tz_name = str(tz)
+
+    local_conv_date = cast(func.timezone(tz_name, Conversation.created_at), Date)
+    conv_rows = {
+        r[0]: int(r[1])
+        for r in (
+            await session.execute(
+                select(local_conv_date, func.count())
+                .where(*_conv_filter(ctx, start_dt, end_dt, agent_id, channel))
+                .group_by(local_conv_date)
+            )
+        ).all()
+    }
+
+    msg_sub = _msg_query(ctx, start_dt, end_dt, agent_id, channel).subquery()
+    local_msg_date = cast(func.timezone(tz_name, msg_sub.c.created_at), Date)
+    msg_rows = {
+        r[0]: (int(r[1]), int(r[2]), int(r[3]), int(r[4]))
+        for r in (
+            await session.execute(
+                select(
+                    local_msg_date,
+                    func.count(),
+                    func.coalesce(func.sum(msg_sub.c.tokens_prompt), 0),
+                    func.coalesce(func.sum(msg_sub.c.tokens_completion), 0),
+                    func.coalesce(func.sum(msg_sub.c.cost_micros), 0),
+                )
+                .select_from(msg_sub)
+                .group_by(local_msg_date)
+            )
+        ).all()
+    }
+
+    out: dict[dt.date, tuple[int, int, int, int, int]] = {}
+    day = local_start
+    while day <= local_end:
+        messages, tok_p, tok_c, cost = msg_rows.get(day, (0, 0, 0, 0))
+        out[day] = (conv_rows.get(day, 0), messages, tok_p, tok_c, cost)
+        day += dt.timedelta(days=1)
+    return out
+
+
+def _metric_value(metric: str, totals: tuple[int, int, int, int, int]) -> float:
+    conversations, messages, tokens_prompt, tokens_completion, cost_micros = totals
+    if metric == "conversations":
+        return float(conversations)
+    if metric == "messages":
+        return float(messages)
+    if metric == "tokens":
+        return float(tokens_prompt + tokens_completion)
+    return cost_micros / 1_000_000  # "cost"
+
+
+def _sum_totals(day_totals: dict[dt.date, tuple[int, int, int, int, int]]) -> tuple[int, int, int, int, int]:
+    conv = sum(v[0] for v in day_totals.values())
+    msgs = sum(v[1] for v in day_totals.values())
+    tok_p = sum(v[2] for v in day_totals.values())
+    tok_c = sum(v[3] for v in day_totals.values())
+    cost = sum(v[4] for v in day_totals.values())
+    return conv, msgs, tok_p, tok_c, cost
+
+
+def _bucket_key(day: dt.date, granularity: str) -> dt.date:
+    if granularity == "day":
+        return day
+    if granularity == "week":
+        return day - dt.timedelta(days=day.weekday())  # Monday of that week
+    return day.replace(day=1)  # "month"
+
+
+def _months_between(from_date: dt.date, to_date: dt.date) -> int:
+    return (to_date.year - from_date.year) * 12 + (to_date.month - from_date.month) + 1
+
+
+def _shift_months(day: dt.date, months: int) -> dt.date:
+    total = day.year * 12 + (day.month - 1) - months
+    year, month = divmod(total, 12)
+    return dt.date(year, month + 1, 1)
+
+
+def _previous_range(from_date: dt.date, to_date: dt.date, granularity: str) -> tuple[dt.date, dt.date]:
+    """The immediately-preceding period of the same length, for the header's delta pill.
+
+    Day/week buckets shift back by the range's own day-count. Month buckets shift back by
+    whole months instead — sliding a 3-month window back by ~90 days would drift off the
+    1st and silently include part of a fourth month.
+    """
+    prev_to = from_date - dt.timedelta(days=1)
+    if granularity == "month":
+        return _shift_months(from_date, _months_between(from_date, to_date)), prev_to
+    span_days = (to_date - from_date).days + 1
+    return prev_to - dt.timedelta(days=span_days - 1), prev_to
+
+
+async def timeseries(
+    session: AsyncSession,
+    ctx: OrgContext,
+    metric: str,
+    granularity: str,
+    from_date: dt.date,
+    to_date: dt.date,
+    tz: ZoneInfo,
+    agent_id: uuid.UUID | None = None,
+    channel: str | None = None,
+) -> schemas.TimeseriesResponse:
+    """The dashboard "Activity" bar chart (docs/20 §9.3.2, ADR-101): one metric, bucketed by day,
+    week (Monday-start) or month, zero-filled, in the caller's own timezone — plus the prior
+    period's total of the same metric for the header's "vs N last period" delta.
+    """
+    rbac.require_permission(ctx.role, rbac.ANALYTICS_VIEW)
+
+    day_totals = await _local_day_totals(session, ctx, agent_id, channel, tz, from_date, to_date)
+    buckets: dict[dt.date, list[int]] = {}
+    for day in sorted(day_totals):
+        key = _bucket_key(day, granularity)
+        b = buckets.setdefault(key, [0, 0, 0, 0, 0])
+        conv, msgs, tok_p, tok_c, cost = day_totals[day]
+        b[0] += conv
+        b[1] += msgs
+        b[2] += tok_p
+        b[3] += tok_c
+        b[4] += cost
+
+    points = [
+        schemas.TimeseriesPoint(bucket_start=key, value=_metric_value(metric, tuple(b)))
+        for key, b in sorted(buckets.items())
+    ]
+
+    prev_from, prev_to = _previous_range(from_date, to_date, granularity)
+    prev_totals = _sum_totals(await _local_day_totals(session, ctx, agent_id, channel, tz, prev_from, prev_to))
+
+    return schemas.TimeseriesResponse(
+        granularity=granularity,
+        metric=metric,
+        points=points,
+        previous_period_total=_metric_value(metric, prev_totals),
+    )
 
 
 async def by_agent(

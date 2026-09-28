@@ -18,6 +18,43 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-101: One new endpoint (`GET /v1/analytics/timeseries`) for the dashboard's bar-chart "Activity" redesign — timezone-correct, zero-filled, three granularities
+- **Date:** 2026-09-28
+- **Status:** accepted
+- **Context:** 2026-09-28 feedback replaced the dashboard's line chart with a bar chart
+  (`designreference/ACTIVITYNEW DAHSBOARDDESING.png`) that needs Daily (14 days)/Weekly
+  (12 ISO weeks)/Monthly (12 months)/Range views, a delta pill vs. the equal-length prior
+  period, and buckets on the *caller's* calendar day — not UTC's. `/v1/analytics/series` (the
+  old chart's source) only does daily buckets on a naive `cast(created_at, Date)`, i.e. UTC
+  calendar days, has no week/month grouping, and returns no "previous period" total. It also
+  computes every metric (conversations, messages, tokens, cost) in one row per day, which this
+  chart doesn't need — the bar chart shows one metric at a time.
+- **Decision:** One new read-only, org-scoped endpoint,
+  `GET /v1/analytics/timeseries?metric=&granularity=day|week|month&from=&to=&tz=`
+  (`app/modules/analytics/{router,service,schemas}.py`, `TimeseriesResponse`). `tz` is an IANA
+  zone string (frontend sends `Intl.DateTimeFormat().resolvedOptions().timeZone`, same "no
+  stored org timezone yet" gap ADR-100 already flagged); the service groups on
+  `timezone(:tz, created_at)` cast to `Date` — not the naive UTC cast `/series` uses — so a bar
+  labelled "Sep 28" is really that caller's local Sep 28. Day buckets are computed first and
+  zero-filled, then folded into week (Monday-start) or month buckets in Python; the prior-period
+  total shifts the whole `[from, to]` window back by its own length (whole months for month
+  granularity, so a multi-month window doesn't drift off the 1st). Validated: `to >= from`,
+  range capped at 1100 days, `tz` must parse as a real `ZoneInfo`. Same `ANALYTICS_VIEW` RBAC as
+  every other analytics route.
+- **Alternatives considered:** Adding `granularity`/`tz` params to the existing `/series` —
+  rejected because `/series` is still used as-is by `/analytics` and the agent Analytics tab
+  (docs/20's redesign only touched the *dashboard's* chart), and bolting timezone/week/month
+  logic onto its four-metrics-at-once shape would have complicated a route nothing else needs
+  changed. Computing per-bucket totals directly in SQL with `date_trunc('week', ...)` — rejected
+  because Postgres's `date_trunc` weeks (ISO, Monday-start) still needed a from-scratch "previous
+  period" query either way, and the Python zero-fill-then-fold approach mirrors `/series`'s
+  already-reviewed gap-filling pattern instead of inventing a second one.
+- **Consequences:** `/series` and `/timeseries` now both do local per-day aggregation with
+  near-identical queries (`_local_day_totals` vs. `series`'s inline block) — a future cleanup
+  could unify them once `/series` also needs a timezone param, but that's out of scope here per
+  docs/20's "no backend changes beyond what's needed" rule. The dashboard's Activity card is the
+  only caller today.
+
 ### ADR-100: One new endpoint (`GET /v1/analytics/today`) for the dashboard "Today" gauge — the one exception to docs/20's "no backend changes"
 - **Date:** 2026-09-28
 - **Status:** accepted

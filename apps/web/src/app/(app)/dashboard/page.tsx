@@ -24,9 +24,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with a single restrained accent glow */}
-      <div className="relative -mx-4 -mt-6 overflow-hidden px-4 pt-6 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+    <div className="space-y-4">
+      {/* Header with a single restrained accent glow. Tightened padding (2026-09-28 feedback:
+          Today + KPIs + Activity should fit without scrolling through the chart). */}
+      <div className="relative -mx-4 -mt-6 overflow-hidden px-4 pt-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
         <div className="glow-accent pointer-events-none absolute inset-0 -z-10" />
         <PageHeader
           title="Dashboard"
@@ -43,12 +44,12 @@ export default function DashboardPage() {
         </PageHeader>
       </div>
 
-      {/* Stat row, usage chart, per-channel and per-agent breakdowns — all live */}
+      {/* Stat row, activity chart, per-channel and per-agent breakdowns — all live */}
       <DashboardStats />
 
       {/* Two-column body */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
           <AgentsPanel />
         </div>
         <div className="xl:col-span-1">

@@ -319,11 +319,53 @@ existing KPI cards fill a 2×2 grid across columns 2–3 (`<TodayCard>` +
   frontend computes local midnight and sends it as a UTC instant; refetches every 60s
   (`refetchInterval`), so the window itself rolls over once a real midnight passes without a
   page reload.
-- **Three rows below**, each a `<StatusPill>` + today's count: Resolved by AI (success), Handed
-  to human (warn), Unanswered (error) — see ADR-100 for exactly how a conversation lands in one
-  of the three.
-- **States:** loading = skeleton gauge; zero conversations = an empty-looking arc ("0 OUT OF
-  {peak}") plus a muted "No chats yet today."
+- ❌ **Removed per 2026-09-28 feedback:** the three `<StatusPill>` rows below the gauge
+  (Resolved by AI / Handed to human / Unanswered). `today_snapshot` (ADR-100) still returns all
+  three counts — nothing to fix server-side — the card just doesn't render them anymore.
+- **States:** loading = skeleton gauge; zero conversations = an empty-looking arc plus a muted
+  "No chats yet today."
+
+#### 9.3.2 "Activity" bar chart (2026-09-28 feedback; ADR-101)
+
+Replaces the dashboard's line chart (`UsageChart`) with a bar chart matching
+`designreference/ACTIVITYNEW DAHSBOARDDESING.png` — `components/dashboard/activity-chart.tsx`
+(header/period/metric state) + `components/charts/activity-bars.tsx` (presentational SVG),
+backed by `GET /v1/analytics/timeseries` (ADR-101). Scoped to `/dashboard` only — `/analytics`
+and the agent Analytics tab keep `UsageChart` and the old `/series` endpoint.
+
+- **Header:** "Activity" title; big total for the selected period + unit (e.g. "6
+  conversations"); a delta pill vs. the equal-length prior period ("▲ 8%" success / "▼ 5%"
+  error / "New" when the prior period was zero — never a divide-by-zero ∞); a segmented
+  Daily/Weekly/Monthly/Range control; a filter icon opening a metric menu (Conversations
+  default, Messages, Tokens, Cost) — this replaces the old chart's metric tabs.
+- **Periods:** Daily = last 14 days, Weekly = last 12 Monday-start weeks, Monthly = last 12
+  months. Range opens two native `<input type="date">` fields; granularity auto-picks day
+  (≤31 days), week (≤182 days) or month (beyond that) — see `granularityForPeriod` in
+  `lib/activity-chart-math.ts`. The current bucket is labelled "Today"/"This week"/"This
+  month" instead of its date.
+- **Bar style** (tokens added to `globals.css`, both themes — see the file's own comment
+  block for the exact hex/blend): `--bar-fill`/`--bar-stripe` (diagonal SVG `<pattern>`),
+  `--bar-border`, `--bar-cap` (2px lighter top edge) for normal bars; `--bar-gradient-from/-to`
+  (vertical gradient) for the selected bar, which also carries its value in `--on-accent` text
+  and a delta-vs-previous-bar pill above it. Rounded (12px), ~30% gap, a 6px stub instead of a
+  zero-height bar so a quiet day is visibly zero rather than a gap. Grows in on mount via the
+  `animate-bar-grow` Tailwind keyframe (`motion-reduce:animate-none` disables it) — CSS-driven,
+  not JS state, so there's no "set state in an effect" to avoid.
+- **Selection:** click or hover a bar to select it; left/right arrow keys move the selection
+  while the chart group has focus. Defaults to the current bucket on every dataset change
+  (period/metric/range), reset during render rather than in an effect (React's documented
+  "adjusting state when an input changes" pattern), so switching tabs never flashes the
+  previous dataset's selection first.
+- **Accuracy (ADR-101):** `/v1/analytics/timeseries?metric=&granularity=&from=&to=&tz=` buckets
+  by the *caller's* local calendar day (`tz` = the browser's IANA zone, same "no stored org
+  timezone yet" gap as ADR-100's Today gauge), zero-fills every bucket in range, and returns
+  `previous_period_total` for the header's delta. Conversations = started in the bucket;
+  messages = all messages sent in it; tokens/cost = summed from the same rows, matching
+  `/series`'s existing definitions — see ADR-101 for why this is a new endpoint rather than
+  `/series` with more params.
+- **Dashboard density (2026-09-28 feedback):** tightened padding/gaps around the Today card,
+  the KPI grid, the page header and this chart (220px → 180px chart height) so Today + the KPI
+  row + Activity fit without scrolling halfway through the chart on a typical laptop viewport.
 
 ### 9.4 Theme behaviour
 

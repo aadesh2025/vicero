@@ -47,7 +47,7 @@ export function TodayCard({ series, className }: { series: DayPoint[] | undefine
   return (
     <div
       data-testid="today-card"
-      className={cn("flex flex-col rounded-card border border-border bg-surface p-5 shadow-card", className)}
+      className={cn("flex flex-col rounded-card border border-border bg-surface p-4 shadow-card", className)}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -66,9 +66,9 @@ export function TodayCard({ series, className }: { series: DayPoint[] | undefine
       </div>
 
       {isLoading ? (
-        <Skeleton className="mx-auto mt-6 h-[110px] w-full max-w-[220px] rounded-t-full" />
+        <Skeleton className="mx-auto mt-4 h-[96px] w-full max-w-[200px] rounded-t-full" />
       ) : (
-        <div className="relative mx-auto mt-4 w-full max-w-[220px]">
+        <div className="relative mx-auto mt-3 w-full max-w-[200px]">
           <Gauge
             value={total}
             max={peak}

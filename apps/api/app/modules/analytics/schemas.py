@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -90,6 +91,29 @@ class DayPoint(BaseModel):
     tokens_prompt: int
     tokens_completion: int
     cost_micros: int
+
+
+class TimeseriesPoint(BaseModel):
+    """One bucket of the dashboard "Activity" bar chart (docs/20 §9.3.2, ADR-101).
+
+    `bucket_start` is the *local* calendar date the bucket starts on (the Monday of a week,
+    the 1st of a month) — local to the `tz` the request was made with, not UTC, so a bar
+    labelled "Sep 28" really is everything the caller's midnight-to-midnight Sep 28 contained.
+    """
+
+    bucket_start: dt.date
+    value: float
+
+
+class TimeseriesResponse(BaseModel):
+    """`GET /v1/analytics/timeseries` (ADR-101): one metric, zero-filled, bucketed by the
+    caller's timezone, plus the same-length prior period's total for the header's delta pill.
+    """
+
+    granularity: Literal["day", "week", "month"]
+    metric: Literal["conversations", "messages", "tokens", "cost"]
+    points: list[TimeseriesPoint]
+    previous_period_total: float
 
 
 class AgentBucket(BaseModel):

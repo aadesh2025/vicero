@@ -9,6 +9,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.chat.pii import classify_contact
+from app.core.plans import PlanStatus
 from app.core.rbac import ASSIGNABLE_ROLES
 
 
@@ -141,7 +142,7 @@ class PlanStatusOut(BaseModel):
     """The org's plan as the dashboard needs it (docs/18 §8). Limits come from `core.plans`."""
 
     plan: str
-    status: Literal["trial", "trial_expired", "legacy"]
+    status: PlanStatus
     trial_ends_at: dt.datetime | None
     days_left: int | None
     expired_reason: Literal["time", "messages"] | None

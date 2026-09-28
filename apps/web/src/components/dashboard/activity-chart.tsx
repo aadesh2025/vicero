@@ -166,11 +166,11 @@ export function ActivityChart() {
 
   return (
     <div data-testid="activity-chart" className="rounded-card border border-border bg-surface">
-      <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="font-display text-[15px] font-extrabold text-text">Activity</h3>
+          <h3 className="font-display text-[14px] font-extrabold text-text">Activity</h3>
           <div className="mt-1 flex flex-wrap items-baseline gap-2">
-            <span className="font-display text-2xl font-extrabold tabular-nums text-text">
+            <span className="font-display text-xl font-extrabold tabular-nums text-text">
               {isLoading ? "—" : `${formatMetric(metric, total)} ${METRIC_LABEL[metric].toLowerCase()}`}
             </span>
             {!isLoading && (
@@ -255,9 +255,9 @@ export function ActivityChart() {
         </div>
       )}
 
-      <div className="px-2 pb-1 pt-3">
+      <div className="px-2 pb-1 pt-2">
         {isLoading ? (
-          <Skeleton className="h-[180px] rounded-lg" />
+          <Skeleton className="h-36 rounded-lg" />
         ) : (
           <ActivityBars
             bars={bars}
@@ -265,7 +265,7 @@ export function ActivityChart() {
             onSelect={setSelectedIndex}
             format={(n) => formatMetric(metric, n)}
             selectedDelta={barDelta}
-            height={180}
+            height={144}
             ariaLabel={`${METRIC_LABEL[metric]} per ${granularity}, ${fromIso} to ${toIso}`}
           />
         )}

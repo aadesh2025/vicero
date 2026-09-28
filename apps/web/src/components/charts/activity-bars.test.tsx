@@ -89,4 +89,18 @@ describe("<ActivityBars>", () => {
     render(<ActivityBars bars={[]} selectedIndex={0} onSelect={() => {}} format={String} selectedDelta={null} ariaLabel="Activity" />);
     expect(screen.getByText(/No activity/)).toBeInTheDocument();
   });
+
+  it("a quiet chart (every bar 0) doesn't warn about duplicate React keys", () => {
+    // niceTicks(0, 5) is [0, 0, 0, 0, 0] — every y-axis tick keyed on its own value would
+    // collide. Regression test for the "two children with the same key, `0`" console error.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const zeroBars = [
+      { key: "2026-03-01", label: "Mar 1", value: 0, ariaLabel: "Mar 1: 0 conversations" },
+      { key: "2026-03-02", label: "Mar 2", value: 0, ariaLabel: "Mar 2: 0 conversations" },
+    ];
+    render(<ActivityBars bars={zeroBars} selectedIndex={0} onSelect={() => {}} format={String} selectedDelta={null} ariaLabel="Activity" />);
+    const keyWarning = errorSpy.mock.calls.some((call) => String(call[0]).includes("same key"));
+    expect(keyWarning).toBe(false);
+    errorSpy.mockRestore();
+  });
 });

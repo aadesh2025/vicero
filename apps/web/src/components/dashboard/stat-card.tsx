@@ -38,20 +38,20 @@ export function StatCard({
   const t = TONE[tone];
 
   return (
-    <div className="rounded-card border border-border bg-surface p-4 shadow-card">
-      <div className="flex items-center gap-2.5">
-        <span className={cn("grid size-[34px] shrink-0 place-items-center rounded-[10px]", t.chip)}>
-          <Icon className="size-[18px]" aria-hidden />
+    <div className="rounded-card border border-border bg-surface p-3 shadow-card">
+      <div className="flex items-center gap-2">
+        <span className={cn("grid size-7 shrink-0 place-items-center rounded-[9px]", t.chip)}>
+          <Icon className="size-4" aria-hidden />
         </span>
-        <span className="text-[13px] font-bold text-muted">{label}</span>
+        <span className="text-[12px] font-bold text-muted">{label}</span>
       </div>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <span className="font-display text-[26px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-text">
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <span className="font-display text-[21px] font-extrabold leading-none tracking-[-0.02em] tabular-nums text-text">
           {value}
         </span>
         {spark && spark.length > 1 && <Sparkline values={spark} color={t.spark} />}
       </div>
-      <div className="mt-2.5 flex items-center gap-2 text-xs">
+      <div className="mt-1.5 flex items-center gap-2 text-xs">
         {delta !== undefined && (
           <span
             className={cn(

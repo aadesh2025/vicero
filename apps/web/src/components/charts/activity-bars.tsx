@@ -12,7 +12,7 @@ export interface ActivityBar {
   ariaLabel: string;
 }
 
-const PAD = { top: 40, right: 8, bottom: 24, left: 34 };
+const PAD = { top: 30, right: 8, bottom: 18, left: 28 };
 
 /**
  * The dashboard "Activity" bar chart (docs/20 §9.3.2, ADR-101), styled after
@@ -99,7 +99,9 @@ export function ActivityBars({
         {ticks.map((t, i) => {
           const y = PAD.top + innerH - (innerH * t) / topTick;
           return (
-            <g key={t}>
+            // Index, not value: a quiet chart's ticks are all 0 (niceTicks(0, 5)), which
+            // duplicate-keyed on the value itself and threw "two children with the same key".
+            <g key={i}>
               <line
                 x1={PAD.left}
                 x2={w - PAD.right}

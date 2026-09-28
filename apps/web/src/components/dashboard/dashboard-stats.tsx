@@ -47,9 +47,9 @@ export function DashboardStats() {
     <>
       {/* Today gauge spans both KPI rows in one column; the four KPIs fill a 2x2 grid beside
           it (docs/20 §9.3.1). Below `lg` everything just stacks in document order. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <TodayCard series={series} className="lg:row-span-2" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-2">
           <StatCard
             label="Conversations"
             value={compact(overview?.conversations ?? 0)}

@@ -38,6 +38,20 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/22 Phase A1: billing period, payment ledger, storage accounting (2026-09-28, ADR-102,
+  migration 0029).** The migration/model/`usage.py`/`cycles.py` side of paid-plan billing, run
+  in parallel with another agent's `app/modules/billing/` track (path-scoped commit, file
+  boundary honoured exactly — see ADR-102 for what was flagged rather than fixed:
+  `chat/inbound.py:253` still passes the raw plan cap to `reserve()`, not
+  `effective_max_messages`, so a pack has no effect on the live chat path until that call site is
+  updated). `org_message_usage.reserve()` now rolls a stale 30-day billing window lazily, in the
+  same atomic `UPDATE` that admits a reservation — no scheduler. New `app/billing/cycles.py`
+  (payment ledger: `open_cycle`/`mark_paid`/`waive`/`current_cycle`/`payment_state`, the last
+  computed from the clock, never stored). `org_storage_usage` backfilled from real
+  `documents.size_bytes` (3 docs / 2196 bytes on this dev DB, verified against a direct
+  `SUM`/`COUNT`). 22 new tests (`test_billing_period.py`, `test_billing_cycles.py`) plus the
+  existing `test_message_metering.py` re-run untouched (23/23) to pin trial behaviour is
+  byte-identical. Migration round-trip (`upgrade → downgrade -1 → upgrade`) verified clean.
 - **Dashboard follow-up: pure-black dark theme, pastel gradient cards, "Today" gauge
   (2026-09-28, ADR-100).** Three changes to the R0–R8 redesign below, from a closer look at
   `designreference/UI_resign.jfif`'s dark mode. **(1)** Dark theme is now pure neutral black

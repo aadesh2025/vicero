@@ -1,14 +1,25 @@
-"""Message metering for plans with a cap (docs/18 §7, ADR-088).
+"""Message metering for plans with a cap (docs/18 §7, docs/22 §6, ADR-088, ADR-102).
 
 **1 message = 1 visitor message OR 1 AI reply**, so one question and its answer cost 2. Not
 counted: an operator's manual reply from the inbox (no model cost), Playground turns (capped
 separately per day), and system/event messages.
 
 Race safety
-    `reserve()` is ONE statement — `UPDATE … SET messages_used = messages_used + :n WHERE
-    messages_used + :n <= :limit RETURNING messages_used`. Postgres serialises concurrent
-    updates of the row and re-evaluates the WHERE against the winner's value, so two visitors
-    arriving together cannot both push past the cap. No read-then-write anywhere.
+    `reserve()` is ONE statement — an atomic `UPDATE … WHERE messages_used + :n <= :limit
+    RETURNING messages_used`, that also rolls a stale billing window in the same statement
+    (docs/22 §6). Postgres serialises concurrent updates of the row and re-evaluates the WHERE
+    against the winner's value, so two visitors arriving together cannot both push past the cap,
+    and a rollover can never race an increment. No read-then-write anywhere.
+
+Billing period (docs/22 §6)
+    `org_message_usage.period_end` is `NULL` for `trial`/`legacy` — the lifetime-counter
+    behaviour this module always had. A paid plan gets a real 30-day window via
+    `start_period()`; once `period_end` is in the past, the next `reserve()` rolls it forward
+    and resets `messages_used`/`extra_messages` **lazily, in the same statement that admits the
+    reservation** — never a scheduled job, for the same reason `plans.py`'s expiry is computed
+    rather than cron-flipped: a dead scheduler must never be able to block a paying customer.
+    `:limit` is always `effective_max_messages` (plan cap + packs) — callers must pass that, not
+    the raw plan cap, or a pack does nothing.
 
 Why it runs in its own short transaction
     A row updated inside the request's transaction stays locked until that transaction ends —
@@ -24,7 +35,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, case, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,11 +64,27 @@ async def load_entitlements(
     session: AsyncSession, org: Organization, *, now: dt.datetime | None = None
 ) -> Entitlements:
     """What `org` may do right now. The only DB-backed way to ask (see `plans.get_entitlements`)."""
-    ent = get_entitlements(org.plan, trial_ends_at=org.trial_ends_at, now=now)
+    ent = get_entitlements(
+        org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at, now=now
+    )
     if not ent.is_metered:
         return ent
-    used = await messages_used(session, org.id)
-    return get_entitlements(org.plan, trial_ends_at=org.trial_ends_at, messages_used=used, now=now)
+    row = (
+        await session.execute(
+            select(OrgMessageUsage.messages_used, OrgMessageUsage.extra_messages).where(
+                OrgMessageUsage.organization_id == org.id
+            )
+        )
+    ).one_or_none()
+    used, extra = (int(row[0]), int(row[1])) if row is not None else (0, 0)
+    return get_entitlements(
+        org.plan,
+        trial_ends_at=org.trial_ends_at,
+        plan_expires_at=org.plan_expires_at,
+        messages_used=used,
+        extra_messages=extra,
+        now=now,
+    )
 
 
 async def load_entitlements_for(
@@ -71,29 +98,98 @@ async def load_entitlements_for(
 async def reserve(
     session: AsyncSession, org_id: uuid.UUID, limit: int, n: int = MESSAGES_PER_EXCHANGE
 ) -> bool:
-    """Atomically claim `n` messages. False means the org is out — send nothing."""
+    """Atomically claim `n` messages. False means the org is out — send nothing.
+
+    `limit` must be `Entitlements.effective_max_messages` (the plan cap plus any packs bought
+    this period) — this function does not recompute a cap, it enforces whatever it is given.
+    """
+    now = dt.datetime.now(tz=dt.UTC)
     async with _short_session(session) as tx:
-        used = await _reserve_once(tx, org_id, limit, n)
+        used = await _reserve_once(tx, org_id, limit, n, now)
         if used is None and await _ensure_row(tx, org_id):
-            used = await _reserve_once(tx, org_id, limit, n)
+            used = await _reserve_once(tx, org_id, limit, n, now)
         await tx.commit()
     return used is not None
 
 
-def _reserve_stmt(org_id: uuid.UUID, limit: int, n: int):  # type: ignore[no-untyped-def]
+def _reserve_stmt(org_id: uuid.UUID, limit: int, n: int, now: dt.datetime):  # type: ignore[no-untyped-def]
+    """The atomic roll-and-increment (docs/22 §6).
+
+    A stale window (`period_end` in the past) always admits the reservation — that is the roll
+    — and resets `messages_used` to `n` and `extra_messages` to 0 (packs never carry over) in
+    the same statement, opening a fresh 30-day window from `now`. A fresh/non-expiring window
+    (`period_end IS NULL`, i.e. `trial`/`legacy`) behaves exactly as before: admitted only if
+    `messages_used + n` still fits under `limit`.
+    """
+    stale = and_(OrgMessageUsage.period_end.isnot(None), OrgMessageUsage.period_end <= now)
     return (
         update(OrgMessageUsage)
         .where(
             OrgMessageUsage.organization_id == org_id,
-            OrgMessageUsage.messages_used + n <= limit,
+            stale | (OrgMessageUsage.messages_used + n <= limit),
         )
-        .values(messages_used=OrgMessageUsage.messages_used + n)
+        .values(
+            messages_used=case((stale, n), else_=OrgMessageUsage.messages_used + n),
+            extra_messages=case((stale, 0), else_=OrgMessageUsage.extra_messages),
+            period_start=case((stale, now), else_=OrgMessageUsage.period_start),
+            period_end=case(
+                (stale, now + dt.timedelta(days=30)), else_=OrgMessageUsage.period_end
+            ),
+        )
         .returning(OrgMessageUsage.messages_used)
     )
 
 
-async def _reserve_once(tx: AsyncSession, org_id: uuid.UUID, limit: int, n: int) -> int | None:
-    return (await tx.execute(_reserve_stmt(org_id, limit, n))).scalar_one_or_none()
+async def _reserve_once(
+    tx: AsyncSession, org_id: uuid.UUID, limit: int, n: int, now: dt.datetime
+) -> int | None:
+    return (await tx.execute(_reserve_stmt(org_id, limit, n, now))).scalar_one_or_none()
+
+
+async def start_period(session: AsyncSession, org_id: uuid.UUID, days: int = 30) -> None:
+    """Open a fresh billing window: called when a paid plan is granted (docs/22 §6).
+
+    Resets the counter to 0 and sets `period_start`/`period_end` — an upsert, so it works
+    whether or not the org has ever been metered before (a `legacy` org upgraded straight to a
+    paid plan has no row yet).
+    """
+    now = dt.datetime.now(tz=dt.UTC)
+    period_end = now + dt.timedelta(days=days)
+    values = {
+        "organization_id": org_id,
+        "messages_used": 0,
+        "extra_messages": 0,
+        "period_start": now,
+        "period_end": period_end,
+    }
+    async with _short_session(session) as tx:
+        await tx.execute(
+            pg_insert(OrgMessageUsage)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=[OrgMessageUsage.organization_id],
+                set_={
+                    "messages_used": 0,
+                    "extra_messages": 0,
+                    "period_start": now,
+                    "period_end": period_end,
+                },
+            )
+        )
+        await tx.commit()
+
+
+async def add_extra_messages(session: AsyncSession, org_id: uuid.UUID, n: int) -> None:
+    """Grant `n` extra messages for the current period (docs/22 §7's packs). A single atomic
+    increment — packs are always a deliberate staff action, never auto-granted, and the caller
+    (the admin "Add messages" endpoint) is responsible for the `plan_grants`/audit trail."""
+    async with _short_session(session) as tx:
+        await tx.execute(
+            update(OrgMessageUsage)
+            .where(OrgMessageUsage.organization_id == org_id)
+            .values(extra_messages=OrgMessageUsage.extra_messages + n)
+        )
+        await tx.commit()
 
 
 async def _ensure_row(tx: AsyncSession, org_id: uuid.UUID) -> bool:

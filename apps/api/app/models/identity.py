@@ -152,6 +152,20 @@ class Organization(Base, UUIDPrimaryKey, TimestampMixin, SoftDeleteMixin):
     #: `settings.agentic_loop_enabled` is also on (app.chat.budget.agentic_loop_enabled).
     agentic_loop_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    #: Who set `plan` to what it currently is (docs/22 §5): `system` (the default nothing ever
+    #: chose), `trial` (self-serve signup), `admin` (a staff grant), `stripe` (reserved, docs/23
+    #: — nothing in this codebase writes it yet). Display/audit only; no access check reads it.
+    plan_source: Mapped[str] = mapped_column(
+        String(16), default="system", server_default="system", nullable=False
+    )
+    #: When a granted paid plan lapses. `NULL` = until revoked. A past value means `plan_expired`
+    #: (`app/core/plans.py`), computed the same way `trial_expired` already is — never flipped by
+    #: a cron, so a dead scheduler can never either lock out or fail to lock out a client.
+    plan_expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    plan_granted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    plan_granted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    #: Why — client name, invoice number, what they paid. For the human, never read by code.
+    plan_note: Mapped[str | None] = mapped_column(String(500))
 
 
 class Membership(Base, UUIDPrimaryKey, TimestampMixin):

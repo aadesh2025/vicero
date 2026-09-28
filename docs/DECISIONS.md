@@ -18,6 +18,70 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-102: Paid-plan billing period, payment ledger and storage accounting (migration 0029, docs/22 Phase A1)
+- **Date:** 2026-09-28
+- **Status:** accepted
+- **Context:** docs/22-BILLING-PAID-PLANS.md needs four things `app/core/plans.py` (Phase A0)
+  didn't add: (1) who granted an org's current plan and until when (§5); (2) a payment ledger
+  the operator marks paid by hand, since the app can never know a bank transfer arrived (§5.1);
+  (3) `org_message_usage.messages_used` turned into a **lifetime** counter in Phase A0, correct
+  for a 10-day trial and wrong for a $49/month plan where 2,000 messages must reset every
+  period (§6); (4) per-org document storage accounting, needed before any storage limit can be
+  enforced (§3 rule 2). This phase ran in parallel with another agent building
+  `app/modules/billing/` — see the file-boundary note below.
+- **Decision:**
+  - **Migration `0029_paid_plans_admin_grants`**: 5 nullable/server-defaulted columns on
+    `organizations` (`plan_source`/`plan_expires_at`/`plan_granted_at`/`plan_granted_by`/
+    `plan_note`); 3 columns on `org_message_usage` (`period_start`/`period_end`/
+    `extra_messages`); two new append-only-in-spirit tables (`plan_grants`, `billing_cycles`);
+    one new per-org table (`org_storage_usage`), **backfilled in the same migration** from
+    `documents.size_bytes`/`COUNT(*)` — real numbers (3 docs / 2196 bytes verified against a
+    direct `SUM`/`COUNT` on this machine's dev DB), not a zero-start, since `documents` already
+    carries `size_bytes`. No table rewrite: every new column is nullable or server-defaulted.
+  - **`usage.reserve()` rewritten as one atomic roll-and-increment**: a stale window
+    (`period_end` in the past) always admits the reservation and resets `messages_used`/
+    `extra_messages`/`period_start`/`period_end` in the *same* `UPDATE`, exactly as docs/22 §6
+    specifies — lazy, never a cron, for the same reason `plans.py`'s computed expiry is: a dead
+    scheduler must never be able to block a paying customer. `period_end IS NULL`
+    (`trial`/`legacy`) takes the old branch of the `CASE` unconditionally, so those plans are
+    byte-identical to before (pinned by re-running `test_message_metering.py` untouched: 23/23
+    green). Added `start_period()` (upsert, so it works whether or not the org has ever been
+    metered) and `add_extra_messages()` per docs/22 §6/§7. `load_entitlements()` now reads
+    `extra_messages` off the row and `org.plan_expires_at` off the org, wiring
+    `Entitlements.effective_max_messages` up to real data for the first time — previously every
+    paid-plan org would have gotten `plan_expires_at=None` forever, since the column didn't
+    exist and nothing computed `plan_expired`.
+  - **`app/billing/cycles.py` (new)**: `open_cycle`/`mark_paid`/`waive`/`current_cycle`/
+    `payment_state` exactly per docs/22 §5.1's spec. `payment_state` is computed
+    (`overdue = now >= period_end`), never stored. `mark_paid(renew=True)` extends
+    `Organization.plan_expires_at` by 30 days **and** opens the next cycle as `pending`, in one
+    transaction — the "Mark paid & renew" monthly-renewal button. Every state change writes a
+    `plan_grants` row **and** calls `write_audit(...)`: two records on purpose, one the billing
+    view, one the security view. `waive()` reuses the `payment_marked` grant action rather than
+    inventing a 6th value for `plan_grants.action`'s documented 5-value enum (§5) — the grant
+    record is about the payment status changing, not a new action type.
+  - **File boundary respected exactly**: only the files docs/22-PHASE-A1-PROMPT.md §1 listed
+    were touched. **Flagging, not fixing** (outside the boundary): `app/chat/inbound.py:253`
+    calls `usage.reserve(session, org_id, ent.max_messages)` — the **raw** plan cap, not
+    `ent.effective_max_messages`. Until that call site is updated (by whoever owns
+    `app/chat/`), a pack bought via `add_extra_messages()` raises the entitlements the dashboard
+    reads but does **not** actually let the live chat path answer more messages. This is
+    docs/22-PHASE-A1-PROMPT.md §2's own warning ("every message cap in this phase is
+    `effective_max_messages`, never `spec.max_messages`") landing on a caller this phase was not
+    allowed to touch.
+- **Alternatives considered:** A Celery-beat job to roll billing periods — rejected for the
+  identical reason docs/18's trial expiry is computed rather than cron-flipped (a dead
+  scheduler must never be able to lock out, or fail to lock out, a paying customer). Storing
+  `payment_state` as a column on `billing_cycles` — rejected because "overdue" is purely a
+  function of the clock (docs/22 §5.1's own `payment_state()` spec); a stored flag would need a
+  sweep to keep it honest, which is exactly the kind of scheduler this whole design avoids.
+- **Consequences:** `app/modules/billing/` (the parallel track) can now call
+  `usage.start_period()` + `cycles.open_cycle()` + set `Organization.plan_*` together to grant a
+  paid plan, and `usage.add_extra_messages()` + a `plan_grants` write to sell a pack — none of
+  that orchestration lives in this phase's files, by design (§1's boundary). The
+  `chat/inbound.py` gap above is the one loose end a human or the other track needs to close
+  before packs have any real effect on the visitor-facing chat path.
+
 ### ADR-101: One new endpoint (`GET /v1/analytics/timeseries`) for the dashboard's bar-chart "Activity" redesign — timezone-correct, zero-filled, three granularities
 - **Date:** 2026-09-28
 - **Status:** accepted

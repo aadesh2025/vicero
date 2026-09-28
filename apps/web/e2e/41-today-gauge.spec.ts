@@ -2,10 +2,12 @@ import { test, expect } from "@playwright/test";
 import { API, auth, authenticateBrowser, createAccount, createPublishedAgent } from "./helpers";
 
 /**
- * The dashboard "Today" gauge (docs/20 §9.3.1, ADR-100): resolved/handed-off/unanswered
- * counts for conversations created today, split exactly the way `today_snapshot` defines it.
+ * The dashboard "Today" gauge (docs/20 §9.3.1, ADR-100): total conversations created today,
+ * drawn against the 30-day peak. The resolved/handed-off/unanswered breakdown was removed
+ * from the card per 2026-09-28 feedback, but `today_snapshot` still returns it and the
+ * gauge's accessible name still reports the total.
  */
-test("the Today card shows real resolved/handed-off/unanswered counts, in both themes", async ({
+test("the Today card shows the real conversation count, in both themes", async ({
   page,
   context,
   request,
@@ -53,10 +55,6 @@ test("the Today card shows real resolved/handed-off/unanswered counts, in both t
     const gauge = card.getByRole("img", { name: /conversations today/i });
     await expect(gauge).toBeVisible();
     await expect(gauge).toHaveAccessibleName(/^3 conversations today/);
-
-    await expect(card.getByText("Resolved by AI").locator("..")).toContainText("1");
-    await expect(card.getByText("Handed to human").locator("..")).toContainText("1");
-    await expect(card.getByText("Unanswered").locator("..")).toContainText("1");
   }
 });
 

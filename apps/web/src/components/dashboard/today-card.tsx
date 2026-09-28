@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { Gauge } from "@/components/charts/gauge";
-import { StatusPill } from "@/components/shared/status-pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getToday } from "@/lib/api/analytics";
 import type { DayPoint } from "@/lib/api/analytics";
@@ -83,35 +82,6 @@ export function TodayCard({ series, className }: { series: DayPoint[] | undefine
       )}
       {!isLoading && total === 0 && (
         <p className="mt-2 text-center text-xs font-semibold text-faint">No chats yet today.</p>
-      )}
-
-      <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4">
-        <TodayRow status="resolved" label="Resolved by AI" count={data?.resolved_by_ai} loading={isLoading} />
-        <TodayRow status="handoff" label="Handed to human" count={data?.handed_to_human} loading={isLoading} />
-        <TodayRow status="unanswered" label="Unanswered" count={data?.unanswered} loading={isLoading} />
-      </div>
-    </div>
-  );
-}
-
-function TodayRow({
-  status,
-  label,
-  count,
-  loading,
-}: {
-  status: "resolved" | "handoff" | "unanswered";
-  label: string;
-  count: number | undefined;
-  loading: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <StatusPill status={status}>{label}</StatusPill>
-      {loading ? (
-        <Skeleton className="h-4 w-6" />
-      ) : (
-        <span className="text-sm font-bold tabular-nums text-text">{count ?? 0}</span>
       )}
     </div>
   );

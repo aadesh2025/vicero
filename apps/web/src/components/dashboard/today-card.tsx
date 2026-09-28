@@ -78,9 +78,6 @@ export function TodayCard({ series, className }: { series: DayPoint[] | undefine
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-1 flex flex-col items-center">
             <span className="font-display text-[28px] font-extrabold leading-none tabular-nums text-text">{total}</span>
-            <span className="mt-1 text-[10.5px] font-extrabold uppercase tracking-[0.08em] text-faint">
-              out of {peak}
-            </span>
           </div>
         </div>
       )}

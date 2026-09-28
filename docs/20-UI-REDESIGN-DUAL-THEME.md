@@ -278,6 +278,10 @@ Every component must look right in **both themes** and cover these states: defau
 
 ### 9.3 AI Builder rail (Dashboard only; small, no new backend)
 
+❌ **Removed from `/dashboard` per 2026-09-28 feedback.** The component (`components/dashboard/
+ai-builder-rail.tsx`) still exists, built and tested as described below, but is no longer
+imported by the dashboard page — kept in case it's wanted elsewhere later rather than deleted.
+
 - A 300px right rail on `/dashboard`, collapsible, collapse state remembered in `localStorage`.
 - **Content:**
   - Header: "AI Builder" in `ai` colour with a sparkle icon.
@@ -307,8 +311,10 @@ existing KPI cards fill a 2×2 grid across columns 2–3 (`<TodayCard>` +
   silently ignore.)
 - **Gauge:** track `surface-3`, fill a gradient arc (`--accent` → `--gauge-to`, a new token:
   light `#60A5FA`, dark `#BFDBFE`), round caps. Centre = conversations started **today** (local
-  midnight to now); under it, "OUT OF {peak}" where peak = the busiest single day in the last
-  30 days, floored at 10. Arc fill = `today / peak`, capped at 100%.
+  midnight to now) — just the number; the "OUT OF {peak}" caption under it was removed per
+  2026-09-28 feedback. `peak` (busiest single day in the last 30 days, floored at 10) still
+  drives the arc's fill fraction (`today / peak`, capped at 100%) and the gauge's own
+  accessible name, just not shown as on-screen text.
 - **"Today" is the browser's timezone** (no org timezone is stored yet — ADR-100). The
   frontend computes local midnight and sends it as a UTC instant; refetches every 60s
   (`refetchInterval`), so the window itself rolls over once a real midnight passes without a

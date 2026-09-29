@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.email import get_email_backend
 from app.models import KnowledgeBase, Organization
-from tests.selfserve_helpers import bearer, signup, trial_org
+from tests.selfserve_helpers import bearer, signup, trial_org, verify_email
 
 pytestmark = pytest.mark.usefixtures("self_serve")
 
@@ -569,3 +569,71 @@ async def test_an_org_already_over_a_new_lower_team_cap_keeps_its_existing_membe
 
     blocked = await _invite(client, headers, org_id, f"sixth.{org_id[:8]}@example.com")
     assert blocked.status_code == 402, blocked.text
+
+
+async def _create_channel(client: AsyncClient, headers: dict[str, str], agent_id: str, kind: str) -> Response:
+    return await client.post(
+        "/v1/channels", json={"agent_id": agent_id, "type": kind, "config": {}}, headers=headers
+    )
+
+
+async def test_channel_connect_blocked_when_not_on_the_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`starter` only includes the `web` channel — `whatsapp` isn't in its allowlist."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)
+    agent_id = await _agent_id(client, headers)
+    resp = await _create_channel(client, headers, agent_id, "whatsapp")
+    assert resp.status_code == 402, resp.text
+    assert resp.json()["error"]["details"]["feature"] == "channels"
+
+
+async def test_channel_connect_succeeds_when_on_the_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)  # includes whatsapp
+    agent_id = await _agent_id(client, headers)
+    resp = await _create_channel(client, headers, agent_id, "whatsapp")
+    assert resp.status_code == 201, resp.text
+
+
+async def test_channel_connect_always_succeeds_on_an_unlimited_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)  # channels=None
+    agent_id = await _agent_id(client, headers)
+    resp = await _create_channel(client, headers, agent_id, "discord")  # not even on Pro
+    assert resp.status_code == 201, resp.text
+
+
+async def test_channel_connect_blocked_when_the_plan_has_expired(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    agent_id = await _agent_id(client, headers)
+    await _set_plan(db_session, org_id, "pro", expires_at=PAST)
+    resp = await _create_channel(client, headers, agent_id, "whatsapp")
+    assert resp.status_code == 402, resp.text
+
+
+async def test_channel_enable_blocked_after_a_downgrade_even_though_it_already_exists(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """docs/22 §11: channels gate at connect *and* enable, not just message-send time — an
+    existing channel from a richer plan must not be re-enable-able after a downgrade."""
+    _, headers, org_id = await trial_org(client)
+    await verify_email(client)  # required for enabling; isolates the channel-allowed gate
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+    agent_id = await _agent_id(client, headers)
+    created = await _create_channel(client, headers, agent_id, "whatsapp")
+    assert created.status_code == 201, created.text
+    channel_id = created.json()["id"]
+
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)  # whatsapp no longer allowed
+
+    enabled = await client.post(f"/v1/channels/{channel_id}/enable", headers=headers)
+    assert enabled.status_code == 402, enabled.text
+    assert enabled.json()["error"]["details"]["feature"] == "channels"

@@ -84,6 +84,7 @@ async def create_channel(
     adapter = get_channel(data.type)
     if adapter is None:
         raise AppError("channels.unknown_type", f"Unknown channel type '{data.type}'.", 400)
+    await usage.require_channel_allowed(session, ctx.org, data.type)
     agent = await session.get(Agent, data.agent_id)
     if agent is None or agent.organization_id != ctx.org.id or agent.deleted_at is not None:
         raise AppError("agents.not_found", "Agent not found.", 404)
@@ -124,9 +125,10 @@ async def update_channel(
     session: AsyncSession, ctx: OrgContext, channel_id: uuid.UUID, data: schemas.UpdateChannelRequest
 ) -> schemas.ChannelOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    channel = await _get_channel(session, ctx, channel_id)
     if data.enabled:
         usage.require_verified_email_to_go_live(ctx.org, ctx.user)
-    channel = await _get_channel(session, ctx, channel_id)
+        await usage.require_channel_allowed(session, ctx.org, channel.type)
     adapter = get_channel(channel.type) or BaseChannel()
     if data.name is not None:
         channel.name = data.name
@@ -153,9 +155,10 @@ async def set_enabled(
     session: AsyncSession, ctx: OrgContext, channel_id: uuid.UUID, enabled: bool
 ) -> schemas.ChannelOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    channel = await _get_channel(session, ctx, channel_id)
     if enabled:
         usage.require_verified_email_to_go_live(ctx.org, ctx.user)
-    channel = await _get_channel(session, ctx, channel_id)
+        await usage.require_channel_allowed(session, ctx.org, channel.type)
     channel.enabled = enabled
     adapter = get_channel(channel.type) or BaseChannel()
     if enabled:

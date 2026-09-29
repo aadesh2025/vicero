@@ -35,7 +35,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import and_, case, select, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -266,19 +266,24 @@ async def playground_allowed(org_id: uuid.UUID, ent: Entitlements) -> bool:
     return allowed
 
 
-# ── Server-side gates (docs/18 §9) ────────────────────────────────────────────
+# ── Server-side gates (docs/18 §9, docs/22 §11) ───────────────────────────────
 # Every one reads the plan through `get_entitlements`; none knows a limit or a plan name.
 async def require_feature(session: AsyncSession, org: Organization, feature: str) -> None:
     """402 `plan_limit` unless the org's plan includes `feature` (workflows / n8n / tool_calling)."""
-    # Feature flags do not depend on usage, so no counter query: a trial and an expired trial
-    # both lock the same features.
-    if not get_entitlements(org.plan, trial_ends_at=org.trial_ends_at).allows(feature):
+    # Feature flags do not depend on *usage*, so no counter query — but `plan_expires_at` is
+    # still required: without it, a lapsed *paid* plan (as opposed to a finished trial) is never
+    # detected as expired here, and its features stay unlocked past expiry (docs/22 §11).
+    if not get_entitlements(org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at).allows(
+        feature
+    ):
         raise plan_limit(feature)
 
 
 def feature_allowed(org: Organization, feature: str) -> bool:
     """Non-raising form of `require_feature`, for the runtime, which must skip rather than fail."""
-    return get_entitlements(org.plan, trial_ends_at=org.trial_ends_at).allows(feature)
+    return get_entitlements(
+        org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at
+    ).allows(feature)
 
 
 async def require_agents_writable(session: AsyncSession, org: Organization) -> Entitlements:
@@ -319,10 +324,205 @@ def require_verified_email_to_go_live(org: Organization, user: object) -> None:
     existed may never have verified, and locking a client out of their own agent is exactly what
     the `legacy` plan exists to prevent.
     """
-    spec = get_entitlements(org.plan, trial_ends_at=org.trial_ends_at).spec
+    spec = get_entitlements(
+        org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at
+    ).spec
     if spec.publish_needs_verified_email and getattr(user, "email_verified_at", None) is None:
         raise AppError(
             "auth.email_unverified",
             "Verify your email address before publishing an agent to a live channel.",
             403,
+        )
+
+
+# ── Per-resource creation gates (docs/22 §11 enforcement matrix) ─────────────
+# Same shape as `require_new_agent_slot` above: load entitlements, compare a live COUNT(*)
+# against the plan's cap, 402 `plan_limit` at the cap. `None` = unlimited, never gated; `0` =
+# not included in the plan at all, same 402 with a different message. An expired trial or
+# lapsed paid plan blocks creation of every limited resource, not just agents.
+def _plan_title(plan: str) -> str:
+    return plan.replace("_", " ").title()
+
+
+async def _require_not_expired(
+    session: AsyncSession, org: Organization, feature: str, message: str
+) -> Entitlements:
+    ent = await load_entitlements(session, org)
+    if ent.is_expired:
+        raise plan_limit(feature, message)
+    return ent
+
+
+def _limit_error(feature: str, label: str, plan: str, limit: int) -> AppError:
+    if limit == 0:
+        return plan_limit(feature, f"{_plan_title(plan)} plan does not include {label}. Upgrade to add one.")
+    return plan_limit(feature, f"{_plan_title(plan)} plan allows up to {limit} {label}. Upgrade to add more.")
+
+
+async def _require_slot(
+    session: AsyncSession, org: Organization, feature: str, label: str, count: int
+) -> Entitlements:
+    """`count` is the caller's own live `COUNT(*)` — computed by the caller because some
+    resources (tools) pool more than one table into a single cap."""
+    ent = await _require_not_expired(
+        session, org, feature, f"Your plan has expired, so {label} are read-only. Upgrade to keep editing."
+    )
+    limit = ent.limit_for(feature)
+    if limit is not None and count >= limit:
+        raise _limit_error(feature, label, org.plan, limit)
+    return ent
+
+
+async def require_kb_slot(session: AsyncSession, org: Organization) -> None:
+    from app.models import KnowledgeBase
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(KnowledgeBase)
+                .where(KnowledgeBase.organization_id == org.id, KnowledgeBase.deleted_at.is_(None))
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "knowledge_bases", "knowledge bases", count)
+
+
+async def require_document_slot(session: AsyncSession, org: Organization, size_bytes: int) -> None:
+    """Checked **before** the file is written or embedded (docs/22 §11) — the document-count
+    limit, then the storage-bytes hard cap against `org_storage_usage`'s live counter."""
+    from app.models import Document, OrgStorageUsage
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(Document).where(Document.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    ent = await _require_slot(session, org, "documents", "documents", count)
+
+    storage_limit = ent.limit_for("storage")
+    if storage_limit is not None:
+        used = (
+            await session.execute(
+                select(OrgStorageUsage.bytes_used).where(OrgStorageUsage.organization_id == org.id)
+            )
+        ).scalar_one_or_none()
+        if int(used or 0) + size_bytes > storage_limit:
+            mb = storage_limit // (1024 * 1024)
+            raise plan_limit(
+                "storage", f"{_plan_title(org.plan)} plan includes {mb} MB of storage. Upgrade for more space."
+            )
+
+
+async def record_document_stored(session: AsyncSession, org_id: uuid.UUID, size_bytes: int) -> None:
+    """Keep `org_storage_usage` live going forward — A1's migration only ever backfilled it
+    once. On the same session as the document write, so both commit or roll back together."""
+    from app.models import OrgStorageUsage
+
+    await session.execute(
+        pg_insert(OrgStorageUsage)
+        .values(organization_id=org_id, bytes_used=size_bytes, documents_count=1)
+        .on_conflict_do_update(
+            index_elements=[OrgStorageUsage.organization_id],
+            set_={
+                "bytes_used": OrgStorageUsage.bytes_used + size_bytes,
+                "documents_count": OrgStorageUsage.documents_count + 1,
+            },
+        )
+    )
+
+
+async def record_document_removed(session: AsyncSession, org_id: uuid.UUID, size_bytes: int) -> None:
+    """The other half of `record_document_stored` — without this, storage usage only ever
+    grows and an org that deletes content stays wrongly blocked."""
+    from app.models import OrgStorageUsage
+
+    await session.execute(
+        update(OrgStorageUsage)
+        .where(OrgStorageUsage.organization_id == org_id)
+        .values(
+            bytes_used=func.greatest(OrgStorageUsage.bytes_used - size_bytes, 0),
+            documents_count=func.greatest(OrgStorageUsage.documents_count - 1, 0),
+        )
+    )
+
+
+async def require_workflow_slot(session: AsyncSession, org: Organization) -> None:
+    from app.models import Workflow
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(Workflow)
+                .where(Workflow.organization_id == org.id, Workflow.deleted_at.is_(None))
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "workflows", "workflows", count)
+
+
+async def require_tool_slot(session: AsyncSession, org: Organization) -> None:
+    """Tools and MCP servers share one cap — docs/22 §11 groups "Tool count" across both
+    (`tools/service.create_tool, MCP create`)."""
+    from app.models import MCPServer, Tool
+
+    tools = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(Tool).where(Tool.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    mcp = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(MCPServer).where(MCPServer.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "tools", "tools", tools + mcp)
+
+
+async def require_webhook_slot(session: AsyncSession, org: Organization) -> None:
+    from app.models import WebhookEndpoint
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(WebhookEndpoint).where(WebhookEndpoint.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "webhooks", "webhook endpoints", count)
+
+
+async def require_team_member_slot(session: AsyncSession, org: Organization) -> None:
+    """Checked on invitation **and** acceptance (docs/22 §11) — checking only one lets an org
+    exceed its cap by pre-inviting more people than it can seat."""
+    from app.models import Membership
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(Membership)
+                .where(Membership.organization_id == org.id, Membership.status == "active")
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "team_members", "team members", count)
+
+
+async def require_channel_allowed(session: AsyncSession, org: Organization, kind: str) -> None:
+    """The channel allowlist (docs/22 §11) — gated at connect **and** enable, not at
+    message-send time, so a disallowed channel can never even be wired up."""
+    ent = await _require_not_expired(
+        session, org, "channels", "Your plan has expired, so channels are read-only. Upgrade to keep editing."
+    )
+    if not ent.allows_channel(kind):
+        raise plan_limit(
+            "channels", f"{_plan_title(org.plan)} plan does not include the {kind} channel. Upgrade to unlock it."
         )

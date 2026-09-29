@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.core import rbac
 from app.core.config import settings
 from app.core.errors import AppError
@@ -91,6 +92,7 @@ async def _kb_out(
 
 async def create_kb(session: AsyncSession, ctx: OrgContext, data: schemas.CreateKBRequest) -> schemas.KBOut:
     rbac.require_permission(ctx.role, rbac.KB_MANAGE)
+    await usage.require_kb_slot(session, ctx.org)
     kb = KnowledgeBase(
         organization_id=ctx.org.id,
         name=data.name,
@@ -226,16 +228,24 @@ async def create_document(
     if data.source_type == "text":
         if not data.text or not data.text.strip():
             raise AppError("kb.text_required", "text is required for a text document.", 400)
+        raw = data.text.encode("utf-8")
+        # Before writing anything (docs/22 §11): the document-count cap, then storage against
+        # this text's own byte size.
+        await usage.require_document_slot(session, ctx.org, len(raw))
         doc.filename = data.filename or "text-snippet.txt"
         doc.mime_type = "text/plain"
-        raw = data.text.encode("utf-8")
         doc.size_bytes = len(raw)
         session.add(doc)
         await session.flush()
         doc.storage_path = _store_file(ctx.org.id, doc.id, doc.filename, raw)
+        await usage.record_document_stored(session, ctx.org.id, len(raw))
     else:  # url
         if not data.url:
             raise AppError("kb.url_required", "url is required for a url document.", 400)
+        # The fetched size isn't known until the worker ingests it, so only the document-count
+        # cap applies here — `org_storage_usage` is updated once a real size exists, same as
+        # every other size-unknown-at-creation path in this codebase.
+        await usage.require_document_slot(session, ctx.org, 0)
         doc.source_url = data.url
         doc.filename = data.filename or data.url
         session.add(doc)
@@ -273,6 +283,9 @@ async def upload_document(
         )
         code = "kb.format_gated" if decision.outcome == "gated" else "kb.format_unsupported"
         raise AppError(code, decision.reason, 400)
+    # Before writing anything (docs/22 §11): the document-count cap, then storage against this
+    # upload's own byte size.
+    await usage.require_document_slot(session, ctx.org, len(data))
     doc = Document(
         knowledge_base_id=kb.id,
         organization_id=ctx.org.id,
@@ -286,6 +299,7 @@ async def upload_document(
     session.add(doc)
     await session.flush()
     doc.storage_path = _store_file(ctx.org.id, doc.id, filename, data)
+    await usage.record_document_stored(session, ctx.org.id, len(data))
     enqueue_document_ingestion(doc.id)
     return _doc_out(doc)
 
@@ -310,6 +324,7 @@ async def delete_document(session: AsyncSession, ctx: OrgContext, document_id: u
     rbac.require_permission(ctx.role, rbac.KB_MANAGE)
     doc = await _get_document(session, ctx, document_id)
     _remove_document_files(doc)
+    await usage.record_document_removed(session, ctx.org.id, doc.size_bytes or 0)
     await session.delete(doc)  # chunks cascade via FK
 
 

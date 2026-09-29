@@ -1,13 +1,34 @@
-"""Pricing table rendering (docs/22 §8.1). Pure — no database, no request context.
+"""Pricing table rendering (docs/22 §8.1) + the authenticated entitlements endpoint (docs/22 §8).
 
-Kept separate from the router so the mapping from `PLANS` to the wire format can be unit-tested
-without an app, and so the same function can feed the admin panel's plan picker later.
+`pricing_table()` is pure — no database, no request context — kept separate from the router so
+the mapping from `PLANS` to the wire format can be unit-tested without an app, and so the same
+function can feed the admin panel's plan picker later. `entitlements()` is the one function here
+that touches the database: one org's live usage against its own plan.
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import uuid
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.billing.usage import load_entitlements, unanswered_messages
 from app.core.plans import FEATURES, PAID_PLANS, PLANS, PlanSpec
+from app.models import (
+    Agent,
+    Document,
+    KnowledgeBase,
+    Membership,
+    OrgMessageUsage,
+    OrgStorageUsage,
+    Tool,
+    WebhookEndpoint,
+    Workflow,
+)
 from app.modules.billing import schemas
+from app.modules.orgs.deps import OrgContext
 
 
 def _title(plan_id: str) -> str:
@@ -59,3 +80,88 @@ def plan_out(plan_id: str) -> schemas.PlanOut:
 def pricing_table() -> schemas.PricingOut:
     """Every plan that is for sale, cheapest first (the order `PAID_PLANS` is declared in)."""
     return schemas.PricingOut(plans=[plan_out(plan_id) for plan_id in PAID_PLANS])
+
+
+async def _usage_counts(session: AsyncSession, org_id: uuid.UUID, messages_used: int) -> schemas.UsageCountsOut:
+    """Live counts against the same keys `PlanLimitsOut` caps — one org, so plain sequential
+    counts rather than the batch-then-group-in-Python style the admin roster needs across many.
+    """
+    agents = await session.scalar(
+        select(func.count()).select_from(Agent).where(Agent.organization_id == org_id, Agent.deleted_at.is_(None))
+    )
+    knowledge_bases = await session.scalar(
+        select(func.count())
+        .select_from(KnowledgeBase)
+        .where(KnowledgeBase.organization_id == org_id, KnowledgeBase.deleted_at.is_(None))
+    )
+    documents = await session.scalar(
+        select(func.count()).select_from(Document).where(Document.organization_id == org_id)
+    )
+    workflows = await session.scalar(
+        select(func.count())
+        .select_from(Workflow)
+        .where(Workflow.organization_id == org_id, Workflow.deleted_at.is_(None))
+    )
+    tools = await session.scalar(select(func.count()).select_from(Tool).where(Tool.organization_id == org_id))
+    webhooks = await session.scalar(
+        select(func.count()).select_from(WebhookEndpoint).where(WebhookEndpoint.organization_id == org_id)
+    )
+    team_members = await session.scalar(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.organization_id == org_id, Membership.status == "active")
+    )
+    storage_bytes = await session.scalar(
+        select(OrgStorageUsage.bytes_used).where(OrgStorageUsage.organization_id == org_id)
+    )
+    return schemas.UsageCountsOut(
+        agents=int(agents or 0),
+        messages=messages_used,
+        knowledge_bases=int(knowledge_bases or 0),
+        documents=int(documents or 0),
+        storage_bytes=int(storage_bytes or 0),
+        workflows=int(workflows or 0),
+        tools=int(tools or 0),
+        webhooks=int(webhooks or 0),
+        team_members=int(team_members or 0),
+    )
+
+
+async def entitlements(session: AsyncSession, ctx: OrgContext) -> schemas.EntitlementsOut:
+    """`GET /v1/me/entitlements` (docs/22 §8.1): what `ctx.org` may do right now, plus usage.
+
+    Every number here comes from `load_entitlements()` (the same DB-backed resolver the chat
+    path and the admin console use) or a live `COUNT(*)` — nothing is recomputed by hand, and
+    the message cap shown is always `effective_max_messages` (plan cap + packs), never the raw
+    plan cap, which is the exact bug class `app/chat/inbound.py` was fixed for (commit 4aabae0).
+    """
+    now = dt.datetime.now(tz=dt.UTC)
+    ent = await load_entitlements(session, ctx.org, now=now)
+
+    period_end = await session.scalar(
+        select(OrgMessageUsage.period_end).where(OrgMessageUsage.organization_id == ctx.org.id)
+    )
+    unanswered = await unanswered_messages(session, ctx.org.id)
+    usage = await _usage_counts(session, ctx.org.id, ent.messages_used)
+
+    return schemas.EntitlementsOut(
+        plan=ctx.org.plan,
+        status=ent.status,
+        plan_expires_at=ent.plan_expires_at,
+        days_left=ent.days_left(now),
+        limits=_limits(ent.spec),
+        usage=usage,
+        messages=schemas.MessagesOut(
+            used=ent.messages_used,
+            # `ent.meter_limit`, not `ent.spec.max_messages`: on an expired plan `spec` becomes
+            # the zeroed `_EXPIRED` spec (the actually-enforced cap), but the meter should still
+            # read "312 / 500", not "312 / 0" — the same reason `orgs.plan_status` uses it.
+            plan_limit=ent.meter_limit,
+            extra=ent.extra_messages,
+            effective_limit=ent.effective_max_messages,
+            period_end=period_end,
+            unanswered=unanswered,
+        ),
+        features=_features(ent.spec),
+        channels=None if ent.spec.channels is None else sorted(ent.spec.channels),
+    )

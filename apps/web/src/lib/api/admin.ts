@@ -13,6 +13,87 @@ export interface AdminOrg {
   agents: number;
   created_at: string;
   deleted: boolean;
+
+  // ── billing (docs/22 §8.2) ──────────────────────────────────────────────
+  plan: string;
+  /** trial | trial_expired | legacy | starter | pro | business | plan_expired. */
+  status: string;
+  plan_source: string;
+  plan_expires_at: string | null;
+  plan_note: string | null;
+  messages_used: number;
+  /** `null` = unlimited; already includes any packs bought this period. */
+  messages_limit: number | null;
+  unanswered_messages: number;
+  storage_bytes_used: number;
+  /** `null` = unlimited. */
+  storage_bytes_limit: number | null;
+  /** The current billing cycle's computed state — paid | pending | overdue | waived | null. */
+  payment_state: string | null;
+  owner_email: string | null;
+}
+
+/** `?status=` filter chips the admin org list accepts (docs/22 §8.2, §9.1). */
+export type OrgStatusFilter =
+  | "at_limit"
+  | "near_limit"
+  | "expiring"
+  | "expired"
+  | "payment_pending"
+  | "overdue";
+
+/** Plans staff may grant from the panel (docs/22 §4.2) — `legacy` for your own/demo orgs. */
+export const GRANTABLE_PLANS = ["trial", "starter", "pro", "business", "legacy"] as const;
+export type GrantablePlan = (typeof GRANTABLE_PLANS)[number];
+export const PAID_PLANS = ["starter", "pro", "business"] as const;
+
+export interface PlanGrant {
+  id: string;
+  action: string;
+  from_plan: string | null;
+  to_plan: string | null;
+  expires_at: string | null;
+  extra_messages: number | null;
+  amount_usd_cents: number | null;
+  note: string | null;
+  actor_email: string | null;
+  invoiced: boolean;
+  created_at: string;
+}
+
+export interface BillingCycle {
+  id: string;
+  organization_id: string;
+  organization_name: string | null;
+  plan: string;
+  period_start: string;
+  period_end: string;
+  amount_usd_cents: number;
+  /** The raw stored value. */
+  status: "pending" | "paid" | "waived";
+  /** The computed value — adds `overdue` when a pending cycle's period_end has passed. */
+  payment_state: "pending" | "paid" | "waived" | "overdue";
+  paid_at: string | null;
+  method: string | null;
+  reference: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface OrgAdminDetail extends AdminOrg {
+  recent_grants: PlanGrant[];
+  billing_cycles: BillingCycle[];
+}
+
+export interface Pack {
+  id: string;
+  organization_id: string;
+  organization_name: string | null;
+  extra_messages: number | null;
+  amount_usd_cents: number | null;
+  note: string | null;
+  invoiced: boolean;
+  created_at: string;
 }
 
 export interface AdminUser {
@@ -91,7 +172,66 @@ export interface AutomationsOverview {
   error: string | null;
 }
 
-export const listAdminOrgs = () => api<AdminOrg[]>("/v1/admin/orgs");
+export interface ListOrgsParams {
+  q?: string;
+  plan?: string;
+  status?: OrgStatusFilter;
+}
+
+export function listAdminOrgs(params: ListOrgsParams = {}) {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.plan) qs.set("plan", params.plan);
+  if (params.status) qs.set("status", params.status);
+  const suffix = qs.toString();
+  return api<AdminOrg[]>(`/v1/admin/orgs${suffix ? `?${suffix}` : ""}`);
+}
+
+export const getAdminOrg = (orgId: string) => api<OrgAdminDetail>(`/v1/admin/orgs/${orgId}`);
+
+export interface GrantPlanInput {
+  plan: string;
+  /** `null`/omitted = no expiry. */
+  expires_at?: string | null;
+  note: string;
+  payment_received?: boolean;
+  method?: string | null;
+  reference?: string | null;
+}
+
+export const grantPlan = (orgId: string, data: GrantPlanInput) =>
+  api<AdminOrg>(`/v1/admin/orgs/${orgId}/plan`, { method: "POST", body: data });
+
+export const revokePlan = (orgId: string, note: string) =>
+  api<AdminOrg>(`/v1/admin/orgs/${orgId}/plan`, { method: "DELETE", body: { note } });
+
+export const addPacks = (orgId: string, packs: number, note: string) =>
+  api<AdminOrg>(`/v1/admin/orgs/${orgId}/messages`, { method: "POST", body: { packs, note } });
+
+export function listBillingCycles(status?: BillingCycle["payment_state"]) {
+  const suffix = status ? `?status=${status}` : "";
+  return api<BillingCycle[]>(`/v1/admin/billing/cycles${suffix}`);
+}
+
+export interface MarkCyclePaidInput {
+  method: string;
+  reference?: string | null;
+  note?: string | null;
+  renew: boolean;
+}
+
+export const markCyclePaid = (cycleId: string, data: MarkCyclePaidInput) =>
+  api<BillingCycle>(`/v1/admin/billing/cycles/${cycleId}/paid`, { method: "POST", body: data });
+
+export const waiveCycle = (cycleId: string, note: string) =>
+  api<BillingCycle>(`/v1/admin/billing/cycles/${cycleId}/waive`, { method: "POST", body: { note } });
+
+export function listPacks(invoiced = false) {
+  return api<Pack[]>(`/v1/admin/billing/packs?invoiced=${invoiced}`);
+}
+
+export const markPackInvoiced = (packId: string, invoiced: boolean) =>
+  api<Pack>(`/v1/admin/billing/packs/${packId}`, { method: "PATCH", body: { invoiced } });
 export const getAutomationsOverview = () => api<AutomationsOverview>("/v1/admin/automations");
 export const listAdminUsers = () => api<AdminUser[]>("/v1/admin/users");
 export const getPlatformUsage = () => api<PlatformUsage>("/v1/admin/usage");

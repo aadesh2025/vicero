@@ -7,8 +7,12 @@ import { Activity, Bot, Building2, CircleDollarSign, Database, MessagesSquare, S
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { AutomationsTable } from "@/components/admin/automations-table";
+import { BillingTab } from "@/components/admin/billing-tab";
+import { PaymentsTab } from "@/components/admin/payments-tab";
+import { PacksTab } from "@/components/admin/packs-tab";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getAdminHealth,
   getPlatformUsage,
@@ -33,7 +37,7 @@ export default function AdminPage() {
 
   const { data: usage } = useQuery({ queryKey: ["admin-usage"], queryFn: getPlatformUsage, enabled: staff });
   const { data: health } = useQuery({ queryKey: ["admin-health"], queryFn: getAdminHealth, enabled: staff, refetchInterval: 15_000 });
-  const { data: orgs } = useQuery({ queryKey: ["admin-orgs"], queryFn: listAdminOrgs, enabled: staff });
+  const { data: orgs } = useQuery({ queryKey: ["admin-orgs"], queryFn: () => listAdminOrgs(), enabled: staff });
   const { data: users } = useQuery({ queryKey: ["admin-users"], queryFn: listAdminUsers, enabled: staff });
 
   if (!ready || !staff) {
@@ -43,36 +47,64 @@ export default function AdminPage() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-6">
       <PageHeader title="Platform admin" description="Cross-tenant operations. Visible to platform staff only.">
-        <Badge variant="accent">
+        <Badge variant="warn">
           <Server className="size-3" /> staff
         </Badge>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Organizations" value={compact(usage?.organizations ?? 0)} icon={Building2} />
-        <StatCard label="Users" value={compact(usage?.users ?? 0)} icon={Users} />
-        <StatCard label="Agents" value={compact(usage?.agents ?? 0)} icon={Bot} />
-        <StatCard label="Conversations" value={compact(usage?.conversations ?? 0)} icon={MessagesSquare} />
-        <StatCard
-          label="Tokens"
-          value={compact((usage?.tokens_prompt ?? 0) + (usage?.tokens_completion ?? 0))}
-          icon={Zap}
-          hint="prompt + completion"
-        />
-        <StatCard label="Spend" value={usd((usage?.cost_micros ?? 0) / 1_000_000)} icon={CircleDollarSign} invertDelta />
-      </div>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="billing">Billing &amp; Plans</TabsTrigger>
+        </TabsList>
 
-      <HealthPanel health={health} />
+        <TabsContent value="overview" className="mt-6 space-y-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            <StatCard label="Organizations" value={compact(usage?.organizations ?? 0)} icon={Building2} />
+            <StatCard label="Users" value={compact(usage?.users ?? 0)} icon={Users} />
+            <StatCard label="Agents" value={compact(usage?.agents ?? 0)} icon={Bot} />
+            <StatCard label="Conversations" value={compact(usage?.conversations ?? 0)} icon={MessagesSquare} />
+            <StatCard
+              label="Tokens"
+              value={compact((usage?.tokens_prompt ?? 0) + (usage?.tokens_completion ?? 0))}
+              icon={Zap}
+              hint="prompt + completion"
+            />
+            <StatCard label="Spend" value={usd((usage?.cost_micros ?? 0) / 1_000_000)} icon={CircleDollarSign} invertDelta />
+          </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <TopOrgs rows={usage?.top_orgs ?? []} />
-        <FeatureFlags />
-      </div>
+          <HealthPanel health={health} />
 
-      <AutomationsTable />
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <TopOrgs rows={usage?.top_orgs ?? []} />
+            <FeatureFlags />
+          </div>
 
-      <OrgsTable orgs={orgs ?? []} />
-      <UsersTable users={users ?? []} />
+          <AutomationsTable />
+
+          <OrgsTable orgs={orgs ?? []} />
+          <UsersTable users={users ?? []} />
+        </TabsContent>
+
+        <TabsContent value="billing" className="mt-6">
+          <Tabs defaultValue="workspaces">
+            <TabsList>
+              <TabsTrigger value="workspaces">Workspaces</TabsTrigger>
+              <TabsTrigger value="payments">Payments</TabsTrigger>
+              <TabsTrigger value="packs">Packs</TabsTrigger>
+            </TabsList>
+            <TabsContent value="workspaces" className="mt-4">
+              <BillingTab />
+            </TabsContent>
+            <TabsContent value="payments" className="mt-4">
+              <PaymentsTab />
+            </TabsContent>
+            <TabsContent value="packs" className="mt-4">
+              <PacksTab />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

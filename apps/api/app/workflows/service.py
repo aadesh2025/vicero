@@ -539,6 +539,7 @@ async def create_workflow(
 ) -> schemas.WorkflowOut:
     rbac.require_permission(ctx.role, rbac.WORKFLOWS_WRITE)
     await usage.require_feature(session, ctx.org, "workflows")
+    await usage.require_workflow_slot(session, ctx.org)
     if agent_id is not None:
         agent = await session.get(Agent, agent_id)
         if agent is None or agent.organization_id != ctx.org.id:

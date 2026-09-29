@@ -70,6 +70,7 @@ async def _get_tool(session: AsyncSession, ctx: OrgContext, tool_id: uuid.UUID) 
 async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.CreateToolRequest) -> schemas.ToolOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
     await usage.require_feature(session, ctx.org, "tool_calling")
+    await usage.require_tool_slot(session, ctx.org)
     description = data.description
     input_schema = data.input_schema
     config = data.config
@@ -530,6 +531,7 @@ async def create_mcp_server(
     only usable in a turn once the agentic runtime is on for this org (docs/17 §2)."""
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
     await usage.require_feature(session, ctx.org, "tool_calling")
+    await usage.require_tool_slot(session, ctx.org)
     if data.transport == "stdio":
         # A stdio server is a command run on the API host. Any org role with TOOLS_MANAGE
         # (including the client `editor` role) could otherwise execute arbitrary code there.

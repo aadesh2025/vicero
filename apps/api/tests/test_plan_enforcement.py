@@ -212,3 +212,165 @@ async def test_org_storage_usage_tracks_uploads_and_deletes_live(
     await db_session.refresh(row)
     assert row.bytes_used == 0
     assert row.documents_count == 0
+
+
+# ── workflows (max_workflows) ─────────────────────────────────────────────────
+async def _agent_id(client: AsyncClient, headers: dict[str, str], name: str = "Agent") -> str:
+    resp = await client.post("/v1/agents", json={"name": name}, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return str(resp.json()["id"])
+
+
+async def _create_workflow(client: AsyncClient, headers: dict[str, str], agent_id: str, name: str) -> Response:
+    return await client.post(f"/v1/agents/{agent_id}/workflows", json={"name": name}, headers=headers)
+
+
+async def test_workflow_creation_blocked_at_the_cap(client: AsyncClient, db_session: AsyncSession) -> None:
+    """`pro` allows 10 workflows."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+    agent_id = await _agent_id(client, headers)
+
+    for i in range(10):
+        resp = await _create_workflow(client, headers, agent_id, f"Workflow {i}")
+        assert resp.status_code == 201, resp.text
+
+    blocked = await _create_workflow(client, headers, agent_id, "the 11th")
+    assert blocked.status_code == 402, blocked.text
+    assert blocked.json()["error"]["details"]["feature"] == "workflows"
+
+
+async def test_workflow_creation_not_included_on_a_plan_with_zero(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`starter` doesn't include workflows at all (`max_workflows=0`) — the existing
+    `require_feature("workflows")` flag check rejects it before the slot-count check even
+    runs, since the feature itself isn't on the plan. Same 402, a message distinct from
+    the "at the cap" one."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)
+    agent_id = await _agent_id(client, headers)
+    resp = await _create_workflow(client, headers, agent_id, "nope")
+    assert resp.status_code == 402, resp.text
+    assert "isn't included" in resp.json()["error"]["message"]
+
+
+async def test_workflow_creation_always_succeeds_on_an_unlimited_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)  # max_workflows=None
+    agent_id = await _agent_id(client, headers)
+    for i in range(12):  # past Pro's own cap of 10
+        resp = await _create_workflow(client, headers, agent_id, f"wf {i}")
+        assert resp.status_code == 201, resp.text
+
+
+async def test_workflow_creation_blocked_when_the_plan_has_expired(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    agent_id = await _agent_id(client, headers)
+    await _set_plan(db_session, org_id, "pro", expires_at=PAST)
+    resp = await _create_workflow(client, headers, agent_id, "should be blocked")
+    assert resp.status_code == 402, resp.text
+
+
+async def test_an_org_already_over_a_new_lower_workflow_cap_keeps_its_existing_workflows(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    from app.models import Workflow
+
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)
+    agent_id = await _agent_id(client, headers)
+    for i in range(3):
+        assert (await _create_workflow(client, headers, agent_id, f"wf {i}")).status_code == 201
+
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)  # workflows -> 0
+
+    existing = (
+        await db_session.execute(
+            Workflow.__table__.select().where(Workflow.organization_id == uuid.UUID(org_id))
+        )
+    ).fetchall()
+    assert len(existing) == 3
+
+    blocked = await _create_workflow(client, headers, agent_id, "4th")
+    assert blocked.status_code == 402, blocked.text
+
+
+# ── tools + MCP servers (max_tools, shared pool) ──────────────────────────────
+async def _create_builtin_tool(client: AsyncClient, headers: dict[str, str]) -> Response:
+    # `name` must match a real key in app.tools.builtins.BUILTINS for type="builtin" — nothing
+    # here needs distinct names, since the cap counts rows, not distinct tools.
+    return await client.post("/v1/tools", json={"name": "get_datetime", "type": "builtin"}, headers=headers)
+
+
+async def test_tool_creation_blocked_at_the_cap(client: AsyncClient, db_session: AsyncSession) -> None:
+    """`pro` allows 8 tools."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+
+    for _i in range(8):
+        resp = await _create_builtin_tool(client, headers)
+        assert resp.status_code == 201, resp.text
+
+    blocked = await _create_builtin_tool(client, headers)
+    assert blocked.status_code == 402, blocked.text
+    assert blocked.json()["error"]["details"]["feature"] == "tools"
+
+
+async def test_tool_creation_not_included_on_a_plan_with_zero(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`starter` doesn't include tool_calling at all — the existing
+    `require_feature("tool_calling")` flag check rejects it before the slot-count check."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)
+    resp = await _create_builtin_tool(client, headers)
+    assert resp.status_code == 402, resp.text
+    assert "isn't included" in resp.json()["error"]["message"]
+
+
+async def test_tool_creation_always_succeeds_on_an_unlimited_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "legacy")
+    for _i in range(10):  # past Pro's own cap of 8
+        resp = await _create_builtin_tool(client, headers)
+        assert resp.status_code == 201, resp.text
+
+
+async def test_tool_creation_blocked_when_the_plan_has_expired(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=PAST)
+    resp = await _create_builtin_tool(client, headers)
+    assert resp.status_code == 402, resp.text
+
+
+async def test_mcp_servers_share_the_tool_cap_with_ordinary_tools(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """docs/22 §11 groups tools and MCP servers under one "Tool count" — 6 ordinary tools plus
+    2 MCP servers already fills Pro's cap of 8."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+
+    for _i in range(6):
+        assert (await _create_builtin_tool(client, headers)).status_code == 201
+
+    for i in range(2):
+        resp = await client.post(
+            "/v1/mcp/servers",
+            json={"name": f"mcp-{i}", "transport": "sse", "url_or_command": "https://example.com/mcp"},
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+
+    blocked = await _create_builtin_tool(client, headers)
+    assert blocked.status_code == 402, blocked.text
+    assert blocked.json()["error"]["details"]["feature"] == "tools"

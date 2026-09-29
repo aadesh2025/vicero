@@ -31,7 +31,7 @@
 
 ## 2. Goal
 
-- Today BotForge access is given manually. Change it to **self-serve**:
+- Today Vicero access is given manually. Change it to **self-serve**:
   - Anyone signs up → gets **1 workspace** → gets a **10-day free trial** with limits.
   - After the trial (or limit reached) their bots **silently stop replying** and the dashboard asks them to upgrade.
 - Paid plans/pricing are **NOT** part of this phase. Only leave a clean hook for them.

@@ -7,7 +7,7 @@ import { apiError, clientIp, sameOrigin } from "@/lib/vault/http";
 
 // POST /api/vault/login — the private admin area's own sign-in.
 //
-// Not a BotForge login: no user row, no JWT, no call to the API. Fails closed — with the
+// Not a Vicero login: no user row, no JWT, no call to the API. Fails closed — with the
 // vault unconfigured it refuses everyone rather than accepting anything.
 
 const MAX_EMAIL = 254;

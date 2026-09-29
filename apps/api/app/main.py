@@ -1,4 +1,4 @@
-"""BotForge API application factory."""
+"""Vicero API application factory."""
 
 from __future__ import annotations
 
@@ -164,7 +164,7 @@ def _serve_schema() -> bool:
 def create_app() -> FastAPI:
     _init_sentry()
     app = FastAPI(
-        title="BotForge API",
+        title="Vicero API",
         version=__version__,
         description="AI chatbot & automation platform — backend API.",
         lifespan=lifespan,

@@ -1,6 +1,6 @@
 # API usage guide
 
-The BotForge REST API is served under `/v1`. Interactive docs (OpenAPI) are at
+The Vicero REST API is served under `/v1`. Interactive docs (OpenAPI) are at
 `http://localhost:8000/docs` and `/redoc`. Every response error uses a typed envelope:
 
 ```json
@@ -87,7 +87,7 @@ curl -s "${H[@]}" -X PATCH http://localhost:8000/v1/agents/$AID/versions/$VER \
 
 Register endpoints (`POST /v1/webhooks`) to receive HMAC-signed events: `message.created`,
 `conversation.created`/`closed`, `handoff.requested`/`resolved`, `document.ready`/`failed`,
-`tool.run`, `usage.threshold`. Verify the `X-BotForge-Signature` header against your endpoint
+`tool.run`, `usage.threshold`. Verify the `X-Vicero-Signature` header against your endpoint
 secret. Failed deliveries are retried with backoff and a periodic beat sweep.
 
 ## Route map

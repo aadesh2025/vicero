@@ -1,4 +1,4 @@
-# BotForge reverse proxy with automatic HTTPS (Let's Encrypt).
+# Vicero reverse proxy with automatic HTTPS (Let's Encrypt).
 # Two hostnames — the dashboard and the API — both TLS-terminated by Caddy.
 # Set DOMAIN, API_DOMAIN and ACME_EMAIL in ../.env (see docker-compose.prod.yml).
 

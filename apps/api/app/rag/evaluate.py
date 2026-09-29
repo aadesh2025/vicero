@@ -1,6 +1,6 @@
 """Retrieval-quality metrics and the eval-set data model (docs/13 R2, docs/14 P0-2).
 
-**Why this exists.** BotForge had 773 tests and zero retrieval-quality numbers. `score_threshold`
+**Why this exists.** Vicero had 773 tests and zero retrieval-quality numbers. `score_threshold`
 was moved 0.7 -> 0.35 on 2026-07-21 by feel, `top_k=5` and `chunk_size=1000` have never been
 measured, and docs/11 §9 records grounding as the weakest link at 12/15 fabricated — where the
 2026-08-02 incident showed the cause was *retrieval legitimately missing* (0.0318 against a 0.35

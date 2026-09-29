@@ -16,7 +16,7 @@
 | `scripts/`, `Makefile` | tooling | eval + provisioning scripts, dev targets |
 | `.github/workflows` | CI | `ci.yml` (api, audit, web, e2e), `release.yml` |
 
-Untracked noise at root (not part of the audit): `admin-staff.png`, `designreference/`, a `.docx`, `start_botforge.bat`.
+Untracked noise at root (not part of the audit): `admin-staff.png`, `designreference/`, a `.docx`, `start_vicero.bat`.
 Generated/ignored and correctly gitignored: `var/`, `celerybeat-schedule*`, `test-results/`. No `__pycache__` or build output is tracked.
 
 ## 2. Backend layout (`apps/api/app`)

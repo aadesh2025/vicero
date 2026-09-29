@@ -12,7 +12,10 @@ only asserts the redact direction passes just as happily when the allowlist is b
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
+
+from app.llm.fake import FakeChatProvider
 
 SUPPORT_EMAIL = "support@acme.com"
 SUPPORT_PHONE = "+91 80 4000 1000"
@@ -48,9 +51,17 @@ async def _ask(client: AsyncClient, key: str, message: str, cid: str | None = No
     return dict(r.json())
 
 
-# The Fake provider echoes the visitor's message, so whatever we send comes back through the
-# output guard — the same route a real model's reply takes.
-_QUESTION = f"is {SUPPORT_EMAIL} or {SUPPORT_PHONE} the right contact?"
+# The *model* names these contacts (the visitor asks a neutral question and types none of them), so
+# they come back through the output guard exactly as a real model's reply would. If the visitor typed
+# them instead they would be the customer's own and exempt from redaction — a different case, covered
+# in test_pii_customer_echo.py.
+_MODEL_REPLY = f"is {SUPPORT_EMAIL} or {SUPPORT_PHONE} the right contact?"
+_NEUTRAL = "what is the right contact?"
+
+
+@pytest.fixture(autouse=True)
+def _model_names_the_contacts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(FakeChatProvider, "scripted_reply", _MODEL_REPLY)
 
 
 async def test_an_allowlisted_contact_survives_the_widget_reply(client: AsyncClient) -> None:
@@ -62,7 +73,7 @@ async def test_an_allowlisted_contact_survives_the_widget_reply(client: AsyncCli
     )
     key = await _public_key(client, headers)
 
-    content = (await _ask(client, key, _QUESTION))["content"]
+    content = (await _ask(client, key, _NEUTRAL))["content"]
     assert SUPPORT_EMAIL in content, "an agent must be able to give out its own support address"
     assert "4000 1000" in content
     assert "our contact page" not in content
@@ -79,7 +90,7 @@ async def test_the_same_contact_is_redacted_when_the_org_has_published_nothing(
     headers = await _org(client, "wpc.denied@example.com")
     key = await _public_key(client, headers)
 
-    content = (await _ask(client, key, _QUESTION))["content"]
+    content = (await _ask(client, key, _NEUTRAL))["content"]
     assert SUPPORT_EMAIL not in content
     assert "4000 1000" not in content
     assert "our contact page" in content
@@ -98,7 +109,7 @@ async def test_the_allowlist_is_read_per_turn_not_captured_at_conversation_start
     headers = await _org(client, "wpc.midchat@example.com")
     key = await _public_key(client, headers)
 
-    first = await _ask(client, key, _QUESTION)
+    first = await _ask(client, key, _NEUTRAL)
     assert SUPPORT_EMAIL not in first["content"]
     cid = first["conversation_id"]
 
@@ -108,7 +119,7 @@ async def test_the_allowlist_is_read_per_turn_not_captured_at_conversation_start
         headers=headers,
     )
 
-    second = await _ask(client, key, _QUESTION, cid=cid)
+    second = await _ask(client, key, _NEUTRAL, cid=cid)
     assert second["conversation_id"] == cid
     assert SUPPORT_EMAIL in second["content"], "the same conversation must pick up the new value"
 
@@ -123,13 +134,13 @@ async def test_removing_a_contact_takes_effect_on_the_next_turn_too(client: Asyn
     )
     key = await _public_key(client, headers)
 
-    first = await _ask(client, key, _QUESTION)
+    first = await _ask(client, key, _NEUTRAL)
     assert SUPPORT_EMAIL in first["content"]
 
     await client.patch(
         f"/v1/orgs/{headers['X-Org-Id']}", json={"public_contacts": []}, headers=headers
     )
-    second = await _ask(client, key, _QUESTION, cid=first["conversation_id"])
+    second = await _ask(client, key, _NEUTRAL, cid=first["conversation_id"])
     assert SUPPORT_EMAIL not in second["content"]
     assert "our contact page" in second["content"]
 

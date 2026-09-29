@@ -239,7 +239,7 @@ async def list_orgs(
         .subquery()
     )
     # Workflows awaiting review (docs/17 Phase 4) — NOT the same "Workflow" as an n8n
-    # automation (see `AutomationOut`); this is BotForge's own visual workflow builder entity.
+    # automation (see `AutomationOut`); this is Vicero's own visual workflow builder entity.
     # Unlike Agent, `WorkflowVersion.status` carries a real `in_review` value (ADR-080), so this
     # counts that directly rather than aping Agent's "latest draft is ahead of published" proxy
     # — a more honest signal now that one actually exists to read.
@@ -380,7 +380,7 @@ async def list_users(
         .limit(limit)
     )
     if not include_system:
-        # `provision@botforge.dev` is a working credential, not a person. Deleting it to tidy
+        # `provision@vicero.dev` is a working credential, not a person. Deleting it to tidy
         # this list would break `make provision`; hiding it keeps the roster to actual humans.
         stmt = stmt.where(User.is_system.is_(False))
     rows = (await session.execute(stmt)).all()
@@ -573,7 +573,7 @@ async def n8n_signature_audit(session: AsyncSession) -> schemas.N8nSignatureAudi
         config = tool.config or {}
         wf_id = config.get("workflow_id")
         url = config.get("webhook_url")
-        # The URL is what BotForge actually calls, so it decides — same rule as the bind check.
+        # The URL is what Vicero actually calls, so it decides — same rule as the bind check.
         wf = N8nClient.match_workflow_by_webhook_url(workflows, url) if url else None
         if wf is None and wf_id and not url:
             wf = by_id.get(str(wf_id))
@@ -1004,7 +1004,7 @@ async def add_packs(
 async def list_billing_cycles(
     session: AsyncSession, *, status: str | None = None, limit: int = 200
 ) -> list[schemas.BillingCycleOut]:
-    """The payment ledger. `?status=overdue` is the collections list — who is using BotForge
+    """The payment ledger. `?status=overdue` is the collections list — who is using Vicero
     without having paid for the current period."""
     now = dt.datetime.now(tz=dt.UTC)
     rows = (

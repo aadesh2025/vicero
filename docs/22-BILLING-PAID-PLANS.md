@@ -29,7 +29,7 @@ with every out-of-plan feature showing a **locked state with an upgrade message*
 
 ## 1. The operating model — read this first, it explains every design choice
 
-BotForge is being sold **hand-to-hand to agency clients**, not self-serve. The money never touches
+Vicero is being sold **hand-to-hand to agency clients**, not self-serve. The money never touches
 the application:
 
 ```
@@ -115,7 +115,7 @@ must always agree, and a test asserts it (§14).
 2. **Storage is the hard limit; document count is a soft guide.** A 500-page PDF and a 2-page PDF
    must not consume the same quota. Enforce bytes; show both numbers.
 3. **Messages reset every 30-day billing period**, not lifetime (unlike `trial`). §6.
-4. **Third-party provider costs are the customer's.** BotForge charges for the platform; Meta /
+4. **Third-party provider costs are the customer's.** Vicero charges for the platform; Meta /
    WhatsApp messaging and other external providers bill the customer through their own connected
    accounts. The channel-connect screen must say this.
 5. **Extra messages are sold in packs of 500** at the plan's rate, granted by admin, invoiced by

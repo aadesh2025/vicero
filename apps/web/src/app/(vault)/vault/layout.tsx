@@ -6,7 +6,7 @@ import { VaultLogoutButton } from "@/components/vault/logout-button";
 import { getVaultSession } from "@/lib/vault/session";
 
 export const metadata: Metadata = {
-  title: { default: "Private", template: "%s — BotForge private" },
+  title: { default: "Private", template: "%s — Vicero private" },
   // Not a control — a crawler that ignores it still finds nothing without a session — but
   // there is no reason for this URL to appear in a search index.
   robots: { index: false, follow: false, nocache: true },
@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 /**
  * Chrome for the private area.
  *
- * Its own tree, outside `(app)`: no `AuthGate`, no BotForge sidebar, no org switcher, and no
- * call to the BotForge API. The two logins share a host and nothing else.
+ * Its own tree, outside `(app)`: no `AuthGate`, no Vicero sidebar, no org switcher, and no
+ * call to the Vicero API. The two logins share a host and nothing else.
  */
 export default async function VaultLayout({ children }: { children: React.ReactNode }) {
   const email = await getVaultSession();

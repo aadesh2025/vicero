@@ -63,7 +63,7 @@ function LoginForm() {
   return (
     <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
       <h1 className="font-display text-xl font-semibold text-text">Welcome back</h1>
-      <p className="mt-1 text-sm text-muted">Sign in to your BotForge workspace.</p>
+      <p className="mt-1 text-sm text-muted">Sign in to your Vicero workspace.</p>
 
       <div className="mt-6">
         <OAuthButtons onError={setError} />

@@ -12,7 +12,7 @@
 
 ## 0. Executive summary
 
-A live BotForge agent was red-teamed by the operator. It failed at a rate that would be a
+A live Vicero agent was red-teamed by the operator. It failed at a rate that would be a
 serious incident if a client's customers had been the ones testing:
 
 | # | Attack | Result | OWASP |
@@ -25,7 +25,7 @@ serious incident if a client's customers had been the ones testing:
 | 6 | Pressure / manipulation | Held firm, **but broke persona** — "I'm a large language model" | — |
 
 The important part is not that six things broke. It is that **five of the six are the same
-root cause**: BotForge currently defends the *content it retrieves* and does not defend the
+root cause**: Vicero currently defends the *content it retrieves* and does not defend the
 *message the user sends*. Everything below follows from that one asymmetry.
 
 ---
@@ -62,7 +62,7 @@ The threat model documented at the top of `guardrails.py` says untrusted content
 RAG chunks and tool output." **That definition is wrong.** The single most common source of
 untrusted content in a chatbot is the person typing into it. OWASP classifies exactly this as
 *direct* prompt injection (LLM01) and explicitly distinguishes it from the *indirect* variety
-BotForge already handles.
+Vicero already handles.
 
 This one line of missing defence explains failures 1 and 2 outright.
 
@@ -97,7 +97,7 @@ card-number runs. That is a good start and should stay. But nothing checks the o
   recall previous conversations" (failure 6)
 - **Ungrounded claims** — answers with zero citations that assert specific facts (failure 4)
 
-An output guardrail is the last line of defence and BotForge effectively has none.
+An output guardrail is the last line of defence and Vicero effectively has none.
 
 ### 1.4 Grounding is prompt-only, and prompts are not enforcement
 
@@ -203,7 +203,7 @@ Five rules. Every decision below traces to one of them.
 
 ### Why these specific tools
 
-BotForge already has a `GROQ_API_KEY` and a Groq provider adapter. Both recommended guard
+Vicero already has a `GROQ_API_KEY` and a Groq provider adapter. Both recommended guard
 models are hosted on Groq, so this needs **zero new vendor relationships and zero new secrets**:
 
 | Model | Purpose | Size | Context | Price | Notes |
@@ -227,7 +227,7 @@ requirements — with one model and one prompt you can edit without retraining.
 - **Do not adopt NeMo Guardrails or Guardrails AI as a framework.** Both are excellent, but
   NeMo requires learning Colang and Guardrails AI's value is structured-output validation,
   which is not the problem here. Borrow their *ideas* (five-stage rails; validator chains);
-  do not take the dependency. Reassess if BotForge later needs scripted dialog flows.
+  do not take the dependency. Reassess if Vicero later needs scripted dialog flows.
 - **Do not self-host a DeBERTa classifier** (ProtectAI / Prompt Guard weights) initially.
   It means a model server, GPU or slow CPU inference, and version management, to replace a
   $0.04/M API call. Revisit only if per-turn cost or data residency demands it.
@@ -286,7 +286,7 @@ Replace `matches_blocked_topic()` with a real matcher:
 > threat model. Multilingual coverage depends on **L2 (Phase C)**, whose model covers 8
 > languages. Translated regex is explicitly not the plan — it scales to no language in
 > particular and would cost the precision L1 was tuned for. This matters commercially, not just
-> theoretically: BotForge serves Indian clients whose customers open conversations in Hindi and
+> theoretically: Vicero serves Indian clients whose customers open conversations in Hindi and
 > Tamil.
 
 ### L2 — Injection classifier
@@ -578,8 +578,8 @@ difference matters more now than it did when half of it was missing:
 - **Every layer here fails open.** L2 and L3 return "not graded" on any error, by design
   (ADR-051) — so a Groq outage silently returns the deployment to regex-only input screening
   and *no distress detection at all*, while every dashboard looks normal. The metrics to alert
-  on are `botforge_guard_calls_total{outcome="error"|"unavailable"}` and
-  `botforge_policy_calls_total{outcome="error"}`. A fail-open guard that is not running is
+  on are `vicero_guard_calls_total{outcome="error"|"unavailable"}` and
+  `vicero_policy_calls_total{outcome="error"}`. A fail-open guard that is not running is
   indistinguishable from one finding nothing.
 - **Distress detection is a triage aid, never a clinical instrument**, and must never be
   described to a client as one. It will produce false positives and false negatives. The
@@ -700,7 +700,7 @@ Three things worth taking from it, none of which contradict the table above so m
 
 **What this still does not cover.** L2 fails open by design (ADR-051), so a Groq outage returns
 the deployment to the L1-only row above — watch
-`botforge_guard_calls_total{outcome="error"|"unavailable"}`, because a fail-open guard that is
+`vicero_guard_calls_total{outcome="error"|"unavailable"}`, because a fail-open guard that is
 not running is indistinguishable from one finding nothing. And the numbers above are one probe
 set, not an adversary: Meta reports 81.2% prevention for this model, and arXiv 2504.11168
 demonstrates systematic evasion of every deployed detector class.
@@ -724,7 +724,7 @@ Three things this table is meant to stop anyone believing:
 - **Distress detection will produce false positives and false negatives.** It is a triage aid
   for routing a human's attention, **not** a clinical instrument, and must never be described
   to clients as one.
-- **The `crisis` path is a product-safety commitment.** If BotForge routes a person in genuine
+- **The `crisis` path is a product-safety commitment.** If Vicero routes a person in genuine
   distress to a queue nobody watches, that is worse than not detecting it. Ship it only with an
   alerting path the client has actually agreed to monitor.
 

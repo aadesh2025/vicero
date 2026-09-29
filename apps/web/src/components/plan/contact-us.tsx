@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 const EMAIL = process.env.NEXT_PUBLIC_UPGRADE_EMAIL;
 const WHATSAPP = process.env.NEXT_PUBLIC_UPGRADE_WHATSAPP;
 
-export function ContactUsButtons({ subject = "Upgrade my BotForge workspace" }: { subject?: string }) {
+export function ContactUsButtons({ subject = "Upgrade my Vicero workspace" }: { subject?: string }) {
   const whatsappDigits = WHATSAPP?.replace(/\D/g, "");
 
   if (!EMAIL && !whatsappDigits) {
-    return <p className="text-sm text-muted">Contact your BotForge representative to upgrade.</p>;
+    return <p className="text-sm text-muted">Contact your Vicero representative to upgrade.</p>;
   }
 
   return (

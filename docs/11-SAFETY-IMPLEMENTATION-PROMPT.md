@@ -17,7 +17,7 @@ THE CORE DEFECT, so you have it up front:
 `neutralize_injections()` in app/chat/guardrails.py is only ever applied to RAG chunks
 (rag/context.py) and tool output (chat/runtime.py). It is NEVER applied to the visitor's own
 message — chat/inbound.py passes `self.message` straight into `build_messages()` unfiltered.
-BotForge defends against indirect prompt injection and is completely open to direct prompt
+Vicero defends against indirect prompt injection and is completely open to direct prompt
 injection. Five of the six live failures trace to that one asymmetry.
 
 WHAT ACTUALLY HAPPENED IN LIVE TESTING (these become named regression tests, verbatim):

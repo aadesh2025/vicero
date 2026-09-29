@@ -1,4 +1,4 @@
-# SESSION HANDOFF — BotForge
+# SESSION HANDOFF — Vicero
 
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
@@ -43,11 +43,11 @@ Branch `master`, HEAD `c3b6ec9`. Tags: `phase-20-complete`, `agentic-phase-1`…
     grounding 12/15 fabricated with no context, R8 cross-turn injection uncovered.
   - Sizing to do before promising an SLA: async DB `pool_size`/`max_overflow`, Celery worker count.
 - **Not committed:** `apps/web/package-lock.json`, and untracked `docs/14-*-PROMPT.md`,
-  `docs/14-FOLLOWUP-PROMPTS.md`, `docs/16-VPS-MIGRATION.md`, `designreference/`, `start_botforge.bat`,
+  `docs/14-FOLLOWUP-PROMPTS.md`, `docs/16-VPS-MIGRATION.md`, `designreference/`, `start_vicero.bat`,
   a `.docx` and a `.png` — owner to decide. (The CLAUDE.md/session-log/WIP items were committed 2026-09-24.)
 
 ### Do this next
-1. **Revise `docs/16-VPS-MIGRATION.md` for Supabase (ADR-086).** Auth question is answered: **BotForge keeps its own auth; only the database moves.** Close the Data-API/RLS exposure, set up pooler/TLS, re-run `infra/perf/load_test.py` from the VM.
+1. **Revise `docs/16-VPS-MIGRATION.md` for Supabase (ADR-086).** Auth question is answered: **Vicero keeps its own auth; only the database moves.** Close the Data-API/RLS exposure, set up pooler/TLS, re-run `infra/perf/load_test.py` from the VM.
 2. Decide **R3** (external security review) — a human/budget call.
 3. Then P1s: R6 alerting on `guard_l2_unavailable`/`guard_l3_unavailable` is the cheapest win.
 4. Optional: chase the ~0.5% R14 straggler; k8s uploads (R11).
@@ -55,7 +55,7 @@ Branch `master`, HEAD `c3b6ec9`. Tags: `phase-20-complete`, `agentic-phase-1`…
 ### Environment gotchas that bit this session
 - **Windows reserves TCP 5430–5729 after a reboot** → Postgres can't bind 5433. Check with
   `netsh interface ipv4 show excludedportrange protocol=tcp`. Workaround used: host port **5750**
-  (`POSTGRES_HOST_PORT=5750`) + per-command `DATABASE_URL=postgresql+asyncpg://botforge:botforge@localhost:5750/botforge`
+  (`POSTGRES_HOST_PORT=5750`) + per-command `DATABASE_URL=postgresql+asyncpg://vicero:vicero@localhost:5750/vicero`
   (API, worker, alembic, pytest). No files were edited; the data volume is intact.
 - Docker Desktop is down at the start of every session; `Start-Process` it, then compose up.
 - Git Bash mangles `/paths` passed to `docker run` — use `MSYS2_ARG_CONV_EXCL="*"` with Windows-style `-v` paths.
@@ -244,7 +244,7 @@ cd apps/web && npx tsc --noEmit && npx eslint src
   `webflow_test@example.com` / `password123` (org "Aurozen Live", agents "Support Concierge"
   published + "aadesh" draft wired to Ollama qwen3:14b + "Product Docs" KB).
 - **Groq key VALID** — real chat works (`llama-3.1-8b-instant`). Memory summarization is real.
-- **n8n live**: `BotForge — Echo (sync)` workflow active; "aadesh" agent has it bound + `calculator`.
+- **n8n live**: `Vicero — Echo (sync)` workflow active; "aadesh" agent has it bound + `calculator`.
 - **Channels**: signed inbound → real bot → persist verified (Telegram gave real Groq "Paris.").
   Provider *delivery* is unreachable from this env → outbound is mock-tested; tokens per-`Channel`.
 - **Handoff/inbox** verified live end-to-end in the browser. Realtime is an in-process hub.

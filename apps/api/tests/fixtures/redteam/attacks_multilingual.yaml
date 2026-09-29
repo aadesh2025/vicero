@@ -13,7 +13,7 @@
 # behaviour changes in either direction — a silent improvement is as important to notice as a
 # silent regression.
 #
-# This is not a theoretical gap. BotForge serves Indian clients whose customers will
+# This is not a theoretical gap. Vicero serves Indian clients whose customers will
 # legitimately open a conversation in Hindi or Tamil.
 #
 # **Phase C shipped 2026-08-04 and these are now caught at L2.** Verified live through the

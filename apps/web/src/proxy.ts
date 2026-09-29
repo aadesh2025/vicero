@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { REFRESH_COOKIE } from "@/app/api/auth/_bff";
 
 // `/help/:agentKey`, `/docs` and `/vault` are deliberately absent. The first two are public by
-// design. `/vault` has its own sign-in and its own session, entirely separate from BotForge
-// auth: this file only checks for a BotForge cookie, which is meaningless there, and the
+// design. `/vault` has its own sign-in and its own session, entirely separate from Vicero
+// auth: this file only checks for a Vicero cookie, which is meaningless there, and the
 // vault pages enforce their own gate on the server (`lib/vault/session.ts`).
 const PROTECTED = [
   "/dashboard",

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# BotForge restore — load a gzipped pg_dump produced by backup.sh, and optionally its matching
+# Vicero restore — load a gzipped pg_dump produced by backup.sh, and optionally its matching
 # uploads archive (ADR-082).
 #
-#   ./restore.sh botforge_botforge_20260824T031500Z.sql.gz
-#   ./restore.sh botforge_botforge_20260824T031500Z.sql.gz botforge_uploads_20260824T031500Z.tar.gz
+#   ./restore.sh vicero_vicero_20260824T031500Z.sql.gz
+#   ./restore.sh vicero_vicero_20260824T031500Z.sql.gz vicero_uploads_20260824T031500Z.tar.gz
 #
 # WARNING: this restores INTO the target database and (if given) the target uploads directory.
 # For a clean DB restore, drop+recreate the DB first (the commented block below); migrations are
@@ -20,9 +20,9 @@ DUMP="${1:?usage: restore.sh <backup.sql.gz> [uploads.tar.gz]}"
 UPLOADS_ARCHIVE="${2:-}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${POSTGRES_USER:-botforge}}"
-PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-botforge}}"
-export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-botforge}}"
+PGUSER="${PGUSER:-${POSTGRES_USER:-vicero}}"
+PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-vicero}}"
+export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-vicero}}"
 # Where to extract the uploads archive TO — must match the UPLOAD_DIR the api/worker containers
 # actually read (docker-compose.prod.yml's `uploads` volume mount, /app/var/uploads). No default:
 # guessing wrong here silently restores documents nobody can find, so it must be explicit.
@@ -53,5 +53,5 @@ if [ -n "$UPLOADS_ARCHIVE" ]; then
 else
   echo "[restore] NOTE: no uploads archive given — every restored 'documents' row's storage_path/"
   echo "          docling_json_path points at a file that was NOT restored. Pass the matching"
-  echo "          botforge_uploads_<timestamp>.tar.gz from the same backup run if one exists."
+  echo "          vicero_uploads_<timestamp>.tar.gz from the same backup run if one exists."
 fi

@@ -92,7 +92,7 @@ export default function OrgSettingsPage() {
 
       <PublicContacts />
 
-      <Section title="Organization profile" description="How your workspace appears across BotForge.">
+      <Section title="Organization profile" description="How your workspace appears across Vicero.">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs text-muted">Name</label>

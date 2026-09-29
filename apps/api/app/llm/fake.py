@@ -17,13 +17,24 @@ from app.llm.types import (
 
 
 class FakeChatProvider:
-    """Echoes the last user message. Can be told to emit one tool call."""
+    """Echoes the last user message. Can be told to emit one tool call.
+
+    `scripted_reply` (tests only — set with `monkeypatch.setattr(FakeChatProvider, "scripted_reply", ...)`)
+    makes the provider say exactly that, whatever the visitor typed. It exists so a test can model "the
+    *model* produced this contact detail" separately from "the *customer* typed it", which the plain echo
+    cannot: with an echo, every value in the reply is one the visitor wrote. The egress guard treats those
+    two cases differently on purpose (`pii.customer_supplied_contacts`).
+    """
+
+    scripted_reply: str | None = None
 
     def __init__(self, name: str = "fake", tool_call: ToolCall | None = None) -> None:
         self.name = name
         self._tool_call = tool_call
 
     def _reply(self, req: ChatRequest) -> str:
+        if self.scripted_reply is not None:
+            return self.scripted_reply
         last_user = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
         return f"echo: {last_user or ''}".strip()
 

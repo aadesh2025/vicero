@@ -10,12 +10,13 @@ from collections.abc import AsyncIterator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.email import get_email_backend
 from app.db.session import get_session
 from app.main import create_app
+from tests.dbconn import connect, new_engine
 
 # Keep rate limiting out of the way of functional tests; it's unit-tested separately.
 settings.auth_rate_limit = 100_000
@@ -46,8 +47,8 @@ settings.disposable_mx_check_enabled = False
 
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
-    engine = create_async_engine(settings.database_url)
-    conn = await engine.connect()
+    engine = new_engine()
+    conn = await connect(engine)
     trans = await conn.begin()
     session = AsyncSession(bind=conn, expire_on_commit=False)
     try:

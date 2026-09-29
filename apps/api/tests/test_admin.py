@@ -338,7 +338,7 @@ async def test_roster_shows_who_has_access_to_each_org_and_at_what_level(
 async def test_machine_accounts_are_hidden_from_the_roster(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """`provision@botforge.dev` is a working credential, not a person.
+    """`provision@vicero.dev` is a working credential, not a person.
 
     Deleting it to tidy the list would break `scripts/provision-client.mjs`, so it is flagged
     and filtered instead — still reachable with `?include_system=true`.

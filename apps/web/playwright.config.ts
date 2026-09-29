@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// BotForge E2E — drives the real compose stack (web + api + worker + postgres + redis).
+// Vicero E2E — drives the real compose stack (web + api + worker + postgres + redis).
 // Services must already be running; CI boots them before invoking `playwright test`.
 // The API is pinned to the deterministic Fake LLM provider via LLM_FORCE_FAKE=true so
 // the suite needs no paid keys and no local model pulls (docs/10-TESTING.md §E2E).

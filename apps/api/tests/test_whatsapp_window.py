@@ -1,6 +1,6 @@
 """WhatsApp's 24-hour customer-service window.
 
-Outside it Meta drops a free-form message and returns 131047. Before this, BotForge
+Outside it Meta drops a free-form message and returns 131047. Before this, Vicero
 attempted the send anyway and swallowed the failure — the operator saw a message in the
 transcript that the customer never received. These tests pin the two halves of the fix:
 refuse locally before persisting, and honour Meta's verdict if it disagrees with us.

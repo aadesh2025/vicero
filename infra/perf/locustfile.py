@@ -1,4 +1,4 @@
-"""BotForge load/perf harness (Phase 16.3, NFR-1 in docs/01).
+"""Vicero load/perf harness (Phase 16.3, NFR-1 in docs/01).
 
 Measures two things against a running API:
   - **First-token latency** on the streaming chat endpoint (LLM path).
@@ -22,7 +22,7 @@ import time
 from locust import HttpUser, between, task
 
 
-class BotForgeUser(HttpUser):
+class ViceroUser(HttpUser):
     wait_time = between(1, 3)
 
     def on_start(self) -> None:
@@ -42,7 +42,7 @@ class BotForgeUser(HttpUser):
         start = time.perf_counter()
         with self.client.post(
             f"/v1/agents/{self.agent_id}/chat",
-            json={"message": "In one short sentence, what is BotForge?", "stream": True},
+            json={"message": "In one short sentence, what is Vicero?", "stream": True},
             headers=self.headers,
             name="POST /chat (first token)",
             stream=True,

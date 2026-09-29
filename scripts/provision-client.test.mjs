@@ -67,7 +67,7 @@ test("loadEnvFile strips this repo's aligned inline comments", () => {
       "",
       "EMAIL_BACKEND=console                     # console | smtp",
       "N8N_BASE_URL=http://localhost:5679",
-      'SMTP_FROM="BotForge <noreply@x.com>"',
+      'SMTP_FROM="Vicero <noreply@x.com>"',
       "PROVISION_STAFF_PASSWORD=pa#ssword",
       "BLANK=",
     ].join("\n")
@@ -75,7 +75,7 @@ test("loadEnvFile strips this repo's aligned inline comments", () => {
   const env = loadEnvFile(path);
   assert.equal(env.EMAIL_BACKEND, "console");
   assert.equal(env.N8N_BASE_URL, "http://localhost:5679");
-  assert.equal(env.SMTP_FROM, "BotForge <noreply@x.com>");
+  assert.equal(env.SMTP_FROM, "Vicero <noreply@x.com>");
   // '#' with no leading whitespace is part of the value — a password may legitimately contain it.
   assert.equal(env.PROVISION_STAFF_PASSWORD, "pa#ssword");
   assert.equal(env.BLANK, "");

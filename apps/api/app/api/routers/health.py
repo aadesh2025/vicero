@@ -47,7 +47,7 @@ async def readyz(response: Response) -> ReadyResponse:
 
 @router.get("/version", response_model=VersionResponse)
 async def version() -> VersionResponse:
-    return VersionResponse(name="botforge-api", version=__version__, env=settings.env)
+    return VersionResponse(name="vicero-api", version=__version__, env=settings.env)
 
 
 @router.get("/metrics", include_in_schema=False)

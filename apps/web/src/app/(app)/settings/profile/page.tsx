@@ -89,7 +89,7 @@ export default function ProfilePage() {
             PATCH /v1/auth/me), and an editable field with a Save button that silently
             discarded the edit is what this page did before. See docs/DECISIONS.md ADR-041. */}
         <p className="mt-4 text-xs text-faint">
-          Contact your BotForge administrator to change your name or email.
+          Contact your Vicero administrator to change your name or email.
         </p>
       </Section>
 

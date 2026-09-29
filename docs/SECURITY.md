@@ -1,4 +1,4 @@
-# SECURITY.md — BotForge security checklist
+# SECURITY.md — Vicero security checklist
 
 > Verified during **Phase 16.2** (2026-07-19). Each item is marked ✅ met, ⚠️ partial, or
 > ❌ unmet with a note. This is a living checklist — re-verify at each release.
@@ -161,13 +161,16 @@ Advisory (non-blocking) `pip-audit` + `npm audit` run in CI. Results as of 2026-
   nothing public. Too narrow ⇒ one shared bucket per proxy; too wide ⇒ spoofable. With no identifiable client (plain
   local dev) the per-client signup cap steps aside and the session/audit IP is recorded as unknown.
 - ✅ **Dev Postgres/Redis are loopback-only** and the Postgres password is required, not defaulted. Verified: the new
-  password connects on loopback; the old default (`botforge`) is rejected; connections to the machine's Ethernet and
+  password connects on loopback; the old default (`vicero`) is rejected; connections to the machine's Ethernet and
   hotspot addresses on `5750` are refused, as is Redis on `6379`.
-- ⚠️ Still bound to all interfaces in the dev compose file: `api` (8000), `web` (3001), `n8n` (5679), `ollama` (11435).
-  Redis still has no password (loopback-only for now). k8s manifests not audited.
+- ✅ `api` (8000), `web` (3001), `n8n` and `ollama` (11435) are loopback-only too, and **Redis requires a password**
+  (`REDIS_PASSWORD`; unauthenticated → `NOAUTH`, wrong password → `WRONGPASS`; API, Celery worker and beat connect with it).
+  Verified: the web app, API, n8n and Ollama answer on `localhost`, and every published port is refused on the machine's
+  Ethernet and hotspot addresses (ADR-093).
+- ⚠️ The prod compose Redis is not published but has no password yet; k8s manifests not audited.
 
 ## 12. Private admin area `/vault` (ADR-096) — verified 2026-09-25
-- ✅ **Separate credentials, no coupling to BotForge auth.** No user row, no JWT, no API call. A BotForge session of any
+- ✅ **Separate credentials, no coupling to Vicero auth.** No user row, no JWT, no API call. A Vicero session of any
   role — including a real, valid one — is refused at every `/vault` route and at `/api/vault/reveal` (E2E-covered).
 - ✅ **Off until fully configured.** `VAULT_ADMIN_EMAILS`, `VAULT_PASSWORD_HASH` and a 32+ character
   `VAULT_SESSION_SECRET` must all be present; a missing or weak one refuses everyone. A corrupt or foreign-format hash

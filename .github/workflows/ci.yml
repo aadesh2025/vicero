@@ -16,13 +16,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: botforge
-          POSTGRES_PASSWORD: botforge
-          POSTGRES_DB: botforge
+          POSTGRES_USER: vicero
+          POSTGRES_PASSWORD: vicero
+          POSTGRES_DB: vicero
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U botforge"
+          --health-cmd "pg_isready -U vicero"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
@@ -33,7 +33,7 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       SECRET_KEY: ci-test-secret-key
-      DATABASE_URL: postgresql+asyncpg://botforge:botforge@localhost:5432/botforge
+      DATABASE_URL: postgresql+asyncpg://vicero:vicero@localhost:5432/vicero
       REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
@@ -167,13 +167,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: botforge
-          POSTGRES_PASSWORD: botforge
-          POSTGRES_DB: botforge
+          POSTGRES_USER: vicero
+          POSTGRES_PASSWORD: vicero
+          POSTGRES_DB: vicero
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U botforge"
+          --health-cmd "pg_isready -U vicero"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
@@ -184,7 +184,7 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       SECRET_KEY: ci-e2e-secret-key
-      DATABASE_URL: postgresql+asyncpg://botforge:botforge@localhost:5432/botforge
+      DATABASE_URL: postgresql+asyncpg://vicero:vicero@localhost:5432/vicero
       REDIS_URL: redis://localhost:6379/0
       # Deterministic + keyless: every LLM/embedding call runs on the Fake provider.
       LLM_FORCE_FAKE: "true"

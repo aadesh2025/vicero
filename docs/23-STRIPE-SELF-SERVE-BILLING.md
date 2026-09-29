@@ -92,9 +92,9 @@ Test mode first, then live. Price IDs differ between modes — hence env vars, n
 
 | Product | Price | Recurring | Env var |
 |---|---|---|---|
-| BotForge Starter | $49.00 USD | monthly | `STRIPE_PRICE_STARTER` |
-| BotForge Pro | $99.00 USD | monthly | `STRIPE_PRICE_PRO` |
-| BotForge Business | $199.00 USD | monthly | `STRIPE_PRICE_BUSINESS` |
+| Vicero Starter | $49.00 USD | monthly | `STRIPE_PRICE_STARTER` |
+| Vicero Pro | $99.00 USD | monthly | `STRIPE_PRICE_PRO` |
+| Vicero Business | $199.00 USD | monthly | `STRIPE_PRICE_BUSINESS` |
 
 Also enable:
 - **Customer portal** (Settings → Billing → Customer portal): plan switching between the three

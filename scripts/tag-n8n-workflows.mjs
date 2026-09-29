@@ -30,19 +30,19 @@ const ROOT = resolve(HERE, "..");
 /** name → tag. Slugs are the real `organizations.slug` values, looked up in Postgres,
  *  not guessed from the workflow name. `internal` hides a workflow from every org. */
 const MAPPING = [
-  // BotForge's own n8n (:5679)
+  // Vicero's own n8n (:5679)
   { name: "Acme Co — Starter Automation", tag: "acme-co" },
   { name: "Globex Inc — Starter Automation", tag: "globex-inc" },
   { name: "TEMPLATE — Starter Automation", tag: "internal" },
 
   // The AUROZEN AI instance (:5678). Listed so one run covers whichever instance is
   // pointed at; entries whose workflow isn't present are simply reported as absent.
-  { name: "BotForge — Echo (sync)", tag: "internal" },
+  { name: "Vicero — Echo (sync)", tag: "internal" },
   { name: "SHARED — Master Router", tag: "internal" },
   { name: "SHARED — Groq AI Caller", tag: "internal" },
   { name: "SHARED — Auto Provisioner", tag: "internal" },
   // "00001 — …" / "00002 — …" and "Website Lead — Contact Form" are deliberately absent:
-  // no BotForge organization corresponds to them (see the run report).
+  // no Vicero organization corresponds to them (see the run report).
 ];
 
 function loadEnvFile(path) {

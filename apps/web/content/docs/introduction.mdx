@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: BotForge is a platform for building AI agents that answer from your own content, run across every channel you use, and hand over to a human when they should.
+description: Vicero is a platform for building AI agents that answer from your own content, run across every channel you use, and hand over to a human when they should.
 group: Overview
 order: 1
 ---
 
-BotForge lets you build a chatbot that actually knows your business. You give an agent a
+Vicero lets you build a chatbot that actually knows your business. You give an agent a
 persona and a model, point it at your documents, and put it on your website or in the
 messaging apps your customers already use. When it cannot help, it hands the conversation
 to a person.
@@ -20,7 +20,7 @@ and a set of switches for what it is allowed to do. Agents are versioned — you
 draft, test it, and publish when it is right. If a published version misbehaves, roll back.
 
 **Knowledge and citations.** Upload PDFs, Word documents, spreadsheets, Markdown or plain
-text, or point at a URL. BotForge extracts, splits and embeds the content, then retrieves
+text, or point at a URL. Vicero extracts, splits and embeds the content, then retrieves
 the relevant passages at answer time and cites them. An agent grounded this way says "I
 don't know" instead of inventing something.
 
@@ -42,7 +42,7 @@ could answer.
 ## How the pieces fit
 
 <Callout type="note" title="The shape of a turn">
-A visitor sends a message. BotForge finds the relevant passages in your knowledge base,
+A visitor sends a message. Vicero finds the relevant passages in your knowledge base,
 assembles them with your system prompt and the recent conversation, and streams the model's
 answer back token by token — calling tools along the way if the agent is allowed to. The
 turn is recorded with its citations, token usage and cost.
@@ -63,6 +63,6 @@ that decide who can change an agent, who can publish it, and who can only work t
 
 ## What this documentation assumes
 
-It assumes you have a BotForge account and can sign in. It does not assume you write
+It assumes you have a Vicero account and can sign in. It does not assume you write
 Python or TypeScript: everything in the guides can be done from the dashboard, and the API
 sections are there for when you want to automate it.

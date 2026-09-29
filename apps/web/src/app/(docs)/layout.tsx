@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DocsNav } from "@/components/docs/docs-nav";
 
 export const metadata: Metadata = {
-  title: { default: "BotForge docs", template: "%s — BotForge docs" },
+  title: { default: "Vicero docs", template: "%s — Vicero docs" },
   description:
     "Build AI agents, ground them in your own knowledge base, embed a chat widget and wire automations.",
 };
@@ -21,7 +21,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       {children}
       <footer className="border-t border-border">
         <div className="mx-auto flex max-w-[1400px] flex-col gap-2 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center md:px-6">
-          <p>BotForge — build, deploy and operate AI agents.</p>
+          <p>Vicero — build, deploy and operate AI agents.</p>
           <nav className="flex gap-4 sm:ml-auto">
             <Link href="/docs" className="transition-colors hover:text-text">
               Docs

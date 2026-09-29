@@ -23,10 +23,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: botforge-api
+          - image: vicero-api
             context: apps/api
             build_args: ""
-          - image: botforge-web
+          - image: vicero-web
             context: apps/web
             build_args: |
               NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000' }}
@@ -67,10 +67,10 @@ jobs:
     services:
       postgres:
         image: pgvector/pgvector:pg16
-        env: { POSTGRES_USER: botforge, POSTGRES_PASSWORD: botforge, POSTGRES_DB: botforge }
+        env: { POSTGRES_USER: vicero, POSTGRES_PASSWORD: vicero, POSTGRES_DB: vicero }
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U botforge" --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U vicero" --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
         ports: ["6379:6379"]
@@ -85,21 +85,21 @@ jobs:
           context: apps/api
           push: false
           load: true
-          tags: botforge-api:smoke
+          tags: vicero-api:smoke
           cache-from: type=gha
 
       - name: Run migrations on the built image
         run: |
           docker run --rm --network host \
-            -e DATABASE_URL=postgresql+asyncpg://botforge:botforge@localhost:5432/botforge \
-            -e SECRET_KEY=ci-smoke botforge-api:smoke alembic upgrade head
+            -e DATABASE_URL=postgresql+asyncpg://vicero:vicero@localhost:5432/vicero \
+            -e SECRET_KEY=ci-smoke vicero-api:smoke alembic upgrade head
 
       - name: Start the API container
         run: |
           docker run -d --name api --network host \
-            -e DATABASE_URL=postgresql+asyncpg://botforge:botforge@localhost:5432/botforge \
+            -e DATABASE_URL=postgresql+asyncpg://vicero:vicero@localhost:5432/vicero \
             -e REDIS_URL=redis://localhost:6379/0 -e SECRET_KEY=ci-smoke \
-            botforge-api:smoke
+            vicero-api:smoke
 
       - name: Wait for /readyz to be green
         run: |
@@ -131,7 +131,7 @@ jobs:
             exit 0
           fi
           echo "Would SSH to ${DEPLOY_HOST} and run:"
-          echo "  cd /opt/botforge/infra && git pull && \\"
+          echo "  cd /opt/vicero/infra && git pull && \\"
           echo "  docker compose -f docker-compose.prod.yml pull && \\"
           echo "  docker compose -f docker-compose.prod.yml up -d --build   # runs the one-shot migrate job"
           echo "  then: curl -fsS https://\$API_DOMAIN/readyz   # post-deploy smoke"

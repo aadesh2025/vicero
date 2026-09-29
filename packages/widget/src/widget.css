@@ -1,10 +1,10 @@
 /*
- * BotForge widget stylesheet.
+ * Vicero widget stylesheet.
  *
  * The widget renders inside a Shadow DOM and injects all of its own styles at runtime
  * (see widget.js), so this file is optional. It is provided for hosts that want to nudge
  * the launcher/panel from the page level or preload styling before the script initializes.
  */
-#botforge-widget {
+#vicero-widget {
   color-scheme: light dark;
 }

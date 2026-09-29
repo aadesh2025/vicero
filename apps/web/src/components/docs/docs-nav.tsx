@@ -13,7 +13,7 @@ export function DocsNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-bg/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-4 px-4 md:px-6">
-        <Link href="/docs" className="flex items-center gap-2" aria-label="BotForge documentation">
+        <Link href="/docs" className="flex items-center gap-2" aria-label="Vicero documentation">
           <Logo />
           <span className="hidden text-sm text-muted sm:inline">docs</span>
         </Link>

@@ -10,7 +10,7 @@ risk register names explicitly — concurrent chat sessions and concurrent workf
 covers separately: every test agent is configured with `provider: "fake"`
 (`app.llm.fake.FakeChatProvider`, instant, no network) rather than a real model. This is not a
 shortcut — it is the correct isolation. Provider latency is bounded by the vendor, not this
-codebase, and a concurrency test that used a real provider would conflate "does BotForge's own
+codebase, and a concurrency test that used a real provider would conflate "does Vicero's own
 FastAPI/Postgres/Celery stack degrade under concurrent load" with "is Groq slow right now", plus
 it would risk repeating the exact incident the 2026-08-10 session log already recorded: "Running
 the checklist exhausts the Groq free tier."
@@ -247,7 +247,7 @@ async def _run_workflow_level(
 
 async def main() -> None:
     async with httpx.AsyncClient(base_url=BASE, timeout=WORKFLOW_POLL_TIMEOUT_S + 30) as client:
-        print(f"# BotForge load test — base={BASE}")
+        print(f"# Vicero load test — base={BASE}")
         print(f"# chat concurrency levels: {CHAT_LEVELS}")
         print(f"# workflow concurrency levels: {WORKFLOW_LEVELS}")
         print(f"# org pool size: {N_ORGS}\n")

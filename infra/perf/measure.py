@@ -78,7 +78,7 @@ async def _first_token_ms(client: httpx.AsyncClient, headers: dict[str, str], ai
 async def main() -> None:
     async with httpx.AsyncClient(base_url=BASE, timeout=120.0) as client:
         headers, aid = await _setup(client)
-        print(f"# BotForge perf — provider={PROVIDER} model={MODEL} base={BASE}\n")
+        print(f"# Vicero perf — provider={PROVIDER} model={MODEL} base={BASE}\n")
 
         # --- Non-LLM API latency ---
         await client.get("/v1/agents", headers=headers)  # warm

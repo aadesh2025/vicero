@@ -14,7 +14,10 @@ persona break is retried then suppressed, a prompt leak is replaced outright.
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
+
+from app.llm.fake import FakeChatProvider
 
 FOUNDER_EMAIL = "founder.personal@gmail.com"
 VISITOR = {"id": "w-guarded"}
@@ -46,10 +49,13 @@ async def _once(client: AsyncClient, key: str, message: str) -> str:
     return str(r.json()["content"])
 
 
-async def test_pii_redaction_reaches_the_non_streaming_response(client: AsyncClient) -> None:
-    """The Fake provider echoes the message, so the guard has real PII to strip."""
+async def test_pii_redaction_reaches_the_non_streaming_response(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The scripted model names an address the visitor never typed, so the guard has real PII to strip."""
+    monkeypatch.setattr(FakeChatProvider, "scripted_reply", f"Write to {FOUNDER_EMAIL} for that.")
     key = await _setup(client, "guarded.pii@example.com")
-    content = await _once(client, key, f"is {FOUNDER_EMAIL} the right address?")
+    content = await _once(client, key, "is that the right address?")
     assert FOUNDER_EMAIL not in content, "the non-streaming caller received unredacted PII"
     assert "our contact page" in content
 
@@ -63,14 +69,17 @@ async def test_a_persona_break_reaches_the_non_streaming_response(client: AsyncC
     assert content == "Let me get a teammate."
 
 
-async def test_the_streaming_and_non_streaming_paths_agree(client: AsyncClient) -> None:
+async def test_the_streaming_and_non_streaming_paths_agree(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Same input, same agent, same guarded output — the two must not disagree.
 
     The bug was precisely that they did: SSE clients honouring `replace` saw the corrected
     text, `{"stream": false}` callers saw the raw text, and both were "the API working".
     """
     key = await _setup(client, "guarded.parity@example.com")
-    message = f"is {FOUNDER_EMAIL} the right address?"
+    monkeypatch.setattr(FakeChatProvider, "scripted_reply", f"Write to {FOUNDER_EMAIL} for that.")
+    message = "is that the right address?"
 
     once = await _once(client, key, message)
 

@@ -155,8 +155,8 @@ describe("POST /api/vault/reveal", () => {
     expect(JSON.stringify(await body(res))).not.toContain(REAL_KEY);
   });
 
-  it("refuses a BotForge access token — a different door entirely", async () => {
-    jar.set("bf_access", "a-perfectly-valid-botforge-jwt");
+  it("refuses a Vicero access token — a different door entirely", async () => {
+    jar.set("bf_access", "a-perfectly-valid-vicero-jwt");
     jar.set("bf_refresh", "and-a-refresh-token");
     const res = await reveal(post("/api/vault/reveal", { name: "GROQ_API_KEY" }));
     expect(res.status).toBe(401);

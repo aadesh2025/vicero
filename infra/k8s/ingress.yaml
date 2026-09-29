@@ -3,14 +3,14 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: botforge
-  namespace: botforge
+  name: vicero
+  namespace: vicero
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt
 spec:
   tls:
     - hosts: [app.example.com, api.example.com]
-      secretName: botforge-tls
+      secretName: vicero-tls
   rules:
     - host: app.example.com
       http:

@@ -1,4 +1,4 @@
-# BotForge web — production Next.js image (standalone output, non-root).
+# Vicero web — production Next.js image (standalone output, non-root).
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -12,6 +12,8 @@ COPY . .
 # NEXT_PUBLIC_* are inlined at build time — pass the public API base as a build arg.
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ARG NEXT_PUBLIC_N8N_URL=http://localhost:5678
+ENV NEXT_PUBLIC_N8N_URL=${NEXT_PUBLIC_N8N_URL}
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runner

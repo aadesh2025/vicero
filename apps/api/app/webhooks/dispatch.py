@@ -123,11 +123,11 @@ async def deliver_delivery(
         return False
 
     body = json.dumps(delivery.payload).encode()
-    headers = {"Content-Type": "application/json", "X-BotForge-Event": delivery.event}
+    headers = {"Content-Type": "application/json", "X-Vicero-Event": delivery.event}
     if endpoint.secret:
         ts, signature = sign(endpoint.secret, body)
-        headers["X-BotForge-Signature"] = signature
-        headers["X-BotForge-Timestamp"] = ts
+        headers["X-Vicero-Signature"] = signature
+        headers["X-Vicero-Timestamp"] = ts
 
     delivery.attempts += 1
     try:

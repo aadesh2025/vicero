@@ -16,7 +16,7 @@ async def test_version(client: AsyncClient) -> None:
     resp = await client.get("/version")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["name"] == "botforge-api"
+    assert body["name"] == "vicero-api"
     assert body["version"]
     assert body["env"] in {"dev", "test", "prod"}
 
@@ -41,13 +41,13 @@ async def test_metrics_prometheus_exposition(client: AsyncClient) -> None:
     assert resp.status_code == 200
     assert "text/plain" in resp.headers["content-type"]
     body = resp.text
-    assert "botforge_build_info" in body
-    assert "botforge_http_requests_total" in body
-    assert "botforge_http_request_duration_seconds_bucket" in body
+    assert "vicero_build_info" in body
+    assert "vicero_http_requests_total" in body
+    assert "vicero_http_request_duration_seconds_bucket" in body
     # +Inf bucket must equal the histogram count (monotonic, well-formed).
     lines = body.splitlines()
     inf = next(ln for ln in lines if 'le="+Inf"' in ln).split()[-1]
-    prefix = "botforge_http_request_duration_seconds_count"
+    prefix = "vicero_http_request_duration_seconds_count"
     count = next(ln for ln in lines if ln.startswith(prefix)).split()[-1]
     assert inf == count
 

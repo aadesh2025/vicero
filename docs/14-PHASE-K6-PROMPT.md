@@ -9,7 +9,7 @@
 
 1. `CLAUDE.md` — especially §1 (autonomous execution) and §2 (Definition of Done)
 2. `docs/14-KNOWLEDGE-PIPELINE-V2.md` §0a (what is shipped vs enabled) and **§ Phase K6**
-3. `docs/15-DEPLOYMENT-CAPACITY.md` §9/§10 — why BotForge images carry no ML dependencies
+3. `docs/15-DEPLOYMENT-CAPACITY.md` §9/§10 — why Vicero images carry no ML dependencies
 4. `docs/11-SAFETY-GUARDRAILS.md` §6 and §9 — the review workflow and the grounding gap
 
 ## Two rules that override any instinct to simplify

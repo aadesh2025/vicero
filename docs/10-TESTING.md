@@ -47,7 +47,7 @@ them is tagged.
 ### 4.1 Implemented suite (Phase 19.1)
 
 Specs live in `apps/web/e2e/*.spec.ts` (config `apps/web/playwright.config.ts`, helpers
-`e2e/helpers.ts`, PDF fixture `e2e/fixtures/botforge-facts.pdf`). One spec per PRD criterion:
+`e2e/helpers.ts`, PDF fixture `e2e/fixtures/vicero-facts.pdf`). One spec per PRD criterion:
 
 | Spec | Criterion | Coverage |
 |---|---|---|
@@ -107,3 +107,13 @@ fails the build. Coverage reported as an artifact. See `09 §6`.
 ## 8. Local commands
 `make test` (all), `make test-api`, `make test-web`, `make e2e`, `make lint`, `make typecheck`.
 Keep them fast; parallelize where possible.
+
+**Windows + Docker Desktop: the suite can stall (measured 2026-09-25).** With Postgres in Docker Desktop's WSL2 VM and
+the tests on the Windows host, about 1 fresh connection in ~600 to the published port never gets a reply: Windows waits
+exactly 21 s and raises `WinError 121` ("The semaphore timeout period has expired"), and now and then an accepted
+connection goes silent. The suite opens a connection per test, so a full run meets a few, and unbounded they hang the run
+while every file passes on its own. `tests/dbconn.py` bounds them (5 s connect timeout with up to 4 attempts; 120 s
+command timeout) — 1 800 fresh connections then finished with 0 failures, two needing a retry. Use `127.0.0.1` in
+`DATABASE_URL`/`REDIS_URL`, not `localhost` (IPv6 is tried first and the containers publish IPv4 loopback only). If a run
+still stalls, suspect the port forward first: `docker exec vicero-postgres-1 psql ...` answering instantly while the host
+connection hangs is the signature. Running pytest inside the Docker network avoids the forward entirely.

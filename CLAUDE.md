@@ -8,7 +8,7 @@
 
 ## 0. Project one-liner
 
-Build **"BotForge"** — an original, enterprise-grade, Botpress-inspired AI chatbot &
+Build **"Vicero"** — an original, enterprise-grade, Botpress-inspired AI chatbot &
 automation platform. Multi-tenant SaaS: users create AI agents (chatbots), give them a
 persona/temperature/model, attach a knowledge base (RAG), embed a chat widget, connect
 channels (WhatsApp/Telegram/etc.), and wire automations to a **locally-running n8n**
@@ -72,8 +72,8 @@ Do not introduce a different framework without recording the reason in `docs/DEC
 - n8n runs in Docker on the local machine (assume `http://localhost:5678`, configurable via
   `N8N_BASE_URL`). Add an `n8n` service to the dev compose file so the whole stack comes up
   together, but also support pointing at an already-running n8n instance.
-- Integrate two ways: (a) BotForge **calls** n8n workflows via webhook/REST to run
-  automations; (b) n8n **calls** BotForge via signed webhooks/REST API + API keys.
+- Integrate two ways: (a) Vicero **calls** n8n workflows via webhook/REST to run
+  automations; (b) n8n **calls** Vicero via signed webhooks/REST API + API keys.
 - Never hardcode the n8n URL or key — read from env. See `docs/07-INTEGRATIONS.md`.
 
 ## 7. Secrets Claude cannot invent (STOP and ask the human ONLY for these)
@@ -152,11 +152,11 @@ red-team corpus there is no way to tell a real improvement from luck.
 
 ### 10b. The agentic runtime / builder track (`docs/17-*`) is read-always, execute-on-request
 
-`docs/17-AGENTIC-RUNTIME-AND-BUILDER.md` is the spec for BotForge's three biggest identified
+`docs/17-AGENTIC-RUNTIME-AND-BUILDER.md` is the spec for Vicero's three biggest identified
 product/backend gaps — a multi-step agentic tool loop, an in-app visual workflow builder, and
 a pluggable integration contract — each modeled on a specific open-source reference repo
 (`firecrawl/open-agent-builder`, `FoundationAgents/OpenManus`, `botpress/botpress`) but built
-natively on BotForge's existing stack, not by adopting theirs. **Read it before touching
+natively on Vicero's existing stack, not by adopting theirs. **Read it before touching
 `app/chat/runtime.py`, adding any tool-calling capability, or building anything under a
 `workflows`/`agent_steps` table** — it explains why the security rules in its §2 and §6 exist
 and references the exact prior incidents (ADR-055, ADR-044) that justify them.
@@ -206,8 +206,8 @@ Each new session usually starts with Docker Desktop + services **stopped** — b
 3. **Web** (from `apps/web`): `npm run dev -- -p 3001`. Open **http://localhost:3001**.
 
 **Port gotchas:** canonical is web **3000** / API **8000**, but on this machine **3000 is taken by
-an unrelated app**, so BotForge web runs on **3001**. The keyless-E2E API runs on **8010**
+an unrelated app**, so Vicero web runs on **3001**. The keyless-E2E API runs on **8010**
 (`LLM_FORCE_FAKE=true`, `AUTH_RATE_LIMIT` lifted) so it doesn't clash with a real :8000 API.
 **n8n** is expected at **5678** (`N8N_BASE_URL`) — note the running `:5678` belongs to the separate
-AUROZEN AI compose, not BotForge's own `n8n` service. Always run API/web commands from `apps/api` /
+AUROZEN AI compose, not Vicero's own `n8n` service. Always run API/web commands from `apps/api` /
 `apps/web` (not the repo root) to avoid `ModuleNotFoundError: app` / npm ENOENT.

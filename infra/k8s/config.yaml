@@ -4,12 +4,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: botforge-config
-  namespace: botforge
+  name: vicero-config
+  namespace: vicero
 data:
   ENV: "prod"
   LOG_LEVEL: "info"
-  DATABASE_URL: "postgresql+asyncpg://botforge:$(POSTGRES_PASSWORD)@postgres:5432/botforge"
+  DATABASE_URL: "postgresql+asyncpg://vicero:$(POSTGRES_PASSWORD)@postgres:5432/vicero"
   REDIS_URL: "redis://redis:6379/0"
   N8N_BASE_URL: "http://n8n:5678"
   OLLAMA_BASE_URL: "http://ollama:11434"
@@ -18,8 +18,8 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: botforge-secrets
-  namespace: botforge
+  name: vicero-secrets
+  namespace: vicero
 type: Opaque
 stringData:
   # REPLACE THESE. Generate SECRET_KEY: python -c "import secrets;print(secrets.token_urlsafe(48))"

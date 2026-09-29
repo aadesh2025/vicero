@@ -1,6 +1,6 @@
 # RUNBOOK — Bringing the Docker stack up (Windows)
 
-Practical steps to boot BotForge locally and verify Phase 0 + Phase 1 against a real
+Practical steps to boot Vicero locally and verify Phase 0 + Phase 1 against a real
 Postgres. Assumes Windows + Docker Desktop + PowerShell. Compose file lives at
 `infra/docker-compose.yml` and reads `.env` from the **repo root**.
 
@@ -92,7 +92,7 @@ Wait until `postgres` shows **healthy**.
 
 ## Step 5 — (optional) sanity-check Postgres + pgvector
 ```powershell
-docker compose -f infra/docker-compose.yml exec postgres psql -U botforge -d botforge -c "SELECT version();"
+docker compose -f infra/docker-compose.yml exec postgres psql -U vicero -d vicero -c "SELECT version();"
 ```
 
 ## Step 6 — Create the schema and seed demo data
@@ -106,7 +106,7 @@ uv run python -m app.db.seed         # idempotent: 1 org, 1 owner, 1 agent+versi
 Verify:
 ```powershell
 docker compose -f ..\infra\docker-compose.yml exec postgres `
-  psql -U botforge -d botforge -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
+  psql -U vicero -d vicero -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
 # → 28  (27 tables + alembic_version)
 ```
 
@@ -131,9 +131,9 @@ A `200` means Phase 0 + 1 are verified end-to-end.
 |---|---|
 | Web (Next.js) | http://localhost:3000 |
 | API (FastAPI) | http://localhost:8000  (`/healthz`, `/readyz`, `/docs`) |
-| n8n | http://localhost:5678  (basic auth: admin / botforge) |
+| n8n | http://localhost:5678  (basic auth: admin / vicero) |
 | Ollama | http://localhost:11434 |
-| Postgres | localhost:5432  (botforge / botforge / botforge) |
+| Postgres | localhost:5432  (vicero / vicero / vicero) |
 | Redis | localhost:6379 |
 
 ## Everyday commands

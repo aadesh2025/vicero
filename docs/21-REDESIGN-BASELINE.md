@@ -58,4 +58,4 @@ settings nav, `ui/badge`, `ui/button`, …).
   E2E `createAccount` helper 402s against it. Use the keyless E2E API on `:8010`
   (`LLM_FORCE_FAKE=true SELF_SERVE_ENABLED=false ALLOW_SELF_SERVE_ORGS=true`) and start the dev
   web with `NEXT_PUBLIC_API_BASE_URL=http://localhost:8010`. CORS only allows `localhost:3001`,
-  which the `botforge-web-1` docker container also binds — stop it while iterating on source.
+  which the `vicero-web-1` docker container also binds — stop it while iterating on source.

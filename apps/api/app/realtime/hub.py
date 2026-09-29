@@ -27,7 +27,7 @@ from app.core.logging import get_logger
 log = get_logger("realtime.hub")
 
 # One Redis channel carries all realtime events; the topic travels inside the payload.
-REDIS_CHANNEL = "botforge:realtime"
+REDIS_CHANNEL = "vicero:realtime"
 
 
 class Hub:

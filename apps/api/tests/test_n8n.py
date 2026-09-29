@@ -50,8 +50,8 @@ async def test_list_workflows_parses_data() -> None:
 
 def test_extract_webhook_url() -> None:
     client = N8nClient("http://n8n:5678", "k")
-    wf = {"nodes": [{"type": "n8n-nodes-base.webhook", "parameters": {"path": "botforge-echo"}}]}
-    assert client.extract_webhook_url(wf) == "http://n8n:5678/webhook/botforge-echo"
+    wf = {"nodes": [{"type": "n8n-nodes-base.webhook", "parameters": {"path": "vicero-echo"}}]}
+    assert client.extract_webhook_url(wf) == "http://n8n:5678/webhook/vicero-echo"
     assert client.extract_webhook_url({"nodes": []}) is None
 
 
@@ -65,8 +65,8 @@ async def test_trigger_webhook_signs_request() -> None:
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured["sig"] = request.headers.get("x-botforge-signature")
-        captured["ts"] = request.headers.get("x-botforge-timestamp")
+        captured["sig"] = request.headers.get("x-vicero-signature")
+        captured["ts"] = request.headers.get("x-vicero-timestamp")
         captured["body"] = request.content
         return httpx.Response(200, json={"result": "pong"})
 
@@ -309,7 +309,7 @@ async def test_n8n_callback_resolves_pending_run(client: AsyncClient, monkeypatc
     cb = await client.post(
         "/v1/tools/n8n/callback",
         content=body,
-        headers={"X-BotForge-Signature": sig, "X-BotForge-Timestamp": ts, "Content-Type": "application/json"},
+        headers={"X-Vicero-Signature": sig, "X-Vicero-Timestamp": ts, "Content-Type": "application/json"},
     )
     assert cb.status_code == 200 and cb.json()["ok"] is True
 

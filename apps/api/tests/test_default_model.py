@@ -69,7 +69,7 @@ async def test_live_groq_serves_every_platform_default() -> None:
     async with httpx.AsyncClient(timeout=30) as http:
         resp = await http.get(
             "https://api.groq.com/openai/v1/models",
-            headers={"Authorization": f"Bearer {settings.groq_api_key}", "User-Agent": "botforge-live-test"},
+            headers={"Authorization": f"Bearer {settings.groq_api_key}", "User-Agent": "vicero-live-test"},
         )
     assert resp.status_code == 200, resp.text
     live = {m["id"] for m in resp.json()["data"]}

@@ -10,8 +10,8 @@ import { Label } from "@/components/ui/label";
  * The private area's sign-in.
  *
  * Posts straight to `/api/vault/login` — deliberately not through `lib/api/client`, which
- * attaches BotForge tokens and retries through the BotForge refresh flow. Nothing here
- * touches a BotForge session, and a BotForge session is worth nothing here.
+ * attaches Vicero tokens and retries through the Vicero refresh flow. Nothing here
+ * touches a Vicero session, and a Vicero session is worth nothing here.
  */
 export function VaultLoginForm() {
   const router = useRouter();

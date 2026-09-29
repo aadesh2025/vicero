@@ -9,7 +9,7 @@ import { CodeTabs } from "./code-tabs";
 /**
  * How MDX elements render inside the docs.
  *
- * Most of the styling is `prose-botforge` in the Tailwind config; the overrides here are
+ * Most of the styling is `prose-vicero` in the Tailwind config; the overrides here are
  * for the handful of elements the typography plugin gets wrong for this content:
  *
  * - **links** go through `next/link` when internal, so docs navigation is client-side,

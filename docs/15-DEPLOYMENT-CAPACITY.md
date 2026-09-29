@@ -148,7 +148,7 @@ from the ML containers by construction, not by hope.
 **All figures are estimates.** They are derived from what each component loads, not from a
 measured run of this stack. Treat as planning numbers to validate in K1-2, not as truth.
 
-### 3.1 BotForge today
+### 3.1 Vicero today
 
 | Service | Est. RSS | Notes |
 |---|---|---|

@@ -1,8 +1,8 @@
 # Widget install guide
 
-The BotForge chat widget is a single, dependency-free `widget.js` served by the web app at
+The Vicero chat widget is a single, dependency-free `widget.js` served by the web app at
 `/widget.js`. It renders inside a **Shadow DOM** (so it never inherits or leaks your site's CSS),
-streams replies from the public API, and exposes a small `window.BotForge` SDK.
+streams replies from the public API, and exposes a small `window.Vicero` SDK.
 
 ## 1. Get your agent's public key
 
@@ -24,9 +24,9 @@ Paste this just before `</body>` on any page:
 ></script>
 ```
 
-- `src` — where `widget.js` is hosted (your BotForge web host; `http://localhost:3000/widget.js` in dev).
+- `src` — where `widget.js` is hosted (your Vicero web host; `http://localhost:3000/widget.js` in dev).
 - `data-agent` — **required**. The agent's public key from the Channels tab.
-- `data-api` — the BotForge API base URL. If omitted it defaults to `<page-host>:8000`, so set it
+- `data-api` — the Vicero API base URL. If omitted it defaults to `<page-host>:8000`, so set it
   explicitly in production.
 
 The agent must be **published** for the widget to load its config. A launcher bubble appears in the
@@ -34,21 +34,21 @@ corner; clicking it opens the chat panel.
 
 ## 3. Control it from JavaScript (SDK)
 
-Once loaded, `window.BotForge` is available:
+Once loaded, `window.Vicero` is available:
 
 ```js
-BotForge.open();                          // open the panel
-BotForge.close();                         // close it
-BotForge.toggle();                        // toggle
-BotForge.sendMessage("Hello from my site"); // programmatically send a user message
-BotForge.setUser({ name: "Jane", email: "jane@acme.com" }); // attach visitor identity
-BotForge.on("message", (m) => console.log("reply:", m));    // subscribe to events
+Vicero.open();                          // open the panel
+Vicero.close();                         // close it
+Vicero.toggle();                        // toggle
+Vicero.sendMessage("Hello from my site"); // programmatically send a user message
+Vicero.setUser({ name: "Jane", email: "jane@acme.com" }); // attach visitor identity
+Vicero.on("message", (m) => console.log("reply:", m));    // subscribe to events
 ```
 
 Example — open the widget from your own button:
 
 ```html
-<button onclick="BotForge.toggle()">Chat with us</button>
+<button onclick="Vicero.toggle()">Chat with us</button>
 ```
 
 ## 4. Human handoff
@@ -60,7 +60,7 @@ to the open widget in real time over a WebSocket. Handing back resumes the bot.
 ## 5. Theming
 
 Appearance is driven by the agent's Channels config (`persona.widget`): accent colour, launcher
-side (left/right), launcher label, open-by-default, and whether to show the "Powered by BotForge"
+side (left/right), launcher label, open-by-default, and whether to show the "Powered by Vicero"
 footer. Change it in the Channels tab; the widget picks it up from `/v1/public/agents/{key}/config`.
 
 ## 6. Cross-origin notes

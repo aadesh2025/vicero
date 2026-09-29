@@ -1,13 +1,13 @@
 """Stage 4 — cross-encoder reranking over the fused candidates (docs/13 R1, docs/14 K4).
 
-BotForge has stages 1-3: Postgres FTS, pgvector dense, and RRF over the two. The missing stage
+Vicero has stages 1-3: Postgres FTS, pgvector dense, and RRF over the two. The missing stage
 is the cross-encoder. A bi-encoder embeds the query and the document **separately** and compares
 two vectors that never met; a cross-encoder feeds both into one model with joint attention, so
 it can answer "does this passage actually answer this question?" in a way two independent
 vectors structurally cannot. Much more accurate, much slower — hence running it on ~50 fused
 candidates rather than on the corpus.
 
-**Why it earns its place here specifically.** BotForge's worst live failure mode is fabrication
+**Why it earns its place here specifically.** Vicero's worst live failure mode is fabrication
 when retrieval misses and no context block is appended at all (2026-08-02: score 0.0318 against
 a 0.35 threshold, and the model invented opening hours). docs/11 §9 records grounding as the
 weakest link at 12/15 fabricated with **no safety phase A-G touching it**. This attacks that

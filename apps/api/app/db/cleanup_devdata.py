@@ -10,13 +10,13 @@ This utility deletes:
 Two domains are swept, and the reason each is safe is different:
 
   ``@example.com``     Playwright fixtures. Created constantly, never by a human.
-  ``@botforge.local``  The seed account (``app/db/seed.py``). Its demo org is recreated in full
+  ``@vicero.local``  The seed account (``app/db/seed.py``). Its demo org is recreated in full
                        by ``make seed``, so deleting it loses nothing that one command cannot
                        rebuild.
 
-**``@botforge.dev`` is deliberately NOT swept, and must not be added.** That is
+**``@vicero.dev`` is deliberately NOT swept, and must not be added.** That is
 ``PROVISION_STAFF_EMAIL`` — the staff login ``scripts/provision-client.mjs`` uses to stand up
-**real clients**. Every org it provisions carries ``created_by = provision@botforge.dev``, so a
+**real clients**. Every org it provisions carries ``created_by = provision@vicero.dev``, so a
 pattern sweep on that domain would delete real client workspaces the first time one was
 provisioned through the script. Its leftover test orgs (``Acme Co``, ``Globex Inc``) look like
 fixtures but are indistinguishable at the schema level from a real tenant, so they are removed
@@ -46,8 +46,8 @@ log = get_logger("db.cleanup")
 
 #: Fixture accounts safe to delete unattended. Anything added here is deleted *along with the
 #: organizations it created*, so a domain only belongs on this list if no real tenant can ever
-#: be created by an account on it. See the module docstring on ``@botforge.dev``.
-FIXTURE_EMAIL_PATTERNS = ["%@example.com", "%@botforge.local"]
+#: be created by an account on it. See the module docstring on ``@vicero.dev``.
+FIXTURE_EMAIL_PATTERNS = ["%@example.com", "%@vicero.local"]
 
 # Nullable, no-cascade user references. Nulled before deleting users so a stray cross-org
 # reference can never block the delete. (All test content normally lives in deleted orgs.)

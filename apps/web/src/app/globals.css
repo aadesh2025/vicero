@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
-  BotForge design tokens — dual theme (docs/20-UI-REDESIGN-DUAL-THEME.md §4, §5).
+  Vicero design tokens — dual theme (docs/20-UI-REDESIGN-DUAL-THEME.md §4, §5).
 
   One blue primary, one purple for "the AI", and colour that always means something. About 80%
   of any screen is neutral (page, cards, text); colour lives in icons, pills, chart series,

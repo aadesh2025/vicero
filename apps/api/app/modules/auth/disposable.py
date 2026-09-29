@@ -31,7 +31,7 @@ from app.modules.auth.policy import DISPOSABLE_DOMAINS
 
 log = get_logger("auth.disposable")
 
-REDIS_KEY = "botforge:disposable_domains"
+REDIS_KEY = "vicero:disposable_domains"
 #: How long the Redis copy lives if the weekly refresh stops working (then we fall back to the seed).
 REDIS_TTL_SECONDS = 14 * 86400
 _LOCAL_CACHE_SECONDS = 600

@@ -64,7 +64,7 @@ describe("OrgSwitcher", () => {
   });
 
   it("names the org without claiming it is on a plan", () => {
-    // The trigger used to render "Free plan" under the name. BotForge has no tiers — every
+    // The trigger used to render "Free plan" under the name. Vicero has no tiers — every
     // org brings its own provider keys — so that advertised a distinction that does not
     // exist and an upgrade that cannot be bought.
     useSession.setState({

@@ -1,4 +1,4 @@
-# BotForge API — multi-stage build using uv
+# Vicero API — multi-stage build using uv
 FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS base
 
 ENV UV_COMPILE_BYTECODE=1 \

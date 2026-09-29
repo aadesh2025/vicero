@@ -70,7 +70,7 @@ test("a second message continues the same conversation", async ({ page, request 
   });
 
   const firstConversation = await page.evaluate(
-    (key) => localStorage.getItem(`botforge:conv:${key}`),
+    (key) => localStorage.getItem(`vicero:conv:${key}`),
     publicKey,
   );
   expect(firstConversation).toBeTruthy();
@@ -83,12 +83,12 @@ test("a second message continues the same conversation", async ({ page, request 
 
   // Same thread, not a new one silently started after a rejected resume.
   const secondConversation = await page.evaluate(
-    (key) => localStorage.getItem(`botforge:conv:${key}`),
+    (key) => localStorage.getItem(`vicero:conv:${key}`),
     publicKey,
   );
   expect(secondConversation).toBe(firstConversation);
   expect(
-    await page.evaluate((key) => localStorage.getItem(`botforge:vid:${key}`), publicKey),
+    await page.evaluate((key) => localStorage.getItem(`vicero:vid:${key}`), publicKey),
   ).toBeTruthy();
 });
 
@@ -103,7 +103,7 @@ test("a conversation id that isn't ours is discarded, not fatal", async ({ page,
   await page.evaluate(
     ([key, api]) => {
       // Someone else's (well-formed but unowned) conversation, as a shared device would have.
-      localStorage.setItem(`botforge:conv:${key}`, "00000000-0000-4000-8000-000000000000");
+      localStorage.setItem(`vicero:conv:${key}`, "00000000-0000-4000-8000-000000000000");
       const s = document.createElement("script");
       s.src = "/widget.js";
       s.setAttribute("data-agent", key);
@@ -124,6 +124,6 @@ test("a conversation id that isn't ours is discarded, not fatal", async ({ page,
     { timeout: 20_000 },
   );
   expect(
-    await page.evaluate((key) => localStorage.getItem(`botforge:conv:${key}`), publicKey),
+    await page.evaluate((key) => localStorage.getItem(`vicero:conv:${key}`), publicKey),
   ).not.toBe("00000000-0000-4000-8000-000000000000");
 });

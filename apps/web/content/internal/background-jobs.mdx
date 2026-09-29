@@ -6,7 +6,7 @@ order: 7
 ---
 
 `app/worker/celery_app.py`. Broker and result backend are Redis (`REDIS_URL`), app name
-`botforge`, JSON serialization, UTC, `task_track_started=True`.
+`vicero`, JSON serialization, UTC, `task_track_started=True`.
 
 ```bash
 celery -A app.worker.celery_app worker   # on Windows, add --pool=solo

@@ -80,7 +80,7 @@ export function BuilderHeader() {
                saved draft shows up as "unpublished changes" in the admin console. */
             <Badge
               variant="warn"
-              title="Your changes are saved and testable in the Playground. Going live is done by the BotForge team."
+              title="Your changes are saved and testable in the Playground. Going live is done by the Vicero team."
             >
               <Clock className="size-3" /> Awaiting review
             </Badge>

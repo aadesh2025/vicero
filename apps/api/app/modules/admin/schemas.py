@@ -33,7 +33,7 @@ class OrgAdminOut(BaseModel):
     #: Agents whose newest draft is ahead of what's live. A client can edit but not publish,
     #: so this is how staff notice work waiting for review without opening every builder.
     agents_with_unpublished_changes: int = 0
-    #: BotForge's own visual-workflow-builder Workflows (docs/17 §3) whose latest version has
+    #: Vicero's own visual-workflow-builder Workflows (docs/17 §3) whose latest version has
     #: been explicitly submitted for review (`WorkflowVersion.status == "in_review"`) — NOT the
     #: same thing as an n8n automation (see `AutomationOut`). Unlike the agents count above,
     #: this reads a real status a workflow author set, not a version-number proxy.
@@ -122,7 +122,7 @@ class HealthOut(BaseModel):
 
 
 class N8nSignatureFindingOut(BaseModel):
-    """One bound n8n tool and whether its workflow verifies BotForge's signature."""
+    """One bound n8n tool and whether its workflow verifies Vicero's signature."""
 
     organization_slug: str
     organization_name: str
@@ -149,7 +149,7 @@ class N8nSignatureAuditOut(BaseModel):
 
 
 class AutomationBindingOut(BaseModel):
-    """One BotForge tool pointing at this workflow."""
+    """One Vicero tool pointing at this workflow."""
 
     organization_slug: str
     organization_name: str

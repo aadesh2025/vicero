@@ -1,4 +1,4 @@
-# BotForge — production stack. TLS-terminated by Caddy, non-root app images, healthchecks,
+# Vicero — production stack. TLS-terminated by Caddy, non-root app images, healthchecks,
 # and a ONE-SHOT migration job (so scaling api/worker replicas never re-runs migrations).
 #
 #   cp ../.env.example ../.env   # set SECRET_KEY, LLM keys, … (goes INSIDE the containers)
@@ -28,7 +28,7 @@
 # Required (container env, ../.env): SECRET_KEY, CORS_ORIGINS (= https://$DOMAIN).
 # Required (interpolation): POSTGRES_PASSWORD, DOMAIN, API_DOMAIN, ACME_EMAIL,
 #   NEXT_PUBLIC_API_BASE_URL (= https://$API_DOMAIN).
-name: botforge-prod
+name: vicero-prod
 
 # ── Memory limits (docs/15 PROD-3, ADR-069) ──────────────────────────────────────────────────
 #
@@ -53,7 +53,7 @@ name: botforge-prod
 # docs/15 §4 Option 1 (Docling core off, no chart VLM, no ASR, no self-hosted reranker).
 
 x-api-env: &api-env
-  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-botforge}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vicero}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vicero}
   REDIS_URL: redis://redis:6379/0
   # Who may tell the API a visitor's real address (X-Forwarded-For; app/core/clientip.py): the
   # Docker networks, i.e. Caddy and the web container. Without this every visitor is one address
@@ -74,9 +74,9 @@ services:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-botforge}
+      POSTGRES_USER: ${POSTGRES_USER:-vicero}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-botforge}
+      POSTGRES_DB: ${POSTGRES_DB:-vicero}
     volumes:
       - pgdata:/var/lib/postgresql/data
     deploy:
@@ -91,7 +91,7 @@ services:
           # a limit alone only stops Postgres growing, it does not prefer it when RAM runs short.
           memory: ${POSTGRES_MEM_RESERVATION:-1g}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botforge}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vicero}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -230,6 +230,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://api.localhost}
+        NEXT_PUBLIC_N8N_URL: ${NEXT_PUBLIC_N8N_URL:-http://localhost:5678}
     restart: unless-stopped
     environment:
       # Server-side BFF reaches the API in-network (refresh-token custody, see ADR-019).
@@ -335,9 +336,9 @@ services:
     env_file: ../.env
     environment:
       PGHOST: postgres
-      PGUSER: ${POSTGRES_USER:-botforge}
+      PGUSER: ${POSTGRES_USER:-vicero}
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      PGDATABASE: ${POSTGRES_DB:-botforge}
+      PGDATABASE: ${POSTGRES_DB:-vicero}
       BACKUP_DIR: /backups
       RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       # Read-only mount of the SAME `uploads` volume api/worker write to (below) — closes

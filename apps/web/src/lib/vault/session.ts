@@ -1,4 +1,4 @@
-/** The vault's own session — a signed, httpOnly cookie, separate from BotForge auth.
+/** The vault's own session — a signed, httpOnly cookie, separate from Vicero auth.
  *
  * Stateless: the cookie carries `{email, exp}` and an HMAC over it. There is no server-side
  * session table, which keeps this free of the API and the database (the vault must keep

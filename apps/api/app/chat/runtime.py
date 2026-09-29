@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.chat import output_guard
+from app.chat import output_guard, pii
 from app.chat.budget import AgentBudget
 from app.chat.guardrails import neutralize_injections
 from app.core.config import settings
@@ -265,6 +265,15 @@ async def run_turn(
                 # The first reply is still in hand; fall through and let `apply` replace it.
                 log.warning("output_guard_regeneration_failed", error=str(exc))
 
+        # Contact details the CUSTOMER typed in this conversation may be read back to them. Taken
+        # only from `user`-role messages: retrieved context and the memory summary are `system`
+        # messages and tool output is `tool`, so a number pulled from the KB, a tool or the model's
+        # own head can never qualify. Distinct from `pii_allowlist` (the org's public contacts).
+        customer_supplied = (
+            pii.customer_supplied_contacts(m.content for m in req.messages if m.role == "user")
+            if pii_allowlist is not None and settings.guard_pii_egress_enabled
+            else None
+        )
         final = output_guard.apply(
             result.content,
             protected_prompt,
@@ -276,7 +285,11 @@ async def run_turn(
             pii_allowlist=pii_allowlist if settings.guard_pii_egress_enabled else None,
             pii_regions=[r.strip() for r in settings.guard_pii_phone_regions.split(",") if r.strip()],
             redact_addresses=settings.guard_pii_redact_addresses,
+            customer_supplied=customer_supplied,
         )
+        if final.pii_echoed:
+            # Counts only. Not a warning: reading back what the customer just said is the product working.
+            log.info("output_guard_pii_echo", provider=provider.name, model=req.model, echoed=final.pii_echoed)
         if final.pii_redacted:
             # Category and count only. Logging the value would move the leak into the log.
             log.warning(

@@ -207,7 +207,7 @@ async def create_org(session: AsyncSession, user: User, name: str) -> schemas.Or
     if not settings.self_serve_enabled:
         raise AppError(
             "orgs.create_forbidden",
-            "Organization creation is staff-only. Ask your BotForge contact to set one up "
+            "Organization creation is staff-only. Ask your Vicero contact to set one up "
             "for you.",
             403,
         )

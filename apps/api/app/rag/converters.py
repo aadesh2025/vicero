@@ -10,7 +10,7 @@ detector matched nothing in a document that visibly contained a number. Better e
 **Three implementations, and the third is never deleted.**
 
 * `DoclingServiceConverter` — HTTP to a `docling-serve` container. Layout analysis, reading
-  order, table structure, OCR. The ML weight lives in Docling's image, so **BotForge's own
+  order, table structure, OCR. The ML weight lives in Docling's image, so **Vicero's own
   images gain no dependency at all** (docs/14 §4.1 Option B).
 * `LegacyConverter` — today's `load_bytes`, wrapped. **This is the fallback and it stays
   forever.** Every rollout step in docs/14 §12 is a flag flip precisely because it exists.
@@ -230,7 +230,7 @@ _WARMUP_PDF = (
     b"/MediaBox [ 0 0 595.2756 841.8898 ] /Parent 6 0 R /Resources <<\n/Font 1 0 R "
     b"/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]\n>> /Rotate 0 /Trans <<\n\n>> \n"
     b"  /Type /Page\n>>\nendobj\n4 0 obj\n<<\n/PageMode /UseNone /Pages 6 0 R /Type /Catalog\n"
-    b">>\nendobj\n5 0 obj\n<<\n/Author (warmup) /Creator (botforge) /Keywords () "
+    b">>\nendobj\n5 0 obj\n<<\n/Author (warmup) /Creator (vicero) /Keywords () "
     b"/Producer (ReportLab PDF Library - \\(opensource\\)) \n  /Subject (warmup) "
     b"/Title (warmup) /Trapped /False\n>>\nendobj\n6 0 obj\n<<\n/Count 1 /Kids [ 3 0 R ] "
     b"/Type /Pages\n>>\nendobj\n7 0 obj\n<<\n/Filter [ /ASCII85Decode /FlateDecode ] "

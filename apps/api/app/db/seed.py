@@ -31,7 +31,7 @@ from app.models import (
 log = get_logger("seed")
 _ph = PasswordHasher()
 
-OWNER_EMAIL = os.getenv("SEED_OWNER_EMAIL", "owner@botforge.local")
+OWNER_EMAIL = os.getenv("SEED_OWNER_EMAIL", "owner@vicero.local")
 OWNER_PASSWORD = os.getenv("SEED_OWNER_PASSWORD", "changeme-dev-only")
 ORG_SLUG = "demo"
 

@@ -1,8 +1,8 @@
 /*!
- * BotForge embeddable chat widget — vanilla, dependency-free, Shadow-DOM isolated.
+ * Vicero embeddable chat widget — vanilla, dependency-free, Shadow-DOM isolated.
  * Embed:
  *   <script src="https://YOUR_HOST/widget.js" data-agent="PUBLIC_KEY" data-api="https://API_HOST" defer></script>
- * SDK: window.BotForge = { open, close, toggle, sendMessage, on, setUser }
+ * SDK: window.Vicero = { open, close, toggle, sendMessage, on, setUser }
  *
  * All theming is applied via CSS custom properties set from the fetched config, so the
  * stylesheet is static and never needs a per-agent rebuild. In preview mode
@@ -11,8 +11,8 @@
  */
 (function () {
   "use strict";
-  if (window.__botforgeWidgetLoaded) return;
-  window.__botforgeWidgetLoaded = true;
+  if (window.__viceroWidgetLoaded) return;
+  window.__viceroWidgetLoaded = true;
 
   var script =
     document.currentScript ||
@@ -27,12 +27,12 @@
     (location.protocol + "//" + location.hostname + ":8000");
   API = API.replace(/\/$/, "");
   if (!PUBLIC_KEY && !PREVIEW) {
-    console.error("[BotForge] missing data-agent (public key) on the widget script tag");
+    console.error("[Vicero] missing data-agent (public key) on the widget script tag");
     return;
   }
 
-  var STORE_KEY = "botforge:conv:" + PUBLIC_KEY;
-  var VISITOR_KEY = "botforge:vid:" + PUBLIC_KEY;
+  var STORE_KEY = "vicero:conv:" + PUBLIC_KEY;
+  var VISITOR_KEY = "vicero:vid:" + PUBLIC_KEY;
 
   function stored(key) {
     try {
@@ -339,13 +339,13 @@
     var theme = state.config.theme || {};
     // Idempotency: never leave a second widget behind. If a prior host exists (e.g. a React
     // remount of the preview, or a double init), remove it before creating the new one.
-    var prior = document.getElementById("botforge-widget");
+    var prior = document.getElementById("vicero-widget");
     if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
 
     // Build fully DETACHED, theme it, THEN insert — so there's never an unstyled/default frame
     // painted (the white panel + dark launcher flash) before applyTheme sets the CSS vars.
     host = document.createElement("div");
-    host.id = "botforge-widget";
+    host.id = "vicero-widget";
     root = host.attachShadow({ mode: "open" });
 
     var style = document.createElement("style");
@@ -377,7 +377,7 @@
       '<textarea class="bf-ta" rows="1" placeholder="Type a message…" aria-label="Message"></textarea>' +
       '<button class="bf-send" aria-label="Send">➤</button>' +
       "</div>" +
-      '<div class="bf-brand">Powered by <a href="https://botforge.dev" target="_blank" rel="noopener">BotForge</a></div>' +
+      '<div class="bf-brand">Powered by <a href="https://vicero.dev" target="_blank" rel="noopener">Vicero</a></div>' +
       '<input type="file" style="display:none" /></div>';
     root.appendChild(panel);
     els.panel = panel;
@@ -877,7 +877,7 @@
       try {
         parent.postMessage({ type: "bf-preview-ready" }, "*");
       } catch (e) {}
-      window.BotForge = api;
+      window.Vicero = api;
       return;
     }
     try {
@@ -885,12 +885,12 @@
       if (!r.ok) throw new Error("config " + r.status);
       state.config = await r.json();
     } catch (e) {
-      console.error("[BotForge] could not load widget config:", e);
+      console.error("[Vicero] could not load widget config:", e);
       return;
     }
     build();
     scheduleCampaigns();
-    window.BotForge = api;
+    window.Vicero = api;
   }
 
   if (document.readyState === "loading") {

@@ -4,11 +4,11 @@
 run in the normal suite because `docling-serve` has no published port by design (docs/14 §9 — an
 internal-only service must not be reachable from outside the compose network). They run only when
 someone explicitly points `DOCLING_ENDPOINT` at a reachable instance, e.g. from inside a container
-on the `botforge_default` network:
+on the `vicero_default` network:
 
-    docker run --rm --network botforge_default \\
+    docker run --rm --network vicero_default \\
       -e DOCLING_ENDPOINT=http://docling:5001 \\
-      -v "$(pwd)/apps/api:/app:rw" botforge-api:latest \\
+      -v "$(pwd)/apps/api:/app:rw" vicero-api:latest \\
       python -m pytest tests/test_docling_golden_fixtures.py -v
 
 Every assertion below is pinned to REAL output captured 2026-08-17 against a live `docling-serve`
@@ -107,7 +107,7 @@ async def test_confidence_report_is_present_on_a_real_conversion() -> None:
     Not asserted as a fixed value: confidence scores are a property of the real ML pipeline and
     will drift across Docling versions. This only pins that the field exists and is structured
     the way K6-A's design assumes — a document-level object with a computed `mean_grade`, not
-    something BotForge has to average from components itself. `table_score` and `ocr_score` are
+    something Vicero has to average from components itself. `table_score` and `ocr_score` are
     asserted absent-or-null rather than any particular value: this fixture has no scanned image
     and (as of 2026-08-17) `table_score` is unimplemented in the service regardless of content.
     """

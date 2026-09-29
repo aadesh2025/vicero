@@ -122,7 +122,7 @@ class N8nClient:
         """The n8n workflow whose Webhook node serves `url`, or None.
 
         Matched on the `/webhook/<path>` tail, not the host: an operator can paste the URL n8n
-        shows (public hostname) while BotForge's own `N8N_BASE_URL` is an internal one.
+        shows (public hostname) while Vicero's own `N8N_BASE_URL` is an internal one.
         """
         return self.match_workflow_by_webhook_url(await self.list_workflows(), url)
 
@@ -145,7 +145,7 @@ class N8nClient:
     def extract_tags(workflow: dict[str, Any]) -> set[str]:
         """Return a workflow's n8n tag names, lower-cased.
 
-        BotForge is a single shared n8n instance behind every org (docs/07 §1), so
+        Vicero is a single shared n8n instance behind every org (docs/07 §1), so
         `list_workflows()` returns every workflow regardless of which client it belongs to.
         Tags are how a workflow is scoped to one org — see `tools/service.workflow_visible_to_org`.
         """
@@ -162,8 +162,8 @@ class N8nClient:
         ts, signature = sign(body)
         headers = {
             "Content-Type": "application/json",
-            "X-BotForge-Signature": signature,
-            "X-BotForge-Timestamp": ts,
+            "X-Vicero-Signature": signature,
+            "X-Vicero-Timestamp": ts,
         }
         async with httpx.AsyncClient(
             timeout=self._timeout, transport=self._transport, follow_redirects=False

@@ -5,7 +5,7 @@ group: Deploy
 order: 1
 ---
 
-The chat widget is a single dependency-free `widget.js`, served by the BotForge web app at
+The chat widget is a single dependency-free `widget.js`, served by the Vicero web app at
 `/widget.js`. It renders inside a **Shadow DOM**, so it neither inherits your site's CSS
 nor leaks its own into your page.
 
@@ -13,7 +13,7 @@ nor leaks its own into your page.
 
 1. Open the agent → **Channels** tab.
 2. Set the appearance — colour, position, launcher text, whether it opens by default,
-   whether to show the BotForge footer. Changes autosave.
+   whether to show the Vicero footer. Changes autosave.
 3. Copy the embed snippet. The `data-agent` value is the agent's **public key**.
 
 The public key is safe to expose in client-side HTML. It grants access to that one
@@ -34,7 +34,7 @@ Paste this just before `</body>`:
 
 | Attribute | Required | Meaning |
 |---|---|---|
-| `src` | yes | Where `widget.js` is hosted — your BotForge web host |
+| `src` | yes | Where `widget.js` is hosted — your Vicero web host |
 | `data-agent` | yes | The agent's public key, from the Channels tab |
 | `data-api` | recommended | The API base URL. Defaults to the page host on port 8000, which is almost never right in production — set it |
 
@@ -45,21 +45,21 @@ only ever been a draft, the launcher never appears.
 
 ## Control it from JavaScript
 
-Once loaded, `window.BotForge` is available:
+Once loaded, `window.Vicero` is available:
 
 ```js
-BotForge.open();                             // open the panel
-BotForge.close();                            // close it
-BotForge.toggle();                           // toggle
-BotForge.sendMessage("Hello from my site");  // send a message as the visitor
-BotForge.setUser({ name: "Jane", email: "jane@acme.com" });
-BotForge.on("message", (m) => console.log("reply:", m));
+Vicero.open();                             // open the panel
+Vicero.close();                            // close it
+Vicero.toggle();                           // toggle
+Vicero.sendMessage("Hello from my site");  // send a message as the visitor
+Vicero.setUser({ name: "Jane", email: "jane@acme.com" });
+Vicero.on("message", (m) => console.log("reply:", m));
 ```
 
 Opening it from your own button:
 
 ```html
-<button onclick="BotForge.toggle()">Chat with us</button>
+<button onclick="Vicero.toggle()">Chat with us</button>
 ```
 
 `setUser` is worth calling if you already know who the visitor is — it attaches identity to
@@ -70,7 +70,7 @@ see who they are talking to.
 
 Appearance comes from the agent's Channels configuration rather than from the snippet:
 accent colour, launcher side, launcher label, open-by-default, and the "Powered by
-BotForge" footer. Change it in the dashboard and the widget picks it up on next load.
+Vicero" footer. Change it in the dashboard and the widget picks it up on next load.
 
 Keeping theming server-side means you can restyle the widget across every site that embeds
 it without anyone editing HTML.

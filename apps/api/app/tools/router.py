@@ -40,8 +40,8 @@ async def n8n_callback(
 ) -> dict[str, bool]:
     """Public, HMAC-verified callback that resolves a pending async n8n tool run."""
     body = await request.body()
-    signature = request.headers.get("X-BotForge-Signature")
-    timestamp = request.headers.get("X-BotForge-Timestamp")
+    signature = request.headers.get("X-Vicero-Signature")
+    timestamp = request.headers.get("X-Vicero-Timestamp")
     if not verify_callback(signature, timestamp, body):
         raise AppError("n8n.bad_signature", "Invalid callback signature.", 401)
     data = schemas.N8nCallbackRequest.model_validate_json(body)

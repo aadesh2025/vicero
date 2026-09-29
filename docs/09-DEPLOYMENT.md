@@ -113,8 +113,8 @@ knowledge base, it is no knowledge base.
 - **`infra/scripts/backup.sh`** — `pg_dump | gzip` to a timestamped file with N-day rotation,
   **plus a `tar.gz` of the `uploads` volume** when `UPLOADS_DIR` is set (ADR-082) — the prod
   `backup` service mounts the same `uploads` volume `api`/`worker` use, read-only, at exactly
-  that path, so one nightly run produces `botforge_<db>_<STAMP>.sql.gz` and
-  `botforge_uploads_<STAMP>.tar.gz` together, same retention window, same volume. Run it nightly
+  that path, so one nightly run produces `vicero_<db>_<STAMP>.sql.gz` and
+  `vicero_uploads_<STAMP>.tar.gz` together, same retention window, same volume. Run it nightly
   via cron (example in the script header) or as a one-shot container that can reach Postgres.
   `UPLOADS_DIR` unset (e.g. a bare Postgres-only environment) falls back to the DB dump alone,
   with a loud warning rather than a silent gap.
@@ -147,7 +147,7 @@ knowledge base, it is no knowledge base.
 - **ci.yml**: on push/PR — API lint (`ruff`) + typecheck (`mypy`) + `pytest` (pg+redis service
   containers), web lint (`eslint`) + typecheck (`tsc`) + `next build`, a dependency audit, and the
   **e2e** job (boots api+worker+web, runs the Playwright PRD suite, uploads the report + logs).
-- **release.yml**: on push to `main` + `v*` tags — **build & push** `botforge-api`/`botforge-web`
+- **release.yml**: on push to `main` + `v*` tags — **build & push** `vicero-api`/`vicero-web`
   images to **GHCR** (`docker/build-push-action`, gha cache); a **smoke** job builds the API image,
   runs `alembic upgrade head`, starts it against pg+redis and asserts **`/readyz` → 200**; a
   **deploy** job (tags/dispatch, `environment: production`) is an SSH template gated on a

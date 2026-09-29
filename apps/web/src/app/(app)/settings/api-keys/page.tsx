@@ -41,7 +41,7 @@ export default function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <Section title="API keys" description="Programmatic access to the BotForge API. Send as X-API-Key or Bearer.">
+      <Section title="API keys" description="Programmatic access to the Vicero API. Send as X-API-Key or Bearer.">
         {canManage && (
           <form
             onSubmit={(e) => {

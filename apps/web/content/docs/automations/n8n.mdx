@@ -6,19 +6,19 @@ order: 2
 ---
 
 An agent that can only talk is half a product. Tools let it act: create a ticket, look up
-an order, send an email, write to your CRM. BotForge connects to
+an order, send an email, write to your CRM. Vicero connects to
 [n8n](https://n8n.io) so those actions are workflows you can build visually rather than
 code someone has to maintain.
 
 The integration runs both ways:
 
-1. **BotForge → n8n** — the agent calls a workflow as a tool, via the workflow's webhook.
-2. **n8n → BotForge** — a workflow calls back into BotForge over the REST API to post a
+1. **Vicero → n8n** — the agent calls a workflow as a tool, via the workflow's webhook.
+2. **n8n → Vicero** — a workflow calls back into Vicero over the REST API to post a
    message, update a conversation, or read analytics.
 
 ## Bind a workflow as a tool
 
-A BotForge-callable workflow starts with a **Webhook** node. For a synchronous tool it ends
+A Vicero-callable workflow starts with a **Webhook** node. For a synchronous tool it ends
 with a **Respond to Webhook** node returning JSON. Activate the workflow so its production
 webhook registers.
 
@@ -27,7 +27,7 @@ agent and the mode.
 
 | Mode | Behaviour |
 |---|---|
-| **sync** | BotForge posts to the webhook and feeds the response JSON straight back to the model in the same turn. Use it when the work takes a second or two. |
+| **sync** | Vicero posts to the webhook and feeds the response JSON straight back to the model in the same turn. Use it when the work takes a second or two. |
 | **async** | The workflow does long-running work and posts a signed result back when it is finished. Use it for anything that might take longer than a visitor will wait. |
 
 Finally, enable **Tools** on the agent. When the model decides the tool is relevant, it
@@ -41,7 +41,7 @@ Binding by pasting a URL bypasses the visibility rules that govern the workflow 
 Anyone with a workflow's webhook URL can bind it.
 </Callout>
 
-## What BotForge sends
+## What Vicero sends
 
 Every outbound tool call is a signed `POST` to the workflow's webhook:
 
@@ -57,11 +57,11 @@ Every outbound tool call is a signed `POST` to the workflow's webhook:
 
 Two headers come with it:
 
-- `X-BotForge-Signature` — HMAC-SHA256 of `"{timestamp}.{body}"`
-- `X-BotForge-Timestamp`
+- `X-Vicero-Signature` — HMAC-SHA256 of `"{timestamp}.{body}"`
+- `X-Vicero-Timestamp`
 
 **Verify the signature in any workflow that does real work.** Without it, the webhook URL
-is the only thing standing between a stranger and your ticketing system. BotForge will
+is the only thing standing between a stranger and your ticketing system. Vicero will
 refuse to bind a workflow that does not verify, when the operator has enabled that
 requirement.
 
@@ -75,13 +75,13 @@ An async workflow posts its result back to `POST /v1/tools/n8n/callback`:
 
 signed with the same secret. That resolves the pending tool run.
 
-## Calling BotForge from n8n
+## Calling Vicero from n8n
 
-For the other direction, call the BotForge REST API from an HTTP Request node, using a
+For the other direction, call the Vicero REST API from an HTTP Request node, using a
 credential your workspace administrator provides. See
 [API authentication](/docs/api/authentication).
 
-BotForge also emits **outbound webhooks** — `message.created`, `handoff.requested`,
+Vicero also emits **outbound webhooks** — `message.created`, `handoff.requested`,
 `conversation.closed` and others — which an n8n Webhook node can receive to trigger a flow.
 See [Webhooks](/docs/api/webhooks).
 
@@ -91,7 +91,7 @@ See [Webhooks](/docs/api/webhooks).
 |---|---|
 | Workflows do not appear in Automations | The workspace has no n8n connection configured, or the base URL is wrong. Bind by webhook URL instead. |
 | The tool call returns an error | The workflow is not **Active**, or a sync workflow has no *Respond to Webhook* node. |
-| An async callback is rejected | The signature or `run_id` does not match. Sign with the same secret BotForge sends. |
+| An async callback is rejected | The signature or `run_id` does not match. Sign with the same secret Vicero sends. |
 
 Every tool call is logged under the agent's **Tools** tab with its inputs, output, latency
 and error — start there, then check the n8n execution log.

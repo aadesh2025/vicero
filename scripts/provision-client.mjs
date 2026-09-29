@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * provision-client.mjs — stand up a complete client on BotForge in one command.
+ * provision-client.mjs — stand up a complete client on Vicero in one command.
  *
  *   node scripts/provision-client.mjs --name "Acme Co" --email owner@acme.com --plan starter
  *
@@ -13,7 +13,7 @@
  * matters most for the invitation: create_invitation only rejects an already-*active* member,
  * so a blind re-run would mint a second pending invite and email the client twice.
  *
- * Location-agnostic: it only ever talks to BOTFORGE_API_BASE_URL and N8N_BASE_URL, so the same
+ * Location-agnostic: it only ever talks to VICERO_API_BASE_URL and N8N_BASE_URL, so the same
  * command works on a laptop today and over SSH on a VPS later. Only .env differs.
  *
  * Requires Node 18+ (built-in fetch). No npm dependencies on purpose — nothing to install
@@ -62,7 +62,7 @@ const fileEnv = loadEnvFile(resolve(REPO_ROOT, ".env"));
 const env = (key, fallback = "") => (process.env[key] ?? fileEnv[key] ?? fallback).trim();
 
 const CONFIG = {
-  apiBaseUrl: env("BOTFORGE_API_BASE_URL", "http://localhost:8000").replace(/\/+$/, ""),
+  apiBaseUrl: env("VICERO_API_BASE_URL", "http://localhost:8000").replace(/\/+$/, ""),
   staffEmail: env("PROVISION_STAFF_EMAIL"),
   staffPassword: env("PROVISION_STAFF_PASSWORD"),
   n8nBaseUrl: env("N8N_BASE_URL", "http://localhost:5678").replace(/\/+$/, ""),
@@ -101,7 +101,7 @@ Options:
   --skip-n8n  Provision everything except the automation (use when n8n is unavailable)
 
 Env (repo .env or real environment):
-  BOTFORGE_API_BASE_URL   default http://localhost:8000
+  VICERO_API_BASE_URL   default http://localhost:8000
   PROVISION_STAFF_EMAIL   staff login; org creation is gated on is_staff, not an API key
   PROVISION_STAFF_PASSWORD
   N8N_BASE_URL            default http://localhost:5678
@@ -141,7 +141,7 @@ async function api(method, path, { body, orgId } = {}) {
     });
   } catch (cause) {
     throw new ProvisionError(
-      `Cannot reach the BotForge API at ${CONFIG.apiBaseUrl} (${cause.message}).\n` +
+      `Cannot reach the Vicero API at ${CONFIG.apiBaseUrl} (${cause.message}).\n` +
         `  Is it running? Locally: cd apps/api && uvicorn app.main:app --port 8000`
     );
   }
@@ -444,14 +444,14 @@ async function ensureWorkflow(clientName, orgSlug) {
   }
   const full = await n8n("GET", `/api/v1/workflows/${template.id}`);
 
-  // Signature verification is not optional. BotForge signs every call to an n8n webhook, but a
+  // Signature verification is not optional. Vicero signs every call to an n8n webhook, but a
   // workflow only benefits if it *checks* the signature; without it anyone who learns the webhook
   // URL can call the automation directly, bypassing the agent, RBAC and budget limits. Every client
   // workflow is a clone of this template, so refuse to clone one that does not verify.
   // (docs/07-INTEGRATIONS.md "Webhook signature verification"; RISK-REGISTER R15.)
-  if (!full.nodes.some((node) => node.name === "Verify BotForge signature")) {
+  if (!full.nodes.some((node) => node.name === "Verify Vicero signature")) {
     throw new ProvisionError(
-      `The template "${TEMPLATE_WORKFLOW_NAME}" has no "Verify BotForge signature" node, so every ` +
+      `The template "${TEMPLATE_WORKFLOW_NAME}" has no "Verify Vicero signature" node, so every ` +
         `client cloned from it would get an unauthenticated webhook.
 ` +
         `  Re-import infra/n8n/template-starter-automation.json (it ships with verification) — see

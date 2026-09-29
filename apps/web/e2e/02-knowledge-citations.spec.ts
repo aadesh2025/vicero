@@ -19,11 +19,11 @@ test("criterion 2: upload PDF → ready → grounded answer with citations", asy
   const kb = await kbRes.json();
 
   // Upload the PDF fixture (contains the token ORANGE-FALCON-2049).
-  const pdf = fs.readFileSync(path.join(__dirname, "fixtures", "botforge-facts.pdf"));
+  const pdf = fs.readFileSync(path.join(__dirname, "fixtures", "vicero-facts.pdf"));
   const up = await request.post(`${API}/v1/knowledge/${kb.id}/documents/upload`, {
     headers: auth(account),
     multipart: {
-      file: { name: "botforge-facts.pdf", mimeType: "application/pdf", buffer: pdf },
+      file: { name: "vicero-facts.pdf", mimeType: "application/pdf", buffer: pdf },
     },
   });
   expect(up.ok(), await up.text()).toBeTruthy();
@@ -42,7 +42,7 @@ test("criterion 2: upload PDF → ready → grounded answer with citations", asy
 
   // The knowledge page renders the ingested document for the user.
   await page.goto(`/knowledge/${kb.id}`);
-  await expect(page.getByText(/botforge-facts\.pdf/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/vicero-facts\.pdf/i)).toBeVisible({ timeout: 15_000 });
 
   // Build an agent that retrieves from this KB, then publish it.
   const agent = await (

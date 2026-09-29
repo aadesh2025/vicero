@@ -2,7 +2,7 @@
 
 ## 1. Vision
 
-BotForge lets non-developers and developers alike build, deploy, and operate AI chatbots
+Vicero lets non-developers and developers alike build, deploy, and operate AI chatbots
 ("agents") that answer questions from a private knowledge base, take actions via tools and
 automations, and run across web and messaging channels — all from a single web dashboard.
 It is inspired by Botpress' capabilities but is an original product with its own
@@ -22,7 +22,7 @@ tools, automations, and team members."
 4. **Agency (AUROZEN-style)** — manages many client bots under separate organizations, with
    team members and role-based access. *(This is a general capability, unrelated to the
    user's separate AUROZEN AI chatbot project.)*
-5. **Platform admin** — operates BotForge itself: sees all orgs, usage, health.
+5. **Platform admin** — operates Vicero itself: sees all orgs, usage, health.
 
 ## 3. Core concepts / domain glossary
 
@@ -39,7 +39,7 @@ tools, automations, and team members."
 - **Channel** — where the agent is reachable (web widget, WhatsApp, Telegram, Slack, Discord, API).
 - **Widget** — the embeddable web chat UI + JS SDK.
 - **Inbox / Handoff** — human takeover of a live conversation.
-- **API key** — programmatic access to BotForge's API, scoped to an org.
+- **API key** — programmatic access to Vicero's API, scoped to an org.
 - **Automation** — an n8n workflow triggered by the agent or by events.
 
 ## 4. Functional requirements (numbered — used as acceptance anchors)
@@ -95,7 +95,7 @@ tools, automations, and team members."
 - FR-F3 n8n integration: list workflows, bind a workflow as a callable tool, invoke via
   webhook, pass structured args, receive result.
 - FR-F4 Tool execution logs with inputs/outputs/latency/errors.
-- FR-F5 Webhooks: BotForge emits events (message.created, handoff.requested, etc.) to n8n.
+- FR-F5 Webhooks: Vicero emits events (message.created, handoff.requested, etc.) to n8n.
 
 ### FR-G: Channels & widget
 - FR-G1 Embeddable web widget: single `<script>` snippet + JS SDK; themeable.

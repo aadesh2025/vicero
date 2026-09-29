@@ -25,7 +25,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BotForge — Build, deploy & operate AI agents",
+  title: "Vicero — Build, deploy & operate AI agents",
   description:
     "An enterprise-grade platform to build knowledge-grounded AI chatbots, wire automations, and run them across every channel.",
 };

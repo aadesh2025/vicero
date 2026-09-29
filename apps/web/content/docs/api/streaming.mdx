@@ -58,7 +58,7 @@ Each event is a `data:` line carrying one JSON object with a `type`.
 `replace` is the one that catches people out.
 
 A reply is streamed as it is generated, but some safety checks can only run on the finished
-text. When one of those fires after streaming has begun, BotForge sends `replace` with the
+text. When one of those fires after streaming has begun, Vicero sends `replace` with the
 corrected reply. A client that has been appending `token` events **must discard everything
 it rendered for this turn** and display the `delta` from `replace` instead.
 

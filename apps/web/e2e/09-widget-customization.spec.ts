@@ -115,7 +115,7 @@ test("transparent style: header has no solid backdrop", async ({ page }) => {
 
 test("builder preview mounts exactly one widget host across config changes + open/close", async ({ page, context, request }) => {
   // Regression for the reported "second widget underneath" overlap: the preview iframe must never
-  // hold more than one #botforge-widget host, no matter how many config posts or toggles happen.
+  // hold more than one #vicero-widget host, no matter how many config posts or toggles happen.
   const account = await createAccount(request, "Single Host Org");
   const { id } = await createPublishedAgent(request, account, { name: "Single Host Bot" });
   await authenticateBrowser(context, account);
@@ -125,7 +125,7 @@ test("builder preview mounts exactly one widget host across config changes + ope
   await expect(frame.locator(".bf-launcher")).toBeVisible({ timeout: 20_000 });
 
   const f = () => page.frames().find((fr) => fr.url().includes("widget-preview"))!;
-  const hostCount = () => f().evaluate(() => document.querySelectorAll("#botforge-widget").length);
+  const hostCount = () => f().evaluate(() => document.querySelectorAll("#vicero-widget").length);
   const postCfg = (color: string) =>
     f().evaluate((c) => {
       window.postMessage(
@@ -142,7 +142,7 @@ test("builder preview mounts exactly one widget host across config changes + ope
   }
   // Open + close a couple of times — still exactly one host.
   for (let i = 0; i < 2; i++) {
-    await f().evaluate(() => (window as unknown as { BotForge?: { toggle: () => void } }).BotForge?.toggle());
+    await f().evaluate(() => (window as unknown as { Vicero?: { toggle: () => void } }).Vicero?.toggle());
     await page.waitForTimeout(120);
     expect(await hostCount()).toBe(1);
   }

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
     # --- Datastores (compose defaults; override via env) ---
-    database_url: str = "postgresql+asyncpg://botforge:botforge@localhost:5432/botforge"
+    database_url: str = "postgresql+asyncpg://vicero:vicero@localhost:5432/vicero"
     redis_url: str = "redis://localhost:6379/0"
 
     # --- LLM providers (free-first). None = feature stubbed, logged, skipped. ---
@@ -172,7 +172,7 @@ class Settings(BaseSettings):
     # without it, one caller can push an arbitrarily large prompt through a paid provider.
     max_user_message_chars: int = 8000
     # L1 static pre-filter on the visitor's own message (direct prompt injection, OWASP LLM01).
-    # Off means BotForge defends retrieved content but not the person typing — the docs/11 §1.1
+    # Off means Vicero defends retrieved content but not the person typing — the docs/11 §1.1
     # asymmetry. Kept switchable because a false positive costs a real customer a real answer.
     guard_input_enabled: bool = True
     # L5 output guardrail: system-prompt leakage + persona breaks.
@@ -271,7 +271,7 @@ class Settings(BaseSettings):
     n8n_base_url: str = "http://localhost:5678"
     n8n_api_key: str | None = None
     n8n_webhook_signing_secret: str | None = None
-    # Refuse to bind an n8n workflow as a tool unless its JSON shows the BotForge signature check
+    # Refuse to bind an n8n workflow as a tool unless its JSON shows the Vicero signature check
     # in the request path (RISK-REGISTER R15, `app.integrations.n8n_signature`). On by default;
     # a pasted webhook URL is resolved to its workflow via the n8n API, so with no `N8N_API_KEY`
     # (or a URL that matches nothing) it cannot be verified and is refused. Turn off only for a
@@ -327,7 +327,7 @@ class Settings(BaseSettings):
     org_chat_rate_window: int = 60  # seconds
 
     # --- Test-only switches (never enable in production) ---
-    # Lets a non-staff user create an organization. BotForge is provisioned per client, so
+    # Lets a non-staff user create an organization. Vicero is provisioned per client, so
     # production must leave this off — with it on, anyone who can reach /signup can hand
     # themselves a workspace. It exists because the test suites bootstrap a tenant per test
     # through the public API, the same reason `llm_force_fake` exists.

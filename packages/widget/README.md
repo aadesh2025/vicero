@@ -1,6 +1,6 @@
-# @botforge/widget
+# @vicero/widget
 
-The embeddable BotForge chat widget — a single, dependency-free `widget.js` that renders a
+The embeddable Vicero chat widget — a single, dependency-free `widget.js` that renders a
 launcher bubble + chat panel inside a **Shadow DOM** (full style isolation) and streams
 replies over the public chat endpoint.
 
@@ -15,7 +15,7 @@ replies over the public chat endpoint.
 ```
 
 - `data-agent` (required): the agent's `public_key` (`bf_pub_…`).
-- `data-api` (optional): the BotForge API base. Defaults to `http(s)://<page-host>:8000`.
+- `data-api` (optional): the Vicero API base. Defaults to `http(s)://<page-host>:8000`.
 
 The widget loads `GET /v1/public/agents/{public_key}/config` for its theme, welcome message,
 and quick replies, then chats over `POST /v1/public/agents/{public_key}/chat` (SSE stream).
@@ -29,18 +29,18 @@ full-screen, and keyboard support (Enter to send, Esc to close).
 
 ## JS SDK
 
-`window.BotForge` is available after load:
+`window.Vicero` is available after load:
 
 ```js
-BotForge.open();
-BotForge.close();
-BotForge.toggle();
-BotForge.sendMessage("Hello!");
-BotForge.setUser({ id: "u_123", name: "Sam", email: "sam@acme.com", metadata: { plan: "pro" } });
-BotForge.on("ready", ({ config }) => {});
-BotForge.on("open", () => {});
-BotForge.on("message", ({ role, content }) => {}); // user + assistant turns
-BotForge.on("response", ({ content }) => {});        // final assistant reply
+Vicero.open();
+Vicero.close();
+Vicero.toggle();
+Vicero.sendMessage("Hello!");
+Vicero.setUser({ id: "u_123", name: "Sam", email: "sam@acme.com", metadata: { plan: "pro" } });
+Vicero.on("ready", ({ config }) => {});
+Vicero.on("open", () => {});
+Vicero.on("message", ({ role, content }) => {}); // user + assistant turns
+Vicero.on("response", ({ content }) => {});        // final assistant reply
 ```
 
 ## Build

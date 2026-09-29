@@ -18,10 +18,10 @@
 # Option 2 and §5, which the persisted DoclingDocument needs anyway.
 #
 # To run these manifests WITH file ingest, on a cluster that has RWX: create a
-# `botforge-uploads` PVC with `accessModes: [ReadWriteMany]`, then add to the api and worker
+# `vicero-uploads` PVC with `accessModes: [ReadWriteMany]`, then add to the api and worker
 # containers `volumeMounts: [{ name: uploads, mountPath: /app/var/uploads }]` and to each pod
-# spec `volumes: [{ name: uploads, persistentVolumeClaim: { claimName: botforge-uploads } }]`.
-# `UPLOAD_DIR` is already `/app/var/uploads` in the prod deployment; set it in botforge-config.
+# spec `volumes: [{ name: uploads, persistentVolumeClaim: { claimName: vicero-uploads } }]`.
+# `UPLOAD_DIR` is already `/app/var/uploads` in the prod deployment; set it in vicero-config.
 #
 # ⚠️ There is also no `ollama` Deployment here, so the default embedding provider is unreachable
 # for the same reason it was in compose (docs/15 PROD-2). The API logs
@@ -29,11 +29,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: botforge-migrate
-  namespace: botforge
+  name: vicero-migrate
+  namespace: vicero
   annotations:
     # Re-run on each deploy by templating a unique name, or delete+apply this Job in CD.
-    "botforge/note": "one-shot: alembic upgrade head"
+    "vicero/note": "one-shot: alembic upgrade head"
 spec:
   backoffLimit: 3
   template:
@@ -41,17 +41,17 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/OWNER/botforge-api:latest
+          image: ghcr.io/OWNER/vicero-api:latest
           command: ["alembic", "upgrade", "head"]
           envFrom:
-            - configMapRef: { name: botforge-config }
-            - secretRef: { name: botforge-secrets }
+            - configMapRef: { name: vicero-config }
+            - secretRef: { name: vicero-secrets }
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
-  namespace: botforge
+  namespace: vicero
 spec:
   replicas: 2
   selector:
@@ -62,12 +62,12 @@ spec:
     spec:
       containers:
         - name: api
-          image: ghcr.io/OWNER/botforge-api:latest
+          image: ghcr.io/OWNER/vicero-api:latest
           command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
           ports: [{ containerPort: 8000 }]
           envFrom:
-            - configMapRef: { name: botforge-config }
-            - secretRef: { name: botforge-secrets }
+            - configMapRef: { name: vicero-config }
+            - secretRef: { name: vicero-secrets }
           livenessProbe:
             httpGet: { path: /healthz, port: 8000 }
             initialDelaySeconds: 10
@@ -84,7 +84,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: api
-  namespace: botforge
+  namespace: vicero
 spec:
   selector: { app: api }
   ports: [{ port: 8000, targetPort: 8000 }]
@@ -93,7 +93,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker
-  namespace: botforge
+  namespace: vicero
 spec:
   replicas: 2
   selector:
@@ -104,17 +104,17 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/OWNER/botforge-api:latest
+          image: ghcr.io/OWNER/vicero-api:latest
           command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
           envFrom:
-            - configMapRef: { name: botforge-config }
-            - secretRef: { name: botforge-secrets }
+            - configMapRef: { name: vicero-config }
+            - secretRef: { name: vicero-secrets }
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: beat
-  namespace: botforge
+  namespace: vicero
 spec:
   replicas: 1 # exactly one beat scheduler
   selector:
@@ -125,17 +125,17 @@ spec:
     spec:
       containers:
         - name: beat
-          image: ghcr.io/OWNER/botforge-api:latest
+          image: ghcr.io/OWNER/vicero-api:latest
           command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info"]
           envFrom:
-            - configMapRef: { name: botforge-config }
-            - secretRef: { name: botforge-secrets }
+            - configMapRef: { name: vicero-config }
+            - secretRef: { name: vicero-secrets }
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
-  namespace: botforge
+  namespace: vicero
 spec:
   replicas: 2
   selector:
@@ -146,7 +146,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/OWNER/botforge-web:latest
+          image: ghcr.io/OWNER/vicero-web:latest
           ports: [{ containerPort: 3000 }]
           env:
             - name: API_INTERNAL_URL
@@ -160,7 +160,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: web
-  namespace: botforge
+  namespace: vicero
 spec:
   selector: { app: web }
   ports: [{ port: 3000, targetPort: 3000 }]

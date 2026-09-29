@@ -1,4 +1,4 @@
-"""RISK-REGISTER R15: an n8n workflow may only be bound as a tool if it verifies BotForge's
+"""RISK-REGISTER R15: an n8n workflow may only be bound as a tool if it verifies Vicero's
 webhook signature, and the audit finds pre-existing binds that don't."""
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ from app.tools import service as tools_service
 
 N8N_DIR = Path(__file__).resolve().parents[3] / "infra" / "n8n"
 SHIPPED = sorted(N8N_DIR.rglob("*.json"))
-VERIFY = "Verify BotForge signature"
+VERIFY = "Verify Vicero signature"
 
 
 def _signed(path: str = "gate-ok", wf_id: str = "1", tag: str = "gateco") -> dict[str, Any]:
-    wf = copy.deepcopy(json.loads((N8N_DIR / "botforge-echo.json").read_text(encoding="utf-8")))
+    wf = copy.deepcopy(json.loads((N8N_DIR / "vicero-echo.json").read_text(encoding="utf-8")))
     wf["id"], wf["name"], wf["tags"] = wf_id, f"Flow {wf_id}", [{"name": tag}]
     wf["nodes"][0]["parameters"]["path"] = path
     return wf

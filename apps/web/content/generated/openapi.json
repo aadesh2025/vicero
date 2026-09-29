@@ -945,7 +945,7 @@
         "type": "object"
       },
       "AutomationBindingOut": {
-        "description": "One BotForge tool pointing at this workflow.",
+        "description": "One Vicero tool pointing at this workflow.",
         "properties": {
           "agent_name": {
             "anyOf": [
@@ -5002,7 +5002,7 @@
         "type": "object"
       },
       "N8nSignatureFindingOut": {
-        "description": "One bound n8n tool and whether its workflow verifies BotForge's signature.",
+        "description": "One bound n8n tool and whether its workflow verifies Vicero's signature.",
         "properties": {
           "agent_name": {
             "anyOf": [
@@ -9294,7 +9294,7 @@
   },
   "info": {
     "description": "AI chatbot & automation platform — backend API.",
-    "title": "BotForge API"
+    "title": "Vicero API"
   },
   "openapi": "3.1.0",
   "paths": {

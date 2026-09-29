@@ -31,7 +31,7 @@ export default function PricingPage() {
         <p>A visitor message and the bot&apos;s reply count as two messages toward your monthly limit.</p>
         <p>
           Messaging-provider costs (WhatsApp, Meta, and similar) are billed to you directly by that provider through
-          your own connected account — BotForge charges only for the platform.
+          your own connected account — Vicero charges only for the platform.
         </p>
         <p>
           Using your own model API key (BYOK) is available on every plan and does not change your message limit.

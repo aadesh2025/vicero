@@ -1,6 +1,6 @@
-# Self-hosting BotForge
+# Self-hosting Vicero
 
-This guide takes you from a clean machine to a running BotForge stack you control. For the
+This guide takes you from a clean machine to a running Vicero stack you control. For the
 day-to-day Docker workflow and Windows/host gotchas, pair it with
 [`RUNBOOK-docker.md`](../RUNBOOK-docker.md). For a hardened, TLS-terminated production deploy,
 see [`09-DEPLOYMENT.md`](../09-DEPLOYMENT.md) and `infra/docker-compose.prod.yml`.

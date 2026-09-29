@@ -16,6 +16,7 @@ from httpx import AsyncClient
 
 from app.chat import output_guard
 from app.chat.pii import PiiMatch, build_allowlist, find_pii, is_allowlisted, summarize
+from app.llm.fake import FakeChatProvider
 
 REGIONS = ["IN", "US", "GB"]
 
@@ -197,8 +198,11 @@ def test_apply_without_an_allowlist_skips_pii_entirely() -> None:
 # ── End to end ───────────────────────────────────────────────────────────────────────────
 
 
-async def test_pii_never_reaches_a_visitor(client: AsyncClient) -> None:
-    """The Fake provider echoes the visitor, so the reply carries whatever they wrote."""
+async def test_pii_never_reaches_a_visitor(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The scripted model reply names contacts the visitor never typed; none may get through."""
+    monkeypatch.setattr(
+        FakeChatProvider, "scripted_reply", "Contact founder.personal@gmail.com on +91 93453 27506."
+    )
     signup = await client.post(
         "/v1/auth/signup", json={"email": "piiguard@example.com", "password": "password123"}
     )
@@ -217,7 +221,7 @@ async def test_pii_never_reaches_a_visitor(client: AsyncClient) -> None:
 
     r = await client.post(
         f"/v1/agents/{aid}/chat",
-        json={"message": "contact founder.personal@gmail.com on +91 93453 27506", "stream": False},
+        json={"message": "who should I contact?", "stream": False},
         headers=headers,
     )
     assert r.status_code == 200, r.text

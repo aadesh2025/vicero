@@ -4,7 +4,7 @@ Meta only allows free-form text within 24 hours of the customer's last inbound m
 ("the customer-service window"). Outside it, a text send is rejected with error 131047 and
 the message simply never arrives — so the window is enforced here, before sending, and the
 failure is surfaced rather than swallowed. Re-opening a conversation outside the window
-requires a pre-approved *template*, which is a Meta-side registration BotForge can't do
+requires a pre-approved *template*, which is a Meta-side registration Vicero can't do
 for you: operators enter their approved template names on the channel config.
 """
 

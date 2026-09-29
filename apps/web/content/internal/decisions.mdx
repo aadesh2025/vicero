@@ -16,7 +16,7 @@ in the code.
 | **084** | Tenant isolation is org-scoped fetch — **not** a repository layer, **not** Postgres RLS. A query that forgets `organization_id` leaks, and nothing structural stops it |
 | **094** | `/docs`, `/redoc` and `/openapi.json` are dev-only. They were previously served in prod, publishing the whole surface |
 | **095** | This documentation site: MDX in the repo, generated API and env references, CI staleness check |
-| **096** | The private area is a separate login with an email allow-list, not an `is_staff` page behind the BotForge login. Supersedes the gate half of 095 |
+| **096** | The private area is a separate login with an email allow-list, not an `is_staff` page behind the Vicero login. Supersedes the gate half of 095 |
 | **019** | The refresh token is httpOnly and rotates; the access token is JS-readable because SSE and WebSockets need it there |
 | **044** | The `.env` comment trap that once shipped a placeholder to Google as a real API key |
 | **083** | A dropped chat stream finishes in a Celery task — an in-request retry cannot work |

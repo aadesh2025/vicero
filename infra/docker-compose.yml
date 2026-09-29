@@ -1,18 +1,18 @@
-# BotForge — dev stack. Bring the whole platform up with: docker compose up
+# Vicero — dev stack. Bring the whole platform up with: docker compose up
 # Config comes from ../.env (copy ../.env.example first). Service URLs below are
 # overridden for in-network addressing.
-name: botforge
+name: vicero
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-botforge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (not "botforge")}
-      POSTGRES_DB: ${POSTGRES_DB:-botforge}
+      POSTGRES_USER: ${POSTGRES_USER:-vicero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (not "vicero")}
+      POSTGRES_DB: ${POSTGRES_DB:-vicero}
     ports:
       # Same reason as N8N_HOST_PORT below: 5432 is routinely already taken on a dev machine by
-      # another project's Postgres, and BotForge must not be pointed at that one — it would
+      # another project's Postgres, and Vicero must not be pointed at that one — it would
       # migrate someone else's database. Container port stays 5432, so DATABASE_URL is the only
       # other thing to line up. Default keeps the canonical setup unchanged.
       #
@@ -23,20 +23,25 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botforge}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vicero}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    # Password-protected (ADR-093). `exec` so redis-server is PID 1 and gets SIGTERM; the password is
+    # read from the environment inside the container, so it never appears in `docker inspect` args.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
     ports:
-      # Loopback only, for the same reason as Postgres above — and Redis has no password.
+      # Loopback only, for the same reason as Postgres above.
       - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -47,8 +52,8 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vicero}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-vicero}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
       # Proxies whose X-Forwarded-For the API believes (app/core/clientip.py): loopback plus Docker's
       # private networks, which covers the web container and the host-side port mapping. The web
       # app has no proxy of its own in dev, so per-client counters see the client as "unknown" here.
@@ -56,7 +61,8 @@ services:
       N8N_BASE_URL: http://n8n:5678
       OLLAMA_BASE_URL: http://ollama:11434
     ports:
-      - "8000:8000"
+      # Loopback only (ADR-093): a bare "8000:8000" publishes on every interface, i.e. the LAN.
+      - "127.0.0.1:8000:8000"
     volumes:
       - ../apps/api:/app
       - api_venv:/app/.venv
@@ -74,8 +80,8 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vicero}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-vicero}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       # Internal address only; the service publishes no host port (docs/14 §9).
       DOCLING_ENDPOINT: http://docling:5001
@@ -96,8 +102,8 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botforge}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-botforge}
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-vicero}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-vicero}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
     volumes:
       - ../apps/api:/app
       - api_venv:/app/.venv
@@ -115,7 +121,7 @@ services:
       API_INTERNAL_URL: http://api:8000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     ports:
-      - "3001:3000"
+      - "127.0.0.1:3001:3000"  # loopback only (ADR-093)
     volumes:
       - ../apps/web:/app
       - web_node_modules:/app/node_modules
@@ -131,14 +137,14 @@ services:
       N8N_PROTOCOL: http
       N8N_BASIC_AUTH_ACTIVE: "true"
       N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-botforge}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-vicero}
       GENERIC_TIMEZONE: UTC
       # n8n resolves telemetry.n8n.io at boot and *exits* if DNS fails (observed:
       # `getaddrinfo EAI_AGAIN telemetry.n8n.io` killed this container). Off means the
       # container comes up on a flaky or offline network too.
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
-      # Webhook signature verification. BotForge signs every call to an n8n webhook
+      # Webhook signature verification. Vicero signs every call to an n8n webhook
       # (HMAC-SHA256 of "<ts>.<raw body>", integrations/n8n_client.py); each workflow's first
       # Code node recomputes it with this secret and answers 401 on a mismatch. Code nodes are
       # sandboxed from both env vars and `crypto` by default in n8n 2.x, so both are opened up here.
@@ -146,7 +152,7 @@ services:
       # infra/.env by default, so start with `make up` or `--env-file .env --env-file ../.env` - do NOT
       # add a copy to infra/.env (two copies drift; R15). Empty => every workflow rejects every call
       # (fails closed), never accepts.
-      # Tradeoff: any workflow author on this n8n can read its env; it is BotForge-operated and staff-authored.
+      # Tradeoff: any workflow author on this n8n can read its env; it is Vicero-operated and staff-authored.
       N8N_WEBHOOK_SIGNING_SECRET: ${N8N_WEBHOOK_SIGNING_SECRET:-}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       NODE_FUNCTION_ALLOW_BUILTIN: crypto
@@ -154,7 +160,7 @@ services:
       # Host port is configurable because 5678 is often already taken — on the build machine
       # by an unrelated n8n. Container port stays 5678, so N8N_BASE_URL is the only other
       # thing to line up. Default keeps the canonical setup unchanged.
-      - "${N8N_HOST_PORT:-5678}:5678"
+      - "127.0.0.1:${N8N_HOST_PORT:-5678}:5678"  # loopback only (ADR-093)
     volumes:
       - n8ndata:/home/node/.n8n
 
@@ -189,7 +195,7 @@ services:
     ports:
       # Changed from 11434 to 11435 to avoid collision with host-installed Ollama.
       # If you want the containerized version, kill the host Ollama and revert to 11434:11434.
-      - "11435:11434"
+      - "127.0.0.1:11435:11434"  # loopback only (ADR-093)
     volumes:
       - ollamadata:/root/.ollama
     entrypoint: ["/bin/sh", "-c"]

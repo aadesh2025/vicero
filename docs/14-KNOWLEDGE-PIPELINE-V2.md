@@ -6,7 +6,7 @@
 > **Revision 2 (2026-08-12):** scope widened after an operator decision — see §1.1. Revision 1
 > covered ~40% of Docling; this covers the agreed set.
 > **Sources reviewed:** `docling-project/docling` @ v2.119.0 (1,631 files),
-> `daveebbelaar/ai-cookbook` @ HEAD (207 files), BotForge `apps/api/app/rag/` and
+> `daveebbelaar/ai-cookbook` @ HEAD (207 files), Vicero `apps/api/app/rag/` and
 > `migrations/versions/`.
 >
 > **This track sits outside the §1 autonomous contract in `CLAUDE.md`, for the same reason
@@ -72,7 +72,7 @@ come from.
 
 ## 0. Correction to docs/13
 
-**`docs/13` §3 finding 3 and §4 R4a are WRONG.** I claimed BotForge has no GIN index on the
+**`docs/13` §3 finding 3 and §4 R4a are WRONG.** I claimed Vicero has no GIN index on the
 FTS expression. It does — `migrations/versions/0004_rag_indexes.py` creates both:
 
 ```sql
@@ -110,13 +110,13 @@ Two repos, two halves of one pipeline. They do not overlap.
 |---|---|---|
 | Solves | **Getting content out of documents correctly** | **Finding the right chunk, and proving it** |
 | Stage | Ingest (offline, background) | Retrieval (online, per turn) |
-| BotForge gap | `pypdf` flat text, no headings, no OCR, no tables, 4 formats | No reranker, no eval harness |
+| Vicero gap | `pypdf` flat text, no headings, no OCR, no tables, 4 formats | No reranker, no eval harness |
 | Latency impact | **None** (Celery worker) | **Yes — critical path** |
 | Risk | Storage, media queue policy, VLM memory | p50 first-token budget |
 
 - **Docling is the bigger and safer win.** It runs in the background, so it cannot touch the
   417 ms p50 first-token budget. It fixes a live safety bug (§3.2 W1) as a side effect.
-- **`docling-slim` is modular.** Base is 8 packages. Run it as `docling-serve` and **BotForge's
+- **`docling-slim` is modular.** Base is 8 packages. Run it as `docling-serve` and **Vicero's
   own images carry zero ML dependencies** — the weight lives in Docling's container.
 - **The retrieval eval harness is the highest-leverage item overall**, because it is the only
   thing that makes every other change here falsifiable.
@@ -217,7 +217,7 @@ Highest-value, least-obvious feature. `BaseChunker.contextualize(chunk)` returns
 metadata-enriched serialization intended to feed the embedding model:
 
 ```
-# what BotForge embeds today
+# what Vicero embeds today
 "Refunds are processed within 14 days of the original purchase date."
 
 # what contextualize() produces
@@ -286,7 +286,7 @@ column without measuring size against real client documents first.
 ### 3.5 Format coverage — agreed scope
 
 Formats are **cheap**: mostly one small pure-Python parser each, and under `docling-serve` they
-live in Docling's image, not BotForge's.
+live in Docling's image, not Vicero's.
 
 | Format | Extra | In scope | Why |
 |---|---|---|---|
@@ -408,7 +408,7 @@ docling-slim[
 # EXCLUDED: format-xml-*, format-video, format-html-render, models-remote
 ```
 
-Under `docling-serve` (§4.1 Option B) this is **Docling's image**. BotForge's worker installs
+Under `docling-serve` (§4.1 Option B) this is **Docling's image**. Vicero's worker installs
 only `docling-slim[service-client]` — `httpx`, `websockets`, `typer`, `rich`.
 
 ---
@@ -544,7 +544,7 @@ JSON, re-chunking to test a hypothesis costs nothing.
 
 ### 5.2 The reranker — stage 4
 
-BotForge has stages 1–3 (FTS + dense + RRF k=60). Missing: the cross-encoder. A bi-encoder embeds
+Vicero has stages 1–3 (FTS + dense + RRF k=60). Missing: the cross-encoder. A bi-encoder embeds
 query and document **separately**; a cross-encoder feeds both into one model with joint attention.
 Much more accurate, much slower — so run it only on the top ~50 fused candidates.
 
@@ -1062,7 +1062,7 @@ Rollback at every step is a flag flip, because `LegacyConverter` is never delete
 - Video keyframe extraction (without diarization, §3.5).
 - LLM-as-judge answer-quality eval on top of the retrieval eval.
 - Per-KB `embedding_dim` (§6), unblocking 1536-dim models.
-- **Explicitly rejected:** LangChain / LlamaIndex / CrewAI / Haystack integrations. BotForge has
+- **Explicitly rejected:** LangChain / LlamaIndex / CrewAI / Haystack integrations. Vicero has
   its own runtime, guardrail layers and tool loop. A second orchestration stack means two places a
   safety bug can hide, and docs/11's layers would not apply to the second one.
 
@@ -1088,7 +1088,7 @@ Postgres works around it via custom-plan parameter folding is plan-dependent. St
 it" because that is the honest reading. **Do not skip the `EXPLAIN`.**
 
 **Medium — the *size* of retrieval gains.** The ~40+ NDCG figure is FiQA (financial forum posts),
-not a support KB. The *direction* is well established; the magnitude on BotForge's corpora is
+not a support KB. The *direction* is well established; the magnitude on Vicero's corpora is
 unknown until P0-2 exists. **That uncertainty is the argument for P0-2 first, not against K2/K4.**
 
 **Medium-low — docling-serve RAM at full scope.** Layout + table + OCR + Granite Vision + Whisper
@@ -1141,10 +1141,10 @@ choice. K3-5 must measure, not assume.
 
 So the two halves of this phase have **completely different costs**:
 
-- **K6-A (confidence)** rides on the conversion call BotForge already makes. Nearly free.
+- **K6-A (confidence)** rides on the conversion call Vicero already makes. Nearly free.
 - **K6-B (structured extraction)** has no service path. Using Docling's own extractor means
   running it **in-process**, which puts `torch` + a VLM back into the worker image — and that
-  directly contradicts docs/15's deployment thesis (BotForge images carry zero ML dependencies).
+  directly contradicts docs/15's deployment thesis (Vicero images carry zero ML dependencies).
 
 **K6-B therefore does NOT use Docling's extractor.** See K6.2 for what it uses instead.
 
@@ -1175,7 +1175,7 @@ score < 0.9  → GOOD
 score >= 0.9 → EXCELLENT
 ```
 
-### K6.2 Why BotForge specifically needs it
+### K6.2 Why Vicero specifically needs it
 
 **Today a badly-extracted document produces garbage chunks, and retrieval serves them with a
 similarity score that looks perfectly healthy.** Nothing anywhere signals that the source was
@@ -1255,7 +1255,7 @@ fact or says it does not.
 ### K6.6 ⚠️ How to extract — NOT with Docling
 
 Per K6.0, Docling's extractor is unreachable over `docling-serve` and would drag a VLM into the
-worker. **Use the LLM infrastructure BotForge already has:**
+worker. **Use the LLM infrastructure Vicero already has:**
 
 ```
 Docling markdown (already produced by K1)

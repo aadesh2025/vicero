@@ -15,7 +15,7 @@ export default async function VaultLoginPage() {
       <div className="w-full rounded-xl border border-border bg-surface p-6 shadow-pop">
         <h1 className="font-display text-xl font-semibold text-text">Private area</h1>
         <p className="mt-1 mb-5 text-sm text-muted">
-          Restricted to the platform administrator. This sign-in is separate from your BotForge account.
+          Restricted to the platform administrator. This sign-in is separate from your Vicero account.
         </p>
         {configured ? (
           <VaultLoginForm />

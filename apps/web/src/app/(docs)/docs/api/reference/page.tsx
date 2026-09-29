@@ -7,7 +7,7 @@ import { groupDocs, listDocs } from "@/lib/docs/content";
 
 export const metadata: Metadata = {
   title: "Endpoint reference",
-  description: "The customer-facing BotForge REST endpoints, generated from the API's own schema.",
+  description: "The customer-facing Vicero REST endpoints, generated from the API's own schema.",
 };
 
 /**

@@ -1,17 +1,17 @@
-"""Does an n8n workflow actually verify BotForge's webhook signature? (RISK-REGISTER R15)
+"""Does an n8n workflow actually verify Vicero's webhook signature? (RISK-REGISTER R15)
 
-BotForge signs every call it makes to an n8n webhook (`n8n_client.sign`), but n8n only checks
+Vicero signs every call it makes to an n8n webhook (`n8n_client.sign`), but n8n only checks
 that signature if the workflow says to. A workflow built by hand in the n8n UI, or cloned before
 the shipped templates gained the check, accepts an unsigned `curl` from anyone who learns its
 URL — bypassing the agent, RBAC, budgets and every input check. This module inspects a workflow's
 JSON (as returned by the n8n API) and says whether the check is really in the request path.
 
-**Structural, not nominal.** It does not look for a node called "Verify BotForge signature" —
+**Structural, not nominal.** It does not look for a node called "Verify Vicero signature" —
 a name proves nothing. It requires, for every Webhook node:
 
 1. the `rawBody` option is on (without it the HMAC cannot be recomputed);
 2. the Webhook's ONLY outgoing connections go to a Code node whose source does the HMAC work
-   (`createHmac`, the `x-botforge-signature` header, `timingSafeEqual`) — so no branch reaches
+   (`createHmac`, the `x-vicero-signature` header, `timingSafeEqual`) — so no branch reaches
    the automation without passing through it;
 3. that Code node's output goes only to an IF/Switch node that tests its `verified` result —
    a verifier whose answer is never consulted is decoration.
@@ -32,11 +32,11 @@ _WEBHOOK_TYPES = {"n8n-nodes-base.webhook"}
 _CODE_TYPE = "n8n-nodes-base.code"
 _GATE_TYPES = {"n8n-nodes-base.if", "n8n-nodes-base.switch"}
 # What the shipped verifier's source contains (infra/n8n/*.json); all three must be present.
-_VERIFIER_MARKERS = ("createHmac", "x-botforge-signature", "timingSafeEqual")
+_VERIFIER_MARKERS = ("createHmac", "x-vicero-signature", "timingSafeEqual")
 
 FIX_HINT = (
     "Start the workflow with the shipped verify chain "
-    "(Webhook [rawBody on] -> 'Verify BotForge signature' Code node -> IF -> your automation) "
+    "(Webhook [rawBody on] -> 'Verify Vicero signature' Code node -> IF -> your automation) "
     "— see infra/n8n/README.md, or re-clone infra/n8n/template-starter-automation.json."
 )
 
@@ -72,7 +72,7 @@ def unverified_reason(workflow: dict[str, Any]) -> str | None:
     connections = workflow.get("connections") or {}
     hooks = [n for n in nodes if n.get("type") in _WEBHOOK_TYPES]
     if not hooks:
-        return "it has no Webhook node, so there is nothing for BotForge to sign a call to"
+        return "it has no Webhook node, so there is nothing for Vicero to sign a call to"
 
     for hook in hooks:
         hook_name = str(hook.get("name"))
@@ -86,7 +86,7 @@ def unverified_reason(workflow: dict[str, Any]) -> str | None:
             if not _is_verifier(by_name.get(target)):
                 return (
                     f"Webhook '{hook_name}' feeds '{target}' directly; every path from a Webhook "
-                    "must go through a Code node that verifies the BotForge HMAC signature"
+                    "must go through a Code node that verifies the Vicero HMAC signature"
                 )
             gates = _successors(connections, target)
             if not gates or not all(_tests_verified(by_name.get(g)) for g in gates):

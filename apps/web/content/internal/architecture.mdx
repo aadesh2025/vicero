@@ -8,7 +8,7 @@ order: 1
 <Callout type="warn" title="Private area — administrator only">
 This section describes the system's internals — its full endpoint surface, its tenancy
 model and the real values of every secret it reads. It sits behind its own sign-in at
-`/vault/login`, separate from BotForge accounts, and is checked on the server. Do
+`/vault/login`, separate from Vicero accounts, and is checked on the server. Do
 not paste from it into a customer-facing channel.
 </Callout>
 
@@ -60,7 +60,7 @@ a conversation → the same chat flow → the reply goes out through the adapter
 
 ### A workflow as a tool
 
-BotForge signs a POST to the n8n webhook (`X-BotForge-Signature` over
+Vicero signs a POST to the n8n webhook (`X-Vicero-Signature` over
 `"{timestamp}.{body}"`). **sync** feeds the response straight back into the turn; **async**
 leaves a pending `tool_runs` row that a signed callback to `POST /v1/tools/n8n/callback`
 resolves.

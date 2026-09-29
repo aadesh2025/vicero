@@ -101,7 +101,7 @@ async def load_url(url: str, *, transport: httpx.AsyncBaseTransport | None = Non
                 raise LoaderError("Only http(s) URLs are supported.")
             if await _host_blocked(parsed.hostname, transport):
                 raise LoaderError("Refusing to fetch a private/loopback URL.")
-            resp = await client.get(current, headers={"User-Agent": "BotForge-Ingest/1.0"})
+            resp = await client.get(current, headers={"User-Agent": "Vicero-Ingest/1.0"})
             location = resp.headers.get("location")
             if resp.is_redirect and location:
                 current = urljoin(current, location)

@@ -1,11 +1,11 @@
 # Starter n8n workflows
 
-Importable workflows that BotForge agents can call as **n8n tools** (docs/07 §1).
+Importable workflows that Vicero agents can call as **n8n tools** (docs/07 §1).
 
 | File | Webhook path | Mode | What it does |
 |---|---|---|---|
-| `botforge-echo.json` | `/webhook/botforge-echo` | sync | Echoes the tool arguments back — smoke test for a bound tool. |
-| `create-support-ticket.json` | `/webhook/botforge-create-ticket` | sync | Generates a ticket id + status and returns it (a "Respond to Webhook" example). |
+| `vicero-echo.json` | `/webhook/vicero-echo` | sync | Echoes the tool arguments back — smoke test for a bound tool. |
+| `create-support-ticket.json` | `/webhook/vicero-create-ticket` | sync | Generates a ticket id + status and returns it (a "Respond to Webhook" example). |
 | `demo-niches/*.json` | `/webhook/demo-{harbor-reservations,citycare-appointments,luxeglow-bookings,threadline-orders}` | sync | Four **fake-data** demo automations (restaurant, clinic, salon, fabric store) used to test agents end to end. See below. |
 | `template-starter-automation.json` | `/webhook/{client-slug}-starter-automation` | sync | **Cloned per client** by `scripts/provision-client.mjs`. Import it once; the script copies it per client, rewriting the webhook path to the client's slug so no two clients share a URL. |
 
@@ -19,15 +19,15 @@ Its Set node writes `handled_by: {{ $workflow.name }}`, so each client's copy re
 name. Real per-client logic (CRM, Sheets, Slack …) replaces the Set node afterwards; the
 template exists so a new client starts with a working webhook rather than an empty n8n.
 
-**Which n8n?** BotForge must own the instance it provisions into — cloning and activating
+**Which n8n?** Vicero must own the instance it provisions into — cloning and activating
 workflows in an instance that belongs to another project risks that project's automations. If
-5678 is taken, run BotForge's own on another port:
+5678 is taken, run Vicero's own on another port:
 `cd infra && N8N_HOST_PORT=5679 docker compose up -d n8n`, and set
 `N8N_BASE_URL=http://localhost:5679`.
 
-## How BotForge calls them
+## How Vicero calls them
 
-When an agent invokes a bound n8n tool, BotForge `POST`s to the workflow's webhook URL with:
+When an agent invokes a bound n8n tool, Vicero `POST`s to the workflow's webhook URL with:
 
 ```json
 {
@@ -39,13 +39,13 @@ When an agent invokes a bound n8n tool, BotForge `POST`s to the workflow's webho
 }
 ```
 
-Every request is signed: headers `X-BotForge-Signature` (HMAC-SHA256 of `"{timestamp}.{body}"`
-using `N8N_WEBHOOK_SIGNING_SECRET`) and `X-BotForge-Timestamp`. **Every JSON in this directory verifies
+Every request is signed: headers `X-Vicero-Signature` (HMAC-SHA256 of `"{timestamp}.{body}"`
+using `N8N_WEBHOOK_SIGNING_SECRET`) and `X-Vicero-Timestamp`. **Every JSON in this directory verifies
 them** (see below) — a workflow that does not is callable by anyone who has its URL.
 
-**BotForge enforces this when a workflow is bound as a tool.** `POST /v1/tools/n8n/bind` fetches the
+**Vicero enforces this when a workflow is bound as a tool.** `POST /v1/tools/n8n/bind` fetches the
 workflow from the n8n API and refuses (400 `tools.n8n_unsigned_workflow`) unless every Webhook node has
-**Raw Body** on and feeds only a Code node that does the HMAC check (`createHmac`, `x-botforge-signature`,
+**Raw Body** on and feeds only a Code node that does the HMAC check (`createHmac`, `x-vicero-signature`,
 `timingSafeEqual`) whose result an IF/Switch then tests (`verified`). To pass, start from
 `template-starter-automation.json` (or copy its first three nodes). A pasted webhook URL is resolved to its
 workflow through the n8n API (matched on the `/webhook/<path>`), so binding by URL needs `N8N_API_KEY`; a
@@ -65,7 +65,7 @@ and again after editing any bound workflow in the n8n UI.
 
 ## Import
 
-**Via the n8n UI:** open http://localhost:5678 (basic auth `admin` / `botforge`) →
+**Via the n8n UI:** open http://localhost:5678 (basic auth `admin` / `vicero`) →
 *Workflows* → *Import from File* → pick a JSON here → **Activate** the workflow (top-right
 toggle) so the production webhook registers.
 
@@ -75,18 +75,18 @@ toggle) so the production webhook registers.
 KEY=$N8N_API_KEY
 curl -s -H "X-N8N-API-KEY: $KEY" -H "Content-Type: application/json" \
   -X POST http://localhost:5678/api/v1/workflows \
-  --data-binary @infra/n8n/botforge-echo.json
+  --data-binary @infra/n8n/vicero-echo.json
 # then activate it:  POST /api/v1/workflows/{id}/activate
 ```
 
-## Bind in BotForge
+## Bind in Vicero
 
 Dashboard → **Automations** → pick the workflow → **Bind as tool** (choose the agent + mode).
 Then enable the agent's tools and chat — the agent can call the workflow and use its response.
 
 ## Signature verification (built into every JSON here)
 
-Each workflow starts **Webhook** (`rawBody: true`) → **Verify BotForge signature** (Code) → **Signature
+Each workflow starts **Webhook** (`rawBody: true`) → **Verify Vicero signature** (Code) → **Signature
 valid?** (IF) → the automation, with the false branch answering **401**. The check recomputes
 `HMAC-SHA256(secret, "<timestamp>." + raw body)`, compares in constant time, rejects timestamps more than
 300 s off, and **fails closed** (no secret / missing header / no raw body ⇒ 401). It is part of the
@@ -97,14 +97,14 @@ since `docker-compose.prod.yml` has no n8n service):
 
 | n8n env | Why |
 |---|---|
-| `N8N_WEBHOOK_SIGNING_SECRET` | the shared secret — the root `.env` value BotForge signs with (one source, see below) |
+| `N8N_WEBHOOK_SIGNING_SECRET` | the shared secret — the root `.env` value Vicero signs with (one source, see below) |
 | `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` | n8n 2.x hides `$env` from Code nodes by default |
 | `NODE_FUNCTION_ALLOW_BUILTIN=crypto` | ...and blocks `require('crypto')` |
 
-**Why one file.** The secret lives **only in the root `.env`** — that is where BotForge's own settings loader
+**Why one file.** The secret lives **only in the root `.env`** — that is where Vicero's own settings loader
 reads it, so it is what the API signs with. Compose's `${...}` interpolation ignores the root `.env` by
 default and reads `infra/.env`, which used to hold a second copy. Two copies drift silently: rotate one and
-n8n rejects every call as "invalid signature" while nothing looks wrong on the BotForge side. So the compose
+n8n rejects every call as "invalid signature" while nothing looks wrong on the Vicero side. So the compose
 file has no copy; `make up` passes `--env-file .env` and n8n gets the same value the API signs with. From
 `infra/` by hand: `docker compose --env-file .env --env-file ../.env up -d n8n`. Started without it, n8n has
 an empty secret and rejects every call (fail closed — safe, but every tool call 401s). After changing it:

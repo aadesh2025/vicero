@@ -10,8 +10,8 @@
  * must not fall back to something permissive, so every accessor returns "nothing" rather
  * than a default, and `isConfigured()` is what login checks first.
  *
- * This is deliberately independent of BotForge's own accounts: no `users` row, no JWT, no
- * `is_staff`. Compromising or being granted a BotForge account gets you nothing here.
+ * This is deliberately independent of Vicero's own accounts: no `users` row, no JWT, no
+ * `is_staff`. Compromising or being granted a Vicero account gets you nothing here.
  */
 
 import "server-only";

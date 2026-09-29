@@ -65,7 +65,7 @@ _EMAIL_WINDOW = 3600
 
 # Verified against on unknown accounts so a wrong email costs the same time as a wrong password
 # (otherwise response time separates "no such account" from "bad password").
-_DUMMY_HASH = hash_password("botforge-timing-equaliser")
+_DUMMY_HASH = hash_password("vicero-timing-equaliser")
 
 
 def _now() -> dt.datetime:

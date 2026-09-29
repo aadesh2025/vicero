@@ -32,10 +32,10 @@
 |---|---|
 | `designreference/UI_resign.jfif` | **Primary style reference.** Same dashboard in light and dark: layout rhythm, card style, pastel status pills, bordered cards, calm neutrals, blue primary button |
 | `designreference/inboxdesign.png` | Inbox layout reference (three-pane conversation view) |
-| `designreference/prototype/botforge-dual-theme-prototype.dc.html` | **Our approved clickable prototype** (Dashboard, Conversations, Channels, light/dark toggle). It's a design-canvas file, not runnable standalone. **Read its source:** every colour token and style string is in the `renderVals()` block at the bottom. Treat its values as the spec when this doc and the prototype agree; **this doc wins** if they differ |
+| `designreference/prototype/vicero-dual-theme-prototype.dc.html` | **Our approved clickable prototype** (Dashboard, Conversations, Channels, light/dark toggle). It's a design-canvas file, not runnable standalone. **Read its source:** every colour token and style string is in the `renderVals()` block at the bottom. Treat its values as the spec when this doc and the prototype agree; **this doc wins** if they differ |
 | `docs/05-FRONTEND.md` | Existing frontend conventions. Keep them |
 
-> The references are for **style**, not content. Use BotForge's real pages, data and copy.
+> The references are for **style**, not content. Use Vicero's real pages, data and copy.
 > Don't copy any third-party product's layout pixel-for-pixel.
 
 ---
@@ -560,7 +560,7 @@ Every page gets the shell, the page header pattern (title + subtitle + one prima
 - Don't touch `apps/api`, auth logic, plan-limit logic, metering, or the widget's runtime.
 - Don't rename token names that are already used (`accent`, `ember`, `surface`…). Add new ones instead.
 - No hard-coded hex or Tailwind palette classes in components after R8. Add a lint check or grep test that fails on `#[0-9a-f]{6}` or `-(red|blue|…)-[0-9]{3}` inside `src/components` and `src/app` (exceptions allowed for brand SVG files).
-- **Product name:** read from one constant (rename pending). Don't add new hard-coded "BotForge" strings.
+- **Product name:** read from one constant (rename pending). Don't add new hard-coded "Vicero" strings.
 - Record decisions in `docs/DECISIONS.md` (ADR: "UI redesign — dual theme tokens"). Update `docs/05-FRONTEND.md` with the new token, channel and status systems, and `docs/PROGRESS.md` per phase.
 
 ---

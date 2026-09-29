@@ -1,6 +1,6 @@
 # 12 — Agent Vulnerability Test Checklist
 
-> A practical, run-it-yourself checklist for testing any BotForge agent before it goes live
+> A practical, run-it-yourself checklist for testing any Vicero agent before it goes live
 > with a real client. Organized by threat category. Each item has: what to type/do, what
 > "pass" looks like, and which guardrail layer (docs/11) is supposed to catch it — so a
 > failure tells you exactly where to look.

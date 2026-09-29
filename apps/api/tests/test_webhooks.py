@@ -52,9 +52,9 @@ async def test_signed_delivery(client: AsyncClient, db_session: AsyncSession) ->
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured["sig"] = request.headers.get("x-botforge-signature")
-        captured["ts"] = request.headers.get("x-botforge-timestamp")
-        captured["event"] = request.headers.get("x-botforge-event")
+        captured["sig"] = request.headers.get("x-vicero-signature")
+        captured["ts"] = request.headers.get("x-vicero-timestamp")
+        captured["event"] = request.headers.get("x-vicero-event")
         captured["body"] = request.content
         return httpx.Response(200, json={"ok": True})
 

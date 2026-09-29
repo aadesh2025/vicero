@@ -119,7 +119,7 @@ function NoWorkspace() {
                   (<span className="font-mono text-text">{user.email}</span>)
                 </>
               ) : null}{" "}
-              — or contact your BotForge rep.
+              — or contact your Vicero rep.
             </p>
             <p className="mt-4 text-xs text-faint">
               Already have an invite link? Open it while signed in and you&apos;ll join straight away.

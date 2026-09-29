@@ -238,7 +238,7 @@ Format each entry as below. Newest at the top.
   call, cookie, environment read, storage write or logging (audited), and the copy button reads text from the displayed
   code block at click time.
 - **Alternatives considered:** an authenticated "Try it" or "Use my key" feature (rejected by the brief and by design —
-  it needs the secret in browser JavaScript); `https://api.botforge.ai` as the example host (rejected — the host differs per
+  it needs the secret in browser JavaScript); `https://api.vicero.ai` as the example host (rejected — the host differs per
   deployment and self-hosted or white-label installs have their own, so `YOUR_API_HOST` matches the rest of the docs);
   remembering the selected language in `localStorage` (rejected — a docs page should not write to the reader's browser).
 - **Consequences:** Code blocks across all docs pages gain a copy button. The light and dark code themes changed to GitHub's
@@ -278,7 +278,7 @@ Format each entry as below. Newest at the top.
 
 ### ADR-096: Production database is the bundled Postgres on the Oracle VM again — supersedes ADR-086's hosting decision
 - **Date:** 2026-09-25
-- **Status:** accepted (owner instruction, 2026-09-25). **Supersedes ADR-086 for database hosting only.** ADR-086's auth decision (a) — BotForge keeps its own auth, Supabase Auth is not adopted — is unchanged.
+- **Status:** accepted (owner instruction, 2026-09-25). **Supersedes ADR-086 for database hosting only.** ADR-086's auth decision (a) — Vicero keeps its own auth, Supabase Auth is not adopted — is unchanged.
 - **Context:** ADR-086 chose Supabase-managed Postgres with the application containers on Oracle's free tier. Re-examined
   before the first deploy, four things weigh against it for this stack:
   - **Size cap.** Supabase's free tier is 500 MB of database. `chunks.embedding` is `vector(768)` plus an HNSW index, roughly
@@ -314,13 +314,13 @@ Format each entry as below. Newest at the top.
 ### ADR-096: The private reference is a separate login with an email allow-list, not an `is_staff` page
 - **Date:** 2026-09-25
 - **Status:** accepted (supersedes the access-gate half of ADR-095)
-- **Context:** ADR-095 put the internal reference at `/internal-docs`, gated on the BotForge login plus
+- **Context:** ADR-095 put the internal reference at `/internal-docs`, gated on the Vicero login plus
   `is_staff`. The operator asked for something different: a **separate login, unconnected to the main
   one, where only the administrator's email can sign in**, and inside it the real API keys and structure. The
   first version also showed names only, never values. Two problems with the original design surfaced with it:
-  any BotForge account promoted to staff (or a bug in how `is_staff` is granted) opened the door, and a private
+  any Vicero account promoted to staff (or a bug in how `is_staff` is granted) opened the door, and a private
   page that lives inside the customer dashboard shares that dashboard's whole attack surface.
-- **Decision:** `/vault` is its own area with its own credentials and no dependency on BotForge auth: no user row,
+- **Decision:** `/vault` is its own area with its own credentials and no dependency on Vicero auth: no user row,
   no JWT, no call to the API. `VAULT_ADMIN_EMAILS` is an exact-match allow-list; the password is checked against
   a scrypt hash in `VAULT_PASSWORD_HASH` (made by `make vault-password`, which never prints or stores the password);
   the session is a stateless HMAC-signed `httpOnly`, `SameSite=Strict` cookie of 8 hours, re-checked against the
@@ -352,7 +352,7 @@ Format each entry as below. Newest at the top.
 ### ADR-095: The documentation site is MDX in the repo, and its API reference is generated, never written
 - **Date:** 2026-09-25
 - **Status:** accepted (the private-area access gate was replaced by ADR-096)
-- **Context:** BotForge had no public-facing surface at all — `apps/web/src/app/page.tsx` redirected `/` to
+- **Context:** Vicero had no public-facing surface at all — `apps/web/src/app/page.tsx` redirected `/` to
   `/dashboard` — while `docs/05-FRONTEND.md §2` had specified a `/docs` route since day one. The repo's own
   documentation is written for a build agent, not a customer, and the one hand-written API catalogue
   (`docs/04-API-SPEC.md`) had drifted badly: it is missing roughly ten resource families that ship today and still
@@ -362,12 +362,12 @@ Format each entry as below. Newest at the top.
 - **Decision:** Docs are MDX files in `apps/web/content/`, compiled with `next-mdx-remote` (not the file-based
   `@next/mdx`), rendered by routes in `apps/web`. The endpoint reference and the env-var reference are **generated**
   into `apps/web/content/generated/` by `scripts/generate-openapi.py` and `scripts/generate-env-reference.mjs`, and CI
-  fails if the committed output is stale. `prose-botforge` maps `@tailwindcss/typography` onto the existing design
+  fails if the committed output is stale. `prose-vicero` maps `@tailwindcss/typography` onto the existing design
   tokens rather than introducing a second palette.
 - **Alternatives considered:** a database-backed docs CMS (rejected — new tables, an editor UI and RBAC for a
   single-author site); rendering `docs/*.md` directly (rejected — those are build-agent instructions and read wrong
   publicly, besides leaking internal reasoning); a hosted tool like Mintlify (rejected — the staff-only half could not
-  be gated on BotForge's own JWT); hand-writing the endpoint reference (rejected — this is precisely how
+  be gated on Vicero's own JWT); hand-writing the endpoint reference (rejected — this is precisely how
   `04-API-SPEC.md` rotted).
 - **Consequences:** Seven new web dependencies. `src/lib/markdown.ts` stays untouched and keeps serving
   tenant-authored Help Center articles, where its escape-before-format property matters; the MDX pipeline must never
@@ -400,7 +400,7 @@ Format each entry as below. Newest at the top.
 - **Context:** `infra/docker-compose.yml` published `5750→5432` (Postgres) and `6379` (Redis) with a bare
   `host:container` mapping, which binds every interface — on this machine the LAN and the Windows hotspot. Postgres
   did require a password from outside the container (`pg_hba`: `scram-sha-256` for non-loopback), but it was the
-  compose default `botforge`, which the compose file, `.env.example` and CI all printed; the dev database accepted
+  compose default `vicero`, which the compose file, `.env.example` and CI all printed; the dev database accepted
   it. Redis has no password at all. (The first report called this "no password"; the accurate statement is "a
   guessable default".)
 - **Decision:** Publish both as `127.0.0.1:…` (containers still reach each other over the compose network; only
@@ -539,7 +539,7 @@ Format each entry as below. Newest at the top.
   so none is audited. Package layout: DB-touching counter code is in `app/billing/` (core may not import models);
   `normalize_email` is in `db/base.py`.
 
-### ADR-089: An n8n workflow can only be bound as a tool if it verifies BotForge's signature, and the signing secret has one home (RISK-REGISTER R15)
+### ADR-089: An n8n workflow can only be bound as a tool if it verifies Vicero's signature, and the signing secret has one home (RISK-REGISTER R15)
 
 - **Context.** R15's first fix made every *shipped* workflow verify the HMAC, but a workflow built by hand
   in the n8n UI (or cloned earlier) still accepted an unsigned `curl`, and nothing stopped binding one.
@@ -547,10 +547,10 @@ Format each entry as below. Newest at the top.
 - **Decision 1 — gate at bind time, structurally.** `bind_n8n_workflow` refuses (400
   `tools.n8n_unsigned_workflow`, message names the missing piece and points at `infra/n8n/README.md`)
   unless `integrations/n8n_signature.unverified_reason()` finds, for every Webhook node: `rawBody` on; only
-  outgoing links to a Code node containing `createHmac` + `x-botforge-signature` + `timingSafeEqual`; that
+  outgoing links to a Code node containing `createHmac` + `x-vicero-signature` + `timingSafeEqual`; that
   node feeding only IF/Switch nodes that test `verified`. It checks *shape*, not a node *name* — a node
-  called "Verify BotForge signature" that does nothing fails (tested). **The pasted `webhook_url` path is
-  covered too:** the URL is what BotForge actually calls, so it is resolved to its workflow through the n8n
+  called "Verify Vicero signature" that does nothing fails (tested). **The pasted `webhook_url` path is
+  covered too:** the URL is what Vicero actually calls, so it is resolved to its workflow through the n8n
   API (matched on the `/webhook/<path>` tail, since the operator may paste a public hostname; `webhook-test`
   URLs never match) and a `workflow_id` sent alongside cannot launder an unverified URL. A URL that cannot be
   resolved (no `N8N_API_KEY`, n8n down, unknown path) is refused as `tools.n8n_unverifiable` — unverifiable is
@@ -596,7 +596,7 @@ Format each entry as below. Newest at the top.
 
 ### ADR-086: Database hosting is Supabase-managed Postgres (on Oracle's free tier for compute), not self-hosted Postgres on the VPS
 - **Date:** 2026-09-24
-- **Status:** database-hosting decision **superseded by ADR-096** (2026-09-25); the auth decision below stands. Originally: accepted. **Auth decision (owner, 2026-09-24): option (a) — database only.** BotForge keeps its own auth (argon2, JWT + rotating refresh, OAuth, magic links); Supabase Auth is **not** adopted at VPS deploy. Revisit only via a new ADR.
+- **Status:** database-hosting decision **superseded by ADR-096** (2026-09-25); the auth decision below stands. Originally: accepted. **Auth decision (owner, 2026-09-24): option (a) — database only.** Vicero keeps its own auth (argon2, JWT + rotating refresh, OAuth, magic links); Supabase Auth is **not** adopted at VPS deploy. Revisit only via a new ADR.
 - **Context:** `docs/16-VPS-MIGRATION.md` (not yet executed) assumes the API, worker and a self-managed
   `pgvector/pgvector:pg16` container all run on one Oracle Cloud Always Free VM (compose `postgres` service,
   nightly `pg_dump` to a volume, no published DB port). The actual plan is to keep the Oracle VM for the
@@ -608,8 +608,8 @@ Format each entry as below. Newest at the top.
   used in production. Local dev keeps the bundled Postgres (unchanged).
 - **What changes (checked against this repo) vs. what needs confirming on first contact (🔶 = prediction from general
   knowledge of Supabase, not verified here — confirm against Supabase's current docs and plan page):**
-  - **Connection string shape.** Today: `postgresql+asyncpg://botforge:…@localhost:<port>/botforge`, no TLS. Supabase:
-    the database name is `postgres` (not `botforge`); TLS is required (`app/db/session.py` does no TLS setup today);
+  - **Connection string shape.** Today: `postgresql+asyncpg://vicero:…@localhost:<port>/vicero`, no TLS. Supabase:
+    the database name is `postgres` (not `vicero`); TLS is required (`app/db/session.py` does no TLS setup today);
     and there are three endpoints — the direct host (`db.<project-ref>.supabase.co:5432`), the Supavisor **session**
     pooler and the **transaction** pooler (`…pooler.supabase.com`, user `postgres.<project-ref>`, ports 5432 / 6543 🔶).
     🔶 The direct host is IPv6-only unless a paid add-on is bought; whether the Oracle VM has working outbound IPv6 must
@@ -628,7 +628,7 @@ Format each entry as below. Newest at the top.
     a chat turn pays a round trip, so the Oracle VM and the Supabase project must be in the same cloud region.
     `infra/perf/load_test.py` has to be re-run from the Oracle VM against the Supabase instance before any SLA is quoted.
   - **Security: Supabase exposes tables in the `public` schema through its auto-generated REST API (PostgREST).** 🔶
-    BotForge's tables are in `public` and have no RLS (ADR-002 made RLS optional). The project's anon key is designed to
+    Vicero's tables are in `public` and have no RLS (ADR-002 made RLS optional). The project's anon key is designed to
     be public, so that API could read them. Before real data lands: **disable the Data API or enable deny-all RLS on
     every table** (the FastAPI backend connects as a privileged role and is unaffected). This is the most important item
     on this list.
@@ -644,7 +644,7 @@ Format each entry as below. Newest at the top.
     client's chat data; budget for a paid plan before client #1.
 - **Open question — ANSWERED 2026-09-24: (a).** Original text kept for the reasoning: the plan was described as Supabase for "database + auth +
   conversation storage". Postgres and conversations are settled above. **"Auth" is ambiguous** and is not a small
-  choice: (a) *database only* — keep BotForge's own auth (argon2, JWT + rotating refresh, OAuth, magic links,
+  choice: (a) *database only* — keep Vicero's own auth (argon2, JWT + rotating refresh, OAuth, magic links,
   `current_org`, the Next.js BFF cookies) and just point it at a different Postgres; or (b) *replace it with Supabase
   Auth* — which touches `app/modules/auth`, `current_org` token decoding, org-membership/RBAC identity, the web BFF,
   every test that signs up a user, and contradicts CLAUDE.md §4's "Auth: JWT access + refresh, OAuth, password
@@ -755,7 +755,7 @@ Format each entry as below. Newest at the top.
   volume `api`/`worker` already write to (never a second copy of the data) at `/uploads`, plus a
   new `UPLOADS_DIR` env var pointing at it. `backup.sh` archives that directory with `tar -czf`
   into the same `BACKUP_DIR`/`backups` volume the DB dump already writes to, timestamped to
-  match (`botforge_uploads_<STAMP>.tar.gz` beside `botforge_botforge_<STAMP>.sql.gz`), and the
+  match (`vicero_uploads_<STAMP>.tar.gz` beside `vicero_vicero_<STAMP>.sql.gz`), and the
   existing rotation `find` now matches both filename patterns. `restore.sh` takes the archive as
   an optional second argument and extracts it to a new required `UPLOADS_TARGET_DIR` (no default
   — a wrong guess here silently "restores" documents nobody can find, so it must be explicit).
@@ -765,7 +765,7 @@ Format each entry as below. Newest at the top.
   Likewise `restore.sh` with no second argument does exactly what it always did.
 - **Verified, not assumed — against real Postgres and real client-shaped data, not fixtures.**
   Ran the actual `backup` service's own command (`postgres:16` image, network-joined to the real
-  `botforge-postgres-1`, the real dev `uploads` directory bind-mounted read-only in place of the
+  `vicero-postgres-1`, the real dev `uploads` directory bind-mounted read-only in place of the
   volume) against this project's live dev database and its live `apps/api/var/uploads` — 48
   tables dumped, 2993 real uploaded-file entries archived. Restored BOTH into a throwaway
   database and a throwaway directory: `organizations` row count matched (2 = 2) and
@@ -1242,7 +1242,7 @@ Format each entry as below. Newest at the top.
     and `mypy app/` clean (206 source files; the graph.py/service.py drafts needed four
     `type: ignore` comments removed as genuinely unused and two `bool()` casts added on the
     condition parser's `==`/`!=` branches once mypy was run for real). Migration `0023` applied
-    to the real Postgres (`botforge-postgres-1`, port 5433), then downgraded and re-upgraded —
+    to the real Postgres (`vicero-postgres-1`, port 5433), then downgraded and re-upgraded —
     clean both directions. All 9 workflow paths confirmed present in the live OpenAPI schema.
     `test_workflow_graph.py`'s 27 tests plus `test_db.py` (which needed `workflows`/
     `workflow_versions`/`workflow_runs`/`workflow_steps` added to `EXPECTED_TABLES`) all green,
@@ -1314,12 +1314,12 @@ Format each entry as below. Newest at the top.
 - **Decision — borrow the shape, not the platform.** An `IntegrationDefinition` is
   `{name, version, configuration(s), actions, events, channels, states, identifier/auth,
   interfaces}` where every leaf (action input/output, event payload, config field) is a typed
-  schema (Zod in botpress; Pydantic for BotForge) that doubles as both the validator and the
+  schema (Zod in botpress; Pydantic for Vicero) that doubles as both the validator and the
   UI-form generator (`.title()/.describe()/.secret()/.hidden()` annotations in
   `package.ts`) — the schema *is* the contract, authored once. Borrow the **definition/
   implementation split** seen in `gmail/integration.definition.ts` (a thin file importing a
   sibling `./definitions` module) vs. `src/index.ts` (handlers keyed by the same action/channel
-  names) — BotForge's version keeps a typed contract module separate from its handlers so a
+  names) — Vicero's version keeps a typed contract module separate from its handlers so a
   deploy-time check can prove an implementation actually satisfies its declared contract.
   Borrow the `interfaces/` mechanism (`interfaces/hitl/interface.definition.ts`: a shared
   contract an integration opts into via `interfaces: {...}` in its own definition) as the
@@ -1336,11 +1336,11 @@ Format each entry as below. Newest at the top.
   human's answer to Step 0 question 4 (is Phase 5 in scope for v1 at all).
 - **Consequences:** none yet — no code changes this session. **Explicitly left behind:**
   Botpress Cloud's hosted control plane (`ApiClient`, workspace-scoped auth, a central Hub that
-  stores/versions/serves integrations) — BotForge has no equivalent and Phase 5 does not invent
-  one; and the three-way `bots`/`plugins`/`integrations` package-kind split — BotForge's spec
+  stores/versions/serves integrations) — Vicero has no equivalent and Phase 5 does not invent
+  one; and the three-way `bots`/`plugins`/`integrations` package-kind split — Vicero's spec
   only needs the integration + interface split, not a third "plugin" concept.
 
-### ADR-071: open-agent-builder — node/state-machine shape, and why BotForge's MCP client must never use Anthropic's native connector
+### ADR-071: open-agent-builder — node/state-machine shape, and why Vicero's MCP client must never use Anthropic's native connector
 - **Date:** 2026-08-19
 - **Status:** accepted — informs Phase 2 design (not built this session) and one Phase 1 requirement (item 4 below)
 - **Context:** docs/17-IMPLEMENTATION-PROMPT.md Step 0 requires reading
@@ -1350,18 +1350,18 @@ Format each entry as below. Newest at the top.
 - **Decision, four parts.**
   1. **Node config:** their `NodeData` is one flat interface with ~40 optional fields shared by
      every node type, switched on by a string `type` at runtime (`lib/workflow/types.ts`).
-     Explicitly **not** copying this — BotForge's `workflow_steps.node_config` stays free-form
+     Explicitly **not** copying this — Vicero's `workflow_steps.node_config` stays free-form
      jsonb per row (per docs/17 §3.1), but the code that reads it type-narrows per `node_type`
      rather than sharing one giant struct.
   2. **State/event vocabulary:** borrow their per-node status vocabulary — `pending | running |
      completed | failed | pending-approval` — as the direct model for `workflow_steps.status`,
      adding `awaiting_approval` (already in the docs/17 §3 schema) and dropping their
-     Arcade-specific `pending-authorization` (no OAuth-broker equivalent exists in BotForge).
+     Arcade-specific `pending-authorization` (no OAuth-broker equivalent exists in Vicero).
      Borrow the **loop-node shape**: an iteration counter held in run-scoped variables, read by
      a conditional router each pass, clamped by a **code-level ceiling below the
      user-configurable default** (`parseMaxIterations()` clamps to `ABSOLUTE_MAX=100`
      regardless of a configured default of 10, confirmed in source) — reuse this two-tier cap
-     (org-configurable default, hard platform ceiling) for BotForge's `Loop` node and for
+     (org-configurable default, hard platform ceiling) for Vicero's `Loop` node and for
      `max_steps` generally (§5).
   3. **Approval/pause state:** the minimum durable fields their `interrupt()` call persists are
      `{authId, nodeId, toolName, status, message, threadId, executionId}`. Map this onto
@@ -1390,13 +1390,13 @@ Format each entry as below. Newest at the top.
   connection test (`lib/mcp/mcp-registry.ts`), which confirms docs/17 §4's registration +
   test-connection API is genuinely new work, not something to port.
 
-### ADR-070: OpenManus — the think→act→observe loop and MCP client shape, and the sub-agent budget gap BotForge must not repeat
+### ADR-070: OpenManus — the think→act→observe loop and MCP client shape, and the sub-agent budget gap Vicero must not repeat
 - **Date:** 2026-08-19
 - **Status:** accepted
 - **Context:** docs/17-IMPLEMENTATION-PROMPT.md Step 0 requires reading
   `github.com/FoundationAgents/OpenManus` before Phase 1. Read `app/agent/base.py`,
   `app/agent/manus.py`, `app/agent/toolcall.py`, `app/tool/mcp.py`, `app/tool/base.py`, and
-  `app/flow/base.py` + `app/flow/planning.py`. BotForge already has a bounded tool loop —
+  `app/flow/base.py` + `app/flow/planning.py`. Vicero already has a bounded tool loop —
   `run_turn()` in `app/chat/runtime.py` (shipped under ADR-024): an iteration-capped loop with a
   pluggable `ToolExecutor` callback, where every tool result is passed through
   `neutralize_injections()` before re-entering model context as a `role="tool"` message. Phase 1
@@ -1408,7 +1408,7 @@ Format each entry as below. Newest at the top.
     each call and appends the result — structurally the same shape as `run_turn`'s
     iteration loop (`for iteration in range(iters): ... messages.append(...); continue`).
     `max_steps=20` / `max_observe=10000` are literal class attributes on `Manus`, not config —
-    BotForge's equivalents are `Organization`-scoped overridable settings per §5, following the
+    Vicero's equivalents are `Organization`-scoped overridable settings per §5, following the
     existing `guard_injection_enabled` per-org-override pattern (sibling of ADR-055).
   - Borrow `MCPClientTool`'s tool shape (name + JSON-schema `parameters` + async `execute()`
     returning a structured result) as the calling convention `app/tools/mcp_client.py` uses so
@@ -1420,7 +1420,7 @@ Format each entry as below. Newest at the top.
   - **Explicitly improve on, not copy: sanitization.** Confirmed by reading `act()` in
     `app/agent/toolcall.py` — the raw tool-output string goes straight into
     `Message.tool_message(content=result, ...)` with **zero sanitization anywhere in the path**.
-    BotForge's `neutralize_injections()` step is mandatory and already shipped (docs/11 Phase A);
+    Vicero's `neutralize_injections()` step is mandatory and already shipped (docs/11 Phase A);
     Phase 1 extends it to cover MCP tool results and sub-agent results too, per docs/17 §6 — no
     exceptions, as that section states outright.
 - **The gap that matters most: sub-agent budgets are not inherited, confirmed in source, not
@@ -1435,7 +1435,7 @@ Format each entry as below. Newest at the top.
   *parent's* `workflow_runs.budget`/turn budget rather than allocating its own.
 - **Alternatives considered:** OpenManus's Pydantic-`BaseModel`-as-agent-state — rejected,
   conflates config schema with mutable runtime state and has no persistence path beyond
-  in-process `Memory` (a run's trace dies with the process); BotForge's state is Postgres rows
+  in-process `Memory` (a run's trace dies with the process); Vicero's state is Postgres rows
   (`agent_steps`) from the start.
 - **Consequences:** none yet — this ADR sets the Phase 1 implementation direction; no runtime
   code changed in this session. Confirms Phase 1's budget-inheritance test and its MCP/n8n/
@@ -1755,7 +1755,7 @@ Format each entry as below. Newest at the top.
 ### ADR-063: Reranking is platform infrastructure, off by default, and fails open to RRF order
 - **Date:** 2026-08-13
 - **Status:** accepted
-- **Context:** docs/13 R1 / docs/14 K4. BotForge had stages 1-3 of the four-stage pipeline
+- **Context:** docs/13 R1 / docs/14 K4. Vicero had stages 1-3 of the four-stage pipeline
   (FTS, dense, RRF) and no cross-encoder. Two questions the cookbook does not have to answer:
   whose credential pays, and what happens to the latency budget.
 - **Decision:** (a) the rerank credential is the **platform's** (`RERANK_API_KEY`), resolved by
@@ -1776,7 +1776,7 @@ Format each entry as below. Newest at the top.
   matters where docs/11 §9.2a records Tamil as a first language. The HTTP client speaks both
   shapes, so a hosted vendor stays one env var away.
 - **Consequences:** rerank spend and latency get their own metrics bucket
-  (`botforge_rerank_calls_total`, `botforge_rerank_milliseconds_total`), never folded into
+  (`vicero_rerank_calls_total`, `vicero_rerank_milliseconds_total`), never folded into
   `TurnResult`, or per-org margin analysis is quietly wrong. Enabled-with-no-endpoint warns at
   startup, because a reranker that is off looks exactly like one that ran and agreed.
   **Not enabled for any live agent** — that needs the measured latency delta docs/14 K4-4 asks
@@ -2003,7 +2003,7 @@ Format each entry as below. Newest at the top.
 - **Decision:** Guard models resolve through `guard_models.platform_guard_key()` — a separate
   path reading `settings.groq_api_key` only. Never `resolve_credential()`'s agent → org → env
   chain. Guard spend is the platform's, tracked in its own metrics bucket
-  (`botforge_guard_tokens_total`) and never folded into `TurnResult`.
+  (`vicero_guard_tokens_total`) and never folded into `TurnResult`.
 - **Alternatives considered:** *Resolve like any other chat call* — the org chain falls back to
   the env key last, so it would appear to work in dev and then, for a client on
   Mistral/DeepSeek/xAI/Together/Fireworks/Cerebras with their own key configured, resolve to
@@ -2093,7 +2093,7 @@ Format each entry as below. Newest at the top.
 - **Consequences:** No new weight, and the guardrails compose with the existing typed-error and
   structured-logging conventions instead of sitting alongside them. The cost is that we maintain
   the patterns ourselves, which is why the fixture corpus (docs/11 §5) is treated as part of the
-  implementation rather than an extra. Revisit NeMo if BotForge ever needs scripted dialog flows;
+  implementation rather than an extra. Revisit NeMo if Vicero ever needs scripted dialog flows;
   revisit self-hosting if per-turn cost or data residency changes.
 
 ### ADR-051: Guardrails fail open on availability and closed on enforcement
@@ -2403,7 +2403,7 @@ Format each entry as below. Newest at the top.
   operationally load-bearing, and the only way to answer it was to switch into each org in turn —
   which by definition cannot show internal or unowned workflows at all.
 - **Decision:** `GET /v1/admin/automations` (staff-only, org-agnostic — the ADR-032 pattern)
-  returns every n8n workflow with its tag-derived owner, active state, and the BotForge tools
+  returns every n8n workflow with its tag-derived owner, active state, and the Vicero tools
   bound to it, joined from `tools.config->>'workflow_id'`. It **reports** rather than filters:
   `_resolve_owner` mirrors `workflow_visible_to_org`'s precedence but classifies instead of
   hiding, so staff see the `internal`, `untagged` and `unknown-org` rows a client never would.
@@ -2440,7 +2440,7 @@ Format each entry as below. Newest at the top.
 - **Alternatives considered:** (a) deny-by-default (only tagged workflows visible) — rejected
   for now because it would immediately hide every one of the client's real, already-bound,
   untagged workflows until each is manually tagged; revisit once tagging is the norm. (b) a
-  BotForge-side `workflow_id → org_id` mapping table instead of n8n tags — more robust (doesn't
+  Vicero-side `workflow_id → org_id` mapping table instead of n8n tags — more robust (doesn't
   depend on the operator remembering to tag) but needs a migration and a UI to manage the
   mapping; deferred, n8n tags are zero-schema-change and the operator already names workflows
   by client convention (`00001 —`, `00002 —`).
@@ -2540,7 +2540,7 @@ Format each entry as below. Newest at the top.
 - **Date:** 2026-07-21
 - **Status:** accepted
 - **Context:** bring the embeddable widget's theming to full parity with a richer sibling product,
-  natively in BotForge's stack, without ever changing an already-pasted embed snippet.
+  natively in Vicero's stack, without ever changing an already-pasted embed snippet.
 - **Decisions:**
   - **Everything flows through the live config fetch.** All new controls extend the existing
     `WidgetTheme` returned by `GET /v1/public/agents/{key}/config` (fetched on every widget load), so
@@ -2778,7 +2778,7 @@ Format each entry as below. Newest at the top.
   - **The widget is one dependency-free `widget.js`** rendered into a **Shadow DOM** (full style
     isolation), streaming over the public SSE endpoint (works cross-origin from any host). It
     ships its own minimal, escape-first markdown renderer (no library) and exposes
-    `window.BotForge` (open/close/toggle/sendMessage/on/setUser). Built via a trivial
+    `window.Vicero` (open/close/toggle/sendMessage/on/setUser). Built via a trivial
     `node build.mjs` (esbuild-minified if present, else plain copy) into `apps/web/public/` so the
     web app serves it at `/widget.js`.
   - **Rate limiting:** public chat is throttled per client IP (60/min) via the shared limiter.
@@ -2792,7 +2792,7 @@ Format each entry as below. Newest at the top.
     `config={workflow_id, workflow_name, webhook_url, mode}`. The Phase-9 tool loop already
     calls it; only a `type=="n8n"` branch in `_dispatch` + an `execute_n8n_tool` were added
     (ADR-024 paying off).
-  - **Signing:** outbound webhooks carry `X-BotForge-Signature` = HMAC-SHA256 of
+  - **Signing:** outbound webhooks carry `X-Vicero-Signature` = HMAC-SHA256 of
     `"{timestamp}.{body}"` with `N8N_WEBHOOK_SIGNING_SECRET`; the callback endpoint verifies the
     same (constant-time) with ±300s replay protection.
   - **n8n calls are NOT SSRF-guarded** — the target is the operator-configured, trusted
@@ -3016,7 +3016,7 @@ Format each entry as below. Newest at the top.
   differentiator.
 - **Decision:** Cool graphite surfaces (`#0A0B0D`/`#131519`) with hairline borders and a tight
   grid, spending the one aesthetic risk on a signature **ember** accent (`#FF6A3D` → gold
-  `#FFB020`) that the brand name "BotForge" earns. Typography: Space Grotesk (display) + Inter
+  `#FFB020`) that the brand name "Vicero" earns. Typography: Space Grotesk (display) + Inter
   (body) + JetBrains Mono (data), deliberately not Inter-everywhere. Tokens stored as RGB
   channels in CSS vars so Tailwind opacity modifiers work; `darkMode: "class"` via next-themes,
   dark default with a light override.

@@ -1,13 +1,13 @@
-"""Every n8n workflow shipped in `infra/n8n/` must verify BotForge's webhook signature (RISK-REGISTER R15).
+"""Every n8n workflow shipped in `infra/n8n/` must verify Vicero's webhook signature (RISK-REGISTER R15).
 
-BotForge signs each call to an n8n webhook (`integrations/n8n_client.sign`). A workflow that does not
+Vicero signs each call to an n8n webhook (`integrations/n8n_client.sign`). A workflow that does not
 *check* it can be called directly by anyone holding its URL — bypassing the agent, RBAC, budgets and
 input validation. This file pins three things:
 
 1. **Structure** — every JSON has Webhook(rawBody) -> Verify -> IF, with the false branch a 401, and the
    automation reachable only through the IF's true branch. A new workflow or template that skips it fails.
 2. **Behaviour** — the actual JavaScript in the Verify node is executed under Node against signatures
-   produced by BotForge's own Python `sign()`, so the two implementations cannot drift apart (skipped when
+   produced by Vicero's own Python `sign()`, so the two implementations cannot drift apart (skipped when
    `node` is not installed).
 3. **Hygiene** — no secret and no runtime state (`staticData`) in the exported JSON.
 """
@@ -28,7 +28,7 @@ from app.integrations import n8n_client
 
 N8N_DIR = Path(__file__).resolve().parents[3] / "infra" / "n8n"
 WORKFLOWS = sorted(N8N_DIR.rglob("*.json"))
-VERIFY_NAME = "Verify BotForge signature"
+VERIFY_NAME = "Verify Vicero signature"
 IF_NAME = "Signature valid?"
 
 
@@ -82,8 +82,8 @@ def test_the_verifier_is_the_reference_implementation(path: Path) -> None:
     for must in (
         "createHmac('sha256'",
         "timingSafeEqual",
-        "x-botforge-signature",
-        "x-botforge-timestamp",
+        "x-vicero-signature",
+        "x-vicero-timestamp",
         "ts + '.'",
         "> 300",
         "$env['N8N_WEBHOOK_SIGNING_SECRET']",
@@ -144,15 +144,15 @@ needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node is no
 
 
 @needs_node
-def test_verifier_javascript_accepts_botforge_signatures_and_rejects_everything_else(
+def test_verifier_javascript_accepts_vicero_signatures_and_rejects_everything_else(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secret = "behaviour-test-secret-0123456789"
     monkeypatch.setattr(settings, "n8n_webhook_signing_secret", secret)
-    body = json.dumps({"args": {"note": "héllo ✓", "n": 1}, "mode": "sync"})  # exactly BotForge's serialisation
+    body = json.dumps({"args": {"note": "héllo ✓", "n": 1}, "mode": "sync"})  # exactly Vicero's serialisation
     assert '"n": 1' in body  # the tampered case below must really change a byte
     ts, sig = n8n_client.sign(body.encode())
-    good = {"x-botforge-signature": sig, "x-botforge-timestamp": ts}
+    good = {"x-vicero-signature": sig, "x-vicero-timestamp": ts}
     old_ts = str(int(time.time()) - 600)
     _, old_sig = n8n_client.sign(body.encode(), timestamp=old_ts)
     env = {"N8N_WEBHOOK_SIGNING_SECRET": secret}
@@ -163,15 +163,15 @@ def test_verifier_javascript_accepts_botforge_signatures_and_rejects_everything_
     cases = [
         case("valid"),
         case("no_headers", headers={}),
-        case("bad_mac", headers={**good, "x-botforge-signature": "0" * len(sig)}),
-        case("stale", headers={"x-botforge-signature": old_sig, "x-botforge-timestamp": old_ts}),
+        case("bad_mac", headers={**good, "x-vicero-signature": "0" * len(sig)}),
+        case("stale", headers={"x-vicero-signature": old_sig, "x-vicero-timestamp": old_ts}),
         case("tampered_body", raw=body.replace("\"n\": 1", "\"n\": 2")),
         case("wrong_secret_in_n8n", env={"N8N_WEBHOOK_SIGNING_SECRET": "some-other-secret-value"}),
         case("no_secret_configured", env={}),
         case("empty_secret_configured", env={"N8N_WEBHOOK_SIGNING_SECRET": ""}),
         case("no_raw_body", hasRaw=False),
     ]
-    code = _node(_load(N8N_DIR / "botforge-echo.json"), VERIFY_NAME)["parameters"]["jsCode"]
+    code = _node(_load(N8N_DIR / "vicero-echo.json"), VERIFY_NAME)["parameters"]["jsCode"]
     run = subprocess.run(
         ["node", "-e", HARNESS], input=json.dumps({"code": code, "cases": cases}),
         capture_output=True, text=True, timeout=60, check=False,

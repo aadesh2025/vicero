@@ -80,7 +80,7 @@ export function DeleteOrg() {
         <h2 className="font-display text-base font-semibold text-error-text">Danger zone</h2>
         <p className="mt-0.5 text-sm text-muted">
           Deleting <span className="text-text">{org.name}</span> removes its agents, conversations,
-          knowledge bases and channel connections from BotForge. Members lose access immediately.
+          knowledge bases and channel connections from Vicero. Members lose access immediately.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 p-5">

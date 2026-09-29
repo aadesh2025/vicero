@@ -15,7 +15,7 @@ export function NodePalette() {
             key={n.type}
             draggable
             onDragStart={(e) => {
-              e.dataTransfer.setData("application/botforge-node-type", n.type);
+              e.dataTransfer.setData("application/vicero-node-type", n.type);
               e.dataTransfer.effectAllowed = "move";
             }}
             className="flex cursor-grab items-start gap-2 rounded-md border border-border bg-surface-2 p-2 text-xs transition-colors hover:border-accent/40 hover:bg-surface-3 active:cursor-grabbing"

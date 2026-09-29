@@ -1,6 +1,6 @@
 ---
 title: Core concepts
-description: The vocabulary BotForge uses, and what each thing actually is.
+description: The vocabulary Vicero uses, and what each thing actually is.
 group: Overview
 order: 3
 ---
@@ -33,7 +33,7 @@ The split that matters in practice is `editor` versus `admin`: an editor can cha
 anything about an agent but cannot push it live. That is deliberate, and it is how a client
 can build their own agent while you keep the final say on what customers see.
 
-There is a separate, orthogonal flag for BotForge platform staff, which has nothing to do
+There is a separate, orthogonal flag for Vicero platform staff, which has nothing to do
 with your organization's roles.
 
 ## Agent
@@ -63,7 +63,7 @@ things like product codes and error strings, which embeddings alone are bad at.
 
 ## RAG
 
-Retrieval-augmented generation: before answering, BotForge searches your knowledge base and
+Retrieval-augmented generation: before answering, Vicero searches your knowledge base and
 puts the best-matching chunks into the prompt. The answer comes back with **citations**
 pointing at the documents used.
 
@@ -88,7 +88,7 @@ conversation lands in the same inbox regardless of where it came from.
 ## Contact
 
 A person, assembled across channels. When the same human talks to you on the widget and
-later on WhatsApp, BotForge links those conversations to one contact where it can.
+later on WhatsApp, Vicero links those conversations to one contact where it can.
 
 ## Tool
 

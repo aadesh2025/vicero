@@ -143,7 +143,7 @@ function CreateWebhookDialog({
           }}
           className="space-y-3"
         >
-          <Input placeholder="https://your-server.com/webhooks/botforge" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <Input placeholder="https://your-server.com/webhooks/vicero" value={url} onChange={(e) => setUrl(e.target.value)} />
           <div>
             <label className="mb-1 flex items-center gap-2 text-xs text-muted">
               <input

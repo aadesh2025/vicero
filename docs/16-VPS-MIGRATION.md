@@ -1,13 +1,18 @@
 # docs/16 — Local → VPS migration runbook
 
-> **⚠️ NEEDS A REVISION PASS — do not follow the database sections as written.** This runbook assumes a
+> **Update 2026-09-25 — read `docs/19-ORACLE-SINGLE-VPS-PLAN.md` first.** ADR-096 supersedes ADR-086: production uses the
+> bundled Postgres on the Oracle VM again (Supabase is at most an off-box backup target). The database sections of this
+> runbook apply again. Its box sizing (4 OCPU / 24 GB) is stale — Oracle Always Free is now 2 OCPU / 12 GB — and its s7
+> backup gap for `uploads` was closed by ADR-082. Where this doc and docs/19 disagree, docs/19 wins.
+
+> *(Historical — obsolete as of 2026-09-25, see the update above: the database sections apply again under ADR-096.)* ~~**⚠️ NEEDS A REVISION PASS — do not follow the database sections as written.**~~ This runbook assumes a
 > **self-hosted Postgres container on the VM** throughout (compose `postgres` service, local `pg_dump`
 > backups, no published DB port, `DATABASE_URL` pointing at a sibling container). The decision since made
 > (**ADR-086, 2026-09-24**) is **Supabase-managed Postgres**, with the application containers still on Oracle.
 > That changes the connection string, pooler mode, TLS and backups, and adds an RLS/Data-API exposure to close
-> first. Revise this doc once the Supabase decision is concrete — note ADR-086 records that **auth stays BotForge's own (option a) — only the database moves.** Everything that is not about the database is unaffected.
+> first. Revise this doc once the Supabase decision is concrete — note ADR-086 records that **auth stays Vicero's own (option a) — only the database moves.** Everything that is not about the database is unaffected.
 
-> **Scope.** Moving BotForge from "runs on my Windows machine" to "runs on a public VPS with real
+> **Scope.** Moving Vicero from "runs on my Windows machine" to "runs on a public VPS with real
 > clients on it." Target box in this doc: **Oracle Cloud Always Free, VM.Standard.A1.Flex, 4 OCPU /
 > 24 GB RAM, ARM (aarch64), Ubuntu 22.04**.
 >
@@ -149,7 +154,7 @@ first. **Two different mechanisms read environment variables, from two different
 So the deploy command is:
 
 ```bash
-cd /opt/botforge/infra
+cd /opt/vicero/infra
 docker compose --env-file ../.env -f docker-compose.prod.yml up -d --build
 ```
 
@@ -166,7 +171,7 @@ that way, which is why they are listed separately rather than as "update the URL
 # ── Core identity ────────────────────────────────────────────────────────────
 ENV=prod
 SECRET_KEY=<64+ random chars — openssl rand -hex 32>   # NOT the dev value
-POSTGRES_PASSWORD=<strong, unique>                      # NOT "botforge"
+POSTGRES_PASSWORD=<strong, unique>                      # NOT "vicero"
 
 # ── Hostnames (interpolation — put these in infra/.env too, or pass --env-file)
 DOMAIN=app.yourdomain.com
@@ -179,7 +184,7 @@ API_BASE_URL=https://api.yourdomain.com
 WEB_BASE_URL=https://app.yourdomain.com
 CORS_ORIGINS=https://app.yourdomain.com    # ⛔ see §4 before accepting this line
 N8N_BASE_URL=https://n8n.yourdomain.com    # see §6
-BOTFORGE_API_BASE_URL=https://api.yourdomain.com   # scripts/provision-client.mjs
+VICERO_API_BASE_URL=https://api.yourdomain.com   # scripts/provision-client.mjs
 ```
 
 ⚠️ **`API_BASE_URL` and `WEB_BASE_URL` are not decoration.** Verified in code:
@@ -335,7 +340,7 @@ environment:
   WEBHOOK_URL: https://n8n.yourdomain.com/
   N8N_BASIC_AUTH_ACTIVE: "true"
   N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
-  N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}   # ⚠️ change from "botforge"
+  N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}   # ⚠️ change from "vicero"
   N8N_DIAGNOSTICS_ENABLED: "false"    # it exits if telemetry DNS fails — see dev compose comment
   GENERIC_TIMEZONE: UTC
 volumes:
@@ -348,8 +353,8 @@ Per CLAUDE.md §6, the integration runs both ways, and **both ends currently hol
 
 | Direction | Held where | Action |
 |---|---|---|
-| BotForge → n8n | `webhook_url` **stored per bound tool in the database**, inside the `tools.config` JSONB (`app/tools/n8n_tool.py:79`) — *not* a top-level column | ⚠️ Existing rows point at `http://localhost:5678/...`. Must be updated or re-bound. |
-| n8n → BotForge | `callback_url` built at call time from `settings.api_base_url` | Fixed by setting `API_BASE_URL` (§3.1). |
+| Vicero → n8n | `webhook_url` **stored per bound tool in the database**, inside the `tools.config` JSONB (`app/tools/n8n_tool.py:79`) — *not* a top-level column | ⚠️ Existing rows point at `http://localhost:5678/...`. Must be updated or re-bound. |
+| n8n → Vicero | `callback_url` built at call time from `settings.api_base_url` | Fixed by setting `API_BASE_URL` (§3.1). |
 
 ⚠️ The stored `webhook_url` is the one that bites. CLAUDE.md's 2026-07-31 entry notes the runtime
 uses the stored `webhook_url`, so bound tools keep working after other changes — which also means
@@ -393,7 +398,7 @@ embeddings with it. That is the good news.
 
 ```bash
 # Add uploads to the nightly job, and get both off the box.
-docker run --rm -v botforge-prod_uploads:/data -v /opt/backups:/out alpine \
+docker run --rm -v vicero-prod_uploads:/data -v /opt/backups:/out alpine \
   tar czf /out/uploads_$(date -u +%Y%m%dT%H%M%SZ).tar.gz -C /data .
 # then rclone/scp /opt/backups to anywhere that is not this VPS
 ```
@@ -402,7 +407,7 @@ docker run --rm -v botforge-prod_uploads:/data -v /opt/backups:/out alpine \
 
 ## 8. ⚠️ Embeddings: you cannot move them off Ollama
 
-**Correcting a plausible assumption:** BotForge's LLM stack is Groq-first and free-tier friendly, so
+**Correcting a plausible assumption:** Vicero's LLM stack is Groq-first and free-tier friendly, so
 the natural instinct is "use Groq for embeddings too and drop Ollama from the box." **That does not
 work.** From `apps/api/app/llm/registry.py:181-184`:
 
@@ -542,8 +547,8 @@ conversations):
 
 ```bash
 # 1. On the laptop — dump
-docker compose exec -T postgres pg_dump -U botforge --no-owner --no-privileges botforge \
-  | gzip -9 > botforge_local.sql.gz
+docker compose exec -T postgres pg_dump -U vicero --no-owner --no-privileges vicero \
+  | gzip -9 > vicero_local.sql.gz
 
 # 2. Copy the UPLOADS TOO — the dump does not contain them.
 #    ⚠️ Locally these are NOT in a Docker volume. Per CLAUDE.md §12 the API runs natively from
@@ -555,12 +560,12 @@ docker compose exec -T postgres pg_dump -U botforge --no-owner --no-privileges b
 tar czf uploads_local.tar.gz -C apps/api/var/uploads .
 
 # 3. Ship both to the VPS
-scp -i oracle.key botforge_local.sql.gz uploads_local.tar.gz ubuntu@<VPS_IP>:/tmp/
+scp -i oracle.key vicero_local.sql.gz uploads_local.tar.gz ubuntu@<VPS_IP>:/tmp/
 
 # 4. On the VPS — restore AFTER `migrate` has run once
-gunzip -c /tmp/botforge_local.sql.gz \
-  | docker compose -f docker-compose.prod.yml exec -T postgres psql -U botforge botforge
-docker run --rm -v botforge-prod_uploads:/data -v /tmp:/in alpine \
+gunzip -c /tmp/vicero_local.sql.gz \
+  | docker compose -f docker-compose.prod.yml exec -T postgres psql -U vicero vicero
+docker run --rm -v vicero-prod_uploads:/data -v /tmp:/in alpine \
   tar xzf /in/uploads_local.tar.gz -C /data
 ```
 
@@ -590,7 +595,7 @@ note records exactly this hazard on the dev machine, where 5432 belonged to anot
 
 ```bash
 # On the VPS
-git clone <repo> /opt/botforge && cd /opt/botforge
+git clone <repo> /opt/vicero && cd /opt/vicero
 cp .env.example .env && nano .env          # §3.1 — every localhost value
 cp .env infra/.env                          # interpolation vars (§3) — or use --env-file
 

@@ -9,12 +9,12 @@
 - Assume the user may already run n8n; support pointing at an external instance via env.
 
 ### Two-way integration
-**BotForge → n8n (agent triggers automations):**
-- Bind an n8n workflow (that starts with a **Webhook** node) as a BotForge **n8n tool**.
+**Vicero → n8n (agent triggers automations):**
+- Bind an n8n workflow (that starts with a **Webhook** node) as a Vicero **n8n tool**.
 - When the agent calls the tool, `integrations/n8n_client` POSTs the tool arguments to the
-  workflow's webhook URL. Sign the request (HMAC header `X-BotForge-Signature`).
+  workflow's webhook URL. Sign the request (HMAC header `X-Vicero-Signature`).
 - **Sync mode**: n8n's "Respond to Webhook" node returns JSON → fed back to the model.
-- **Async mode**: n8n does long work, then calls back BotForge's callback endpoint with the
+- **Async mode**: n8n does long work, then calls back Vicero's callback endpoint with the
   `run_id`; runtime resolves the pending tool call.
 - Discovery: `GET /v1/tools/n8n/workflows` proxies n8n's API to list workflows so the user
   can pick one in the UI, then `POST /v1/tools/n8n/bind`.
@@ -25,23 +25,23 @@
   to all orgs — a permissive default, not "properly scoped." See `docs/guides/N8N-SETUP.md §5`
   and ADR-040.
 
-**n8n → BotForge (workflows use BotForge):**
-- n8n calls BotForge's REST API using an org **API key** (`bf_...`) — e.g., send a message
+**n8n → Vicero (workflows use Vicero):**
+- n8n calls Vicero's REST API using an org **API key** (`bf_...`) — e.g., send a message
   to a conversation, fetch analytics, trigger an agent.
-- BotForge emits **outbound webhooks** (see §4) that n8n workflows subscribe to via Webhook
+- Vicero emits **outbound webhooks** (see §4) that n8n workflows subscribe to via Webhook
   nodes (e.g., on `handoff.requested`, create a ticket).
 
-### Webhook signature verification — REQUIRED for every n8n workflow BotForge calls
-BotForge signs every call to an n8n webhook, but signing only protects a workflow that **checks** the
+### Webhook signature verification — REQUIRED for every n8n workflow Vicero calls
+Vicero signs every call to an n8n webhook, but signing only protects a workflow that **checks** the
 signature. An unverified webhook can be called by anyone who learns its URL, and that call bypasses the
 agent, RBAC, budget limits and any input validation entirely. So:
 
 - **Every workflow bound as an n8n tool must verify the signature before doing anything.** The reference
   implementation is the first three nodes of every JSON in `infra/n8n/`: **Webhook** (option `rawBody: true`)
-  → **Verify BotForge signature** (Code) → **Signature valid?** (IF; the false branch is a **Respond to
+  → **Verify Vicero signature** (Code) → **Signature valid?** (IF; the false branch is a **Respond to
   Webhook** with HTTP **401**). Do not reinvent it; copy those nodes.
 - **Scheme** (`integrations/n8n_client.sign()` / `verify_callback()` — the workflow mirrors the same
-  rules): `X-BotForge-Signature` = hex `HMAC-SHA256(secret, "<X-BotForge-Timestamp>." + raw request body)`.
+  rules): `X-Vicero-Signature` = hex `HMAC-SHA256(secret, "<X-Vicero-Timestamp>." + raw request body)`.
   Compare in constant time, over the **raw bytes** (re-serialising the parsed JSON changes spacing and
   escaping and breaks the MAC), and reject a timestamp more than **300 s** from now (replay window, same as
   the callback verifier).
@@ -52,13 +52,13 @@ agent, RBAC, budget limits and any input validation entirely. So:
   and `require('crypto')` in Code nodes by default. The dev compose sets all three; **a production n8n
   needs them too** (`docker-compose.prod.yml` has no n8n service — an external n8n must be configured the
   same way). Tradeoff: with env access on, any workflow author on that n8n can read its environment, so the
-  instance must be BotForge-operated and its workflows staff-authored.
+  instance must be Vicero-operated and its workflows staff-authored.
 - **Provisioning enforces it.** `scripts/provision-client.mjs` clones `TEMPLATE — Starter Automation` per
-  client and **refuses to clone a template without the `Verify BotForge signature` node**, so a client
+  client and **refuses to clone a template without the `Verify Vicero signature` node**, so a client
   workflow cannot be created unsigned by following the normal path. A workflow built by hand in the n8n UI
   is *not* covered by that check — see RISK-REGISTER R15, which stays open until every workflow bound to a
   tool has been confirmed verified.
-- **Callbacks** (async mode, n8n → BotForge) are the mirror image and are already verified server-side
+- **Callbacks** (async mode, n8n → Vicero) are the mirror image and are already verified server-side
   (`verify_callback`).
 - Pinned by `apps/api/tests/test_n8n_workflows_signed.py`: every workflow JSON under `infra/n8n/` must
   carry the verification chain and no secret or runtime state.
@@ -69,7 +69,7 @@ agent, RBAC, budget limits and any input validation entirely. So:
 
 ### Provide starter n8n workflows (export JSON in `infra/n8n/`)
 - "Create support ticket" (webhook → HTTP/DB node → respond).
-- "Send email on handoff" (BotForge webhook → email node).
+- "Send email on handoff" (Vicero webhook → email node).
 - `template-starter-automation.json` — **`TEMPLATE — Starter Automation`**, the workflow the
   provisioning script clones per client (Webhook → Set → Respond to Webhook). Deliberately
   thin: its job is to give a new client *a working automation* on day one, which real logic
@@ -102,7 +102,7 @@ test and connect their own channels, but never publish).
 - **Tool binding goes through `POST /v1/tools/n8n/bind`**, which resolves the production
   webhook URL from the workflow itself, so the URL is derived by the same code the runtime
   uses instead of being reconstructed by the script.
-- **Location-agnostic.** It only talks to `BOTFORGE_API_BASE_URL` and `N8N_BASE_URL`, so the
+- **Location-agnostic.** It only talks to `VICERO_API_BASE_URL` and `N8N_BASE_URL`, so the
   identical command works over SSH against a VPS: `ssh you@vps "cd own_chatbot && node
   scripts/provision-client.mjs --name ... --email ..."`.
 
@@ -131,7 +131,7 @@ See §3.
   `messages` endpoint. Handle 24-hour window / templates note in docs.
 
 ### Facebook Messenger + Instagram DMs (Meta Messenger Platform)
-Meta unified these two behind one Send API, so BotForge implements them once
+Meta unified these two behind one Send API, so Vicero implements them once
 (`channels/meta_messaging.py`) with a thin subclass each. They share the WhatsApp app
 secret and its `X-Hub-Signature-256` check (`channels/meta_signature.py`).
 
@@ -197,13 +197,13 @@ Bundled with a small toolchain (esbuild/vite) to a single minified `widget.js` +
 served by the web app (or a CDN path). No heavy framework in the bundle; keep it lightweight.
 
 ### Widget SDK (JS API)
-Expose `window.BotForge = { open(), close(), sendMessage(text), on(event, cb),
+Expose `window.Vicero = { open(), close(), sendMessage(text), on(event, cb),
 setUser({id, name, email, metadata}) }` so host pages can control it and pass visitor identity.
 
-## 4. Outbound webhooks (BotForge → external / n8n)
+## 4. Outbound webhooks (Vicero → external / n8n)
 
 - Configurable endpoints (`webhook_endpoints`) subscribe to events.
-- Delivery: enqueue → POST signed payload (`X-BotForge-Signature` = HMAC-SHA256 of body with
+- Delivery: enqueue → POST signed payload (`X-Vicero-Signature` = HMAC-SHA256 of body with
   endpoint secret, plus timestamp) → retry with exponential backoff, record in
   `webhook_deliveries`.
 - Event catalog: `message.created`, `conversation.created`, `conversation.closed`,

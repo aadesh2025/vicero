@@ -416,11 +416,11 @@ async def _require_signed_workflow(
 ) -> None:
     """Refuse a workflow that would accept an unsigned call (RISK-REGISTER R15).
 
-    BotForge signs every request to an n8n webhook, but n8n only checks that signature if the
+    Vicero signs every request to an n8n webhook, but n8n only checks that signature if the
     workflow says to — a hand-built or pre-fix workflow accepts a bare `curl` from anyone with
     its URL, bypassing the agent, RBAC and budgets. `workflow` is what we already fetched when
     binding by id; for a pasted URL it is None and we resolve it, because **the URL is what
-    BotForge will actually call**, whatever `workflow_id` accompanied it. A URL that cannot be
+    Vicero will actually call**, whatever `workflow_id` accompanied it. A URL that cannot be
     resolved (no `N8N_API_KEY`, n8n down, a workflow on some other n8n) cannot be verified, so it
     is refused rather than trusted.
     """
@@ -430,14 +430,14 @@ async def _require_signed_workflow(
         except AppError as exc:
             raise AppError(
                 "tools.n8n_unverifiable",
-                f"Could not check that this webhook verifies BotForge's signature ({exc.message}). "
-                "Bind by workflow instead, or set N8N_API_KEY so BotForge can inspect it.",
+                f"Could not check that this webhook verifies Vicero's signature ({exc.message}). "
+                "Bind by workflow instead, or set N8N_API_KEY so Vicero can inspect it.",
                 400,
             ) from exc
         if workflow is None:
             raise AppError(
                 "tools.n8n_unverifiable",
-                "No workflow on BotForge's n8n serves that webhook URL, so BotForge cannot check "
+                "No workflow on Vicero's n8n serves that webhook URL, so Vicero cannot check "
                 f"that it verifies the signature. {FIX_HINT}",
                 400,
             )

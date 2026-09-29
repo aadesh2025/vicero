@@ -264,7 +264,7 @@ export function ChannelsTab() {
 
             <div className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3">
               <div className="flex-1">
-                <div className="text-sm font-medium text-text">“Powered by BotForge” badge</div>
+                <div className="text-sm font-medium text-text">“Powered by Vicero” badge</div>
                 <div className="text-xs text-muted">Show a small attribution in the widget footer.</div>
               </div>
               <Switch checked={w.branding} onCheckedChange={(v) => setW((x) => void (x.branding = v))} />
@@ -503,7 +503,7 @@ const CHANNEL_SPECS: Record<
     label: "Telegram",
     icon: Send,
     fields: [{ key: "bot_token", label: "Bot token (from @BotFather)", secret: true }],
-    hint: "On enable, BotForge auto-registers the webhook with Telegram — nothing else to do.",
+    hint: "On enable, Vicero auto-registers the webhook with Telegram — nothing else to do.",
   },
   whatsapp: {
     label: "WhatsApp (Meta)",

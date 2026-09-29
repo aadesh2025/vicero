@@ -29,7 +29,7 @@ export function DocArticle({
         <h1 className="font-display text-3xl font-semibold tracking-tight text-text">{title}</h1>
         {description && <p className="mt-3 text-base text-muted">{description}</p>}
       </header>
-      <div className="prose prose-botforge max-w-none">
+      <div className="prose prose-vicero max-w-none">
         <MDXRemote source={body} options={{ mdxOptions }} components={components} />
       </div>
     </article>

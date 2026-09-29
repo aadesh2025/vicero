@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# BotForge backup — pg_dump (DB) + tar (uploads volume), both timestamped/compressed, with
+# Vicero backup — pg_dump (DB) + tar (uploads volume), both timestamped/compressed, with
 # shared rotation. See ADR-082: restoring the DB dump alone used to leave every `documents`
 # row pointing at a storage_path/docling_json_path that no longer existed on disk
 # (RISK-REGISTER R1, docs/15 §8.3) — the uploads archive is what fixes that.
 #
 # Cron example (daily 03:15, keep 14 days):
-#   15 3 * * *  BACKUP_DIR=/var/backups/botforge RETENTION_DAYS=14 UPLOADS_DIR=/mnt/uploads /opt/botforge/infra/scripts/backup.sh
+#   15 3 * * *  BACKUP_DIR=/var/backups/vicero RETENTION_DAYS=14 UPLOADS_DIR=/mnt/uploads /opt/vicero/infra/scripts/backup.sh
 #
 # In Docker, run it from a container that can reach postgres AND has the `uploads` volume
 # mounted read-only, e.g.:
@@ -17,9 +17,9 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5432}"
-PGUSER="${PGUSER:-${POSTGRES_USER:-botforge}}"
-PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-botforge}}"
-export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-botforge}}"
+PGUSER="${PGUSER:-${POSTGRES_USER:-vicero}}"
+PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-vicero}}"
+export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-vicero}}"
 # Where the uploads volume is mounted INSIDE this backup container/host (read-only), e.g.
 # /uploads. Empty by default — deliberately: a caller that only ever had DB access (a bare
 # Postgres host, someone's dev machine) must keep working exactly as before, not start failing
@@ -29,7 +29,7 @@ UPLOADS_DIR="${UPLOADS_DIR:-}"
 
 mkdir -p "$BACKUP_DIR"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-DB_OUT="$BACKUP_DIR/botforge_${PGDATABASE}_${STAMP}.sql.gz"
+DB_OUT="$BACKUP_DIR/vicero_${PGDATABASE}_${STAMP}.sql.gz"
 
 echo "[backup] pg_dump $PGDATABASE@$PGHOST:$PGPORT -> $DB_OUT"
 # Custom-format-free plain SQL, gzipped — restore with restore.sh.
@@ -39,7 +39,7 @@ echo "[backup] wrote $(du -h "$DB_OUT" | cut -f1)"
 
 if [ -n "$UPLOADS_DIR" ]; then
   if [ -d "$UPLOADS_DIR" ]; then
-    UPLOADS_OUT="$BACKUP_DIR/botforge_uploads_${STAMP}.tar.gz"
+    UPLOADS_OUT="$BACKUP_DIR/vicero_uploads_${STAMP}.tar.gz"
     echo "[backup] archiving uploads $UPLOADS_DIR -> $UPLOADS_OUT"
     # -C "$UPLOADS_DIR" so the archive holds paths relative to the mount, not the mount's own
     # absolute path — portable to a restore target with a different mount point.
@@ -53,6 +53,6 @@ else
 fi
 
 # Rotate: delete backups (both DB dumps and uploads archives) older than RETENTION_DAYS.
-find "$BACKUP_DIR" \( -name 'botforge_*.sql.gz' -o -name 'botforge_uploads_*.tar.gz' \) \
+find "$BACKUP_DIR" \( -name 'vicero_*.sql.gz' -o -name 'vicero_uploads_*.tar.gz' \) \
      -type f -mtime "+${RETENTION_DAYS}" -print -delete || true
 echo "[backup] done; retention ${RETENTION_DAYS}d"

@@ -144,11 +144,11 @@ test.describe("API authentication page", () => {
 });
 
 test.describe("private admin area", () => {
-  test("sends a signed-out visitor to its own login page, not BotForge's", async ({ page }) => {
+  test("sends a signed-out visitor to its own login page, not Vicero's", async ({ page }) => {
     const response = await page.goto(`${WEB}/vault`);
     await expect(page).toHaveURL(/\/vault\/login$/);
     await expect(page.getByRole("heading", { name: "Private area" })).toBeVisible();
-    // Its own door: no BotForge dashboard chrome, and it must not redirect to /login.
+    // Its own door: no Vicero dashboard chrome, and it must not redirect to /login.
     await expect(page).not.toHaveURL(/\/login\?/);
     const body = (await response?.text()) ?? "";
     for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
@@ -163,8 +163,8 @@ test.describe("private admin area", () => {
     }
   });
 
-  test("a signed-in BotForge account gets nothing from it", async ({ page, context, request }) => {
-    // The two logins must be unrelated: a real, valid BotForge session — even an owner's —
+  test("a signed-in Vicero account gets nothing from it", async ({ page, context, request }) => {
+    // The two logins must be unrelated: a real, valid Vicero session — even an owner's —
     // is worth nothing at this door.
     const account = await createAccount(request, "Vault Isolation Org");
     await authenticateBrowser(context, account);
@@ -175,7 +175,7 @@ test.describe("private admin area", () => {
     for (const phrase of INTERNAL_ONLY) expect(body).not.toContain(phrase);
   });
 
-  test("the reveal endpoint refuses a BotForge session outright", async ({ context, request }) => {
+  test("the reveal endpoint refuses a Vicero session outright", async ({ context, request }) => {
     const account = await createAccount(request, "Vault Reveal Org");
     await authenticateBrowser(context, account);
     const res = await context.request.post(`${WEB}/api/vault/reveal`, { data: { name: "SECRET_KEY" } });
@@ -201,7 +201,7 @@ test.describe("private admin area", () => {
     }
   });
 
-  test("is not offered anywhere in the BotForge dashboard", async ({ page, context, request }) => {
+  test("is not offered anywhere in the Vicero dashboard", async ({ page, context, request }) => {
     const account = await createAccount(request, "Docs Nav Org");
     await authenticateBrowser(context, account);
     await page.goto(`${WEB}/dashboard`);
@@ -213,6 +213,6 @@ test.describe("private admin area", () => {
  * The signed-in path is covered by `src/app/api/vault/vault-routes.test.ts`, not here: it needs
  * a real password hash in the web server's environment, and this suite deliberately runs
  * without any. What this file proves — the door is locked to everyone without the vault's own
- * session, a BotForge session included, and nothing leaks while it is — is the half a real
+ * session, a Vicero session included, and nothing leaks while it is — is the half a real
  * browser can show.
  */

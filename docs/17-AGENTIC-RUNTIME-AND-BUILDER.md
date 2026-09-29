@@ -6,7 +6,7 @@
 
 ## 0. Why this doc exists
 
-BotForge today (per `docs/PROGRESS.md` and the CLAUDE.md session log) is a mature,
+Vicero today (per `docs/PROGRESS.md` and the CLAUDE.md session log) is a mature,
 production-hardened multi-tenant chatbot SaaS: 900+ backend tests, a 7-layer prompt-safety
 stack (`docs/11-SAFETY-GUARDRAILS.md`, Phases A–G), measured hybrid RAG retrieval
 (`docs/13-AI-COOKBOOK-REVIEW.md`, `docs/14-KNOWLEDGE-PIPELINE-V2.md`), and 6+ live channels.
@@ -17,7 +17,7 @@ What it does **not** have:
    generation + at most one bound n8n tool call. There is no loop where the model can call a
    tool, read the result, and decide to call a second tool before answering.
 2. **An in-app visual workflow/agent builder.** All non-chat automation lives in an external
-   n8n instance, outside BotForge's own DB, auth, and guardrail pipeline.
+   n8n instance, outside Vicero's own DB, auth, and guardrail pipeline.
 3. **A pluggable integration contract.** WhatsApp/Instagram/Messenger/Telegram are each a
    bespoke hardcoded module in `apps/api`; there is no typed, versioned contract a new
    integration (first-party or third-party) could implement.
@@ -41,23 +41,23 @@ for each pattern you plan to borrow and each thing you are deliberately leaving 
 What to study:
 - The node type system: `Start`, `Agent`, `MCP Tool`, `Transform`, `If/Else`, `While Loop`,
   `User Approval`, `End`. Read how each node's config schema and runtime behavior are
-  defined — this maps directly onto BotForge's `workflow_steps.node_type` /
+  defined — this maps directly onto Vicero's `workflow_steps.node_type` /
   `node_config` design in §3 below.
 - The **execution engine**: it runs on LangGraph's `StateGraph` for conditional routing,
-  loops, and human-in-the-loop interrupts. BotForge will NOT adopt LangGraph — study the
+  loops, and human-in-the-loop interrupts. Vicero will NOT adopt LangGraph — study the
   *shape* of the state machine (what a "paused on approval" state looks like, how a loop
   node re-enters) and reimplement it against Celery + Postgres (`workflow_runs.status`,
   `workflow_steps` rows) instead.
-- How execution state streams to the UI (Convex reactivity, in their case). BotForge already
+- How execution state streams to the UI (Convex reactivity, in their case). Vicero already
   has a Redis pub/sub hub (shipped 2026-07-20, used for WS delivery) — study *what events*
   they stream per node (started/completed/failed/waiting-for-approval) and reuse that event
-  shape over BotForge's existing WS/SSE infrastructure, not Convex.
+  shape over Vicero's existing WS/SSE infrastructure, not Convex.
 - The MCP Tool node and Settings → MCP Registry: how a user registers a custom MCP server,
   how the tool list is discovered and tested. Note their real limitation: MCP tool-calling
-  only works natively with Anthropic models today — BotForge's MCP client (§4) must not
+  only works natively with Anthropic models today — Vicero's MCP client (§4) must not
   inherit that limitation; make it provider-agnostic from day one.
 - The User Approval node — study exactly what it blocks on and how resumption works. Map
-  this onto BotForge's existing `Handoff` / attention-queue model (ADR-057) rather than
+  this onto Vicero's existing `Handoff` / attention-queue model (ADR-057) rather than
   building a second human-in-the-loop primitive.
 
 Explicitly do NOT bring in: Convex, Clerk, Next.js 16 canary, E2B (evaluate that separately,
@@ -69,15 +69,15 @@ What to study, file by file:
 - `app/agent/manus.py` — the `Manus` agent class. Read `think()` closely: it is the
   ReAct-style decide-next-action step, called in a loop from the base `ToolCallAgent`.
   Note `max_steps: int = 20` and `max_observe: int = 10000` — the only two budget controls
-  in the reference. BotForge's version needs more (§5 — inherited, per-tenant, cost-based).
+  in the reference. Vicero's version needs more (§5 — inherited, per-tenant, cost-based).
 - `app/agent/toolcall.py` (the base class `Manus` extends) — this is where the actual
   think→act→observe loop lives. Read how a tool call result re-enters `self.memory` before
-  the next `think()` call — this is the exact insertion point where BotForge must route the
+  the next `think()` call — this is the exact insertion point where Vicero must route the
   result through `wrap_untrusted()` / `neutralize_injections()` before it becomes visible to
   the model again (§6, non-negotiable).
 - `app/tool/mcp.py` (`MCPClients`, `MCPClientTool`) — the generic MCP client, supporting
   both `stdio` and `sse` transports, connecting to servers declared in `config.toml`. This is
-  the direct model for BotForge's MCP tool provider (§4).
+  the direct model for Vicero's MCP tool provider (§4).
 - `app/tool/browser_use_tool.py`, `app/tool/python_execute.py`, `app/tool/ask_human.py` —
   read these to understand the *tool interface shape* (a tool is a name + schema + async
   `execute()`), not to copy them. **Do not port `BrowserUseTool` or `PythonExecute` in
@@ -86,7 +86,7 @@ What to study, file by file:
 - `app/flow/` (`run_flow.py`, multi-agent flow, the `DataAnalysis` agent) — study how a
   sub-agent is invoked from within a parent agent's loop. This is where the budget
   inheritance rule in §5.3 comes from: OpenManus does **not** enforce a nested budget, and
-  that gap is exactly what BotForge must not repeat.
+  that gap is exactly what Vicero must not repeat.
 
 Note honestly: OpenManus has zero production concerns — no auth, no multi-tenancy, no
 persistence beyond in-memory `Memory`, no guardrails. It is a single-user CLI. Take the loop
@@ -104,7 +104,7 @@ What to study:
 - Any folder under `integrations/` — pick two or three (e.g. an email or CRM integration)
   and read `integration.definition.ts` (the typed contract: `actions`, `events`, `configuration`
   schema, `identifier`/auth requirements) alongside `src/index.ts` (the implementation). This
-  pair is the direct model for BotForge's `IntegrationDefinition` (§8).
+  pair is the direct model for Vicero's `IntegrationDefinition` (§8).
 - `packages/sdk` — how the typed contract is authored once and consumed by both the CLI and
   the runtime.
 - `packages/cli` (`bp init`, `bp deploy`, `bp deploy --visibility public`) — the versioned,
@@ -112,7 +112,7 @@ What to study:
   `bf deploy` in §8, deferred to Phase 5.
 - `interfaces/` — the shared-contract concept (e.g. any channel integration implements a
   common messaging interface) so core logic can target the interface, not each channel SDK.
-  BotForge's WhatsApp/Instagram/Messenger/Telegram modules should eventually converge on one
+  Vicero's WhatsApp/Instagram/Messenger/Telegram modules should eventually converge on one
   interface this way — but that refactor is Phase 5, not Phase 1.
 
 ## 2. Non-negotiable rules (carried over from docs/11, apply here without exception)
@@ -127,7 +127,7 @@ What to study:
 3. **Budgets are inherited, never reset.** If a workflow or agent step spawns a sub-agent or
    nested tool call, it consumes from the **parent turn's remaining** `max_steps` /
    `max_tool_calls` / `max_cost`, never a fresh allowance. (OpenManus does not do this — see
-   §1.2. This is where BotForge must improve on the reference, not copy it.)
+   §1.2. This is where Vicero must improve on the reference, not copy it.)
 4. **Traces store sanitized data only.** The `agent_steps` / `tool_calls` table (§3) never
    persists a raw tool result — it stores the post-guard, post-redaction version, following
    the same rule as `documents.pii_flags` (nullable: never-scanned vs. scanned-clean vs.
@@ -229,7 +229,7 @@ output back to a visitor.
                      stdio / SSE transport, per §1.2
 ```
 
-- n8n is unchanged and remains BotForge's automation/enterprise-integration surface per
+- n8n is unchanged and remains Vicero's automation/enterprise-integration surface per
   CLAUDE.md §6. MCP is a **new, separate** tool provider, not a replacement.
 - MCP server registration is org-scoped: a new `mcp_servers` table
   (`id, organization_id, name, transport, url_or_command, auth_config (encrypted), enabled`).

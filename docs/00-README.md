@@ -1,6 +1,6 @@
-# BotForge — Build Specification (Source of Truth)
+# Vicero — Build Specification (Source of Truth)
 
-This `docs/` folder is the complete specification for **BotForge**, an original,
+This `docs/` folder is the complete specification for **Vicero**, an original,
 enterprise-grade, Botpress-inspired AI chatbot & automation platform. It is written to be
 handed to **Claude Code**, which will build the entire product **phase by phase, task by
 task, without pausing for approval** (see `../CLAUDE.md §1`).

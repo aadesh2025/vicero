@@ -1,4 +1,4 @@
-"""The transactional emails BotForge sends, as (subject, text, html) triples.
+"""The transactional emails Vicero sends, as (subject, text, html) triples.
 
 Deliberately f-strings over a templating engine: four emails don't justify a Jinja
 dependency or a template loader, and a reviewer can see the whole email in one place.
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from html import escape
 
-_BRAND = "BotForge"
+_BRAND = "Vicero"
 
 _FONT = (
     "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
@@ -82,7 +82,7 @@ def verification_email(link: str, token: str) -> tuple[str, str, str]:
         paragraph=f"Confirm this address to finish setting up your {_BRAND} account.",
         cta_label="Verify email",
         link=link,
-        footer="If you didn't create a BotForge account, you can ignore this email.",
+        footer="If you didn't create a Vicero account, you can ignore this email.",
     )
     return subject, text, html
 

@@ -17,7 +17,7 @@ stubbed/deferred, and any gaps waiting on human secrets.
 | 8 | Chat persistence & memory | ✅ | Backend: `app/chat` (assembly, TurnResult runtime, memory summarizer on a small configurable model), shared `app/rag/agent_retrieval`, conversations module (`POST /v1/agents/{id}/chat` SSE+JSON persisting conversations/messages w/ usage/cost/latency/citations; list/detail/messages/patch/delete; long-term memory folds aged-out turns into `memory_summary`), WebSocket `WS /v1/agents/{id}/chat/ws`. Also fixed the published-agent silent-save bug (branch-on-edit, ADR-023). Frontend: `/conversations` two-pane browser + streaming composer through the persisted endpoint; nav item. **Verified live: curl + browser — streaming `conversation`/`token`/`message` events, continuation on the same conversation, persisted history renders, composer streams a persisted turn.** 87 tests pass; ruff+mypy clean. |
 | 9 | Tools & tool calling | ✅ | Backend `app/tools`: built-ins (get_datetime, calculator, knowledge_search, guarded http_request w/ SSRF, web_search stub) each JSON-schema'd; user-defined HTTP tools (templated `{{arg}}`, SSRF-guarded, timeouts); Tool CRUD + `/test` + `/runs`; `run_turn` tool-calling loop (iteration-capped, execute→feed-back→continue) wired into persisted chat + playground; every call logged to `tool_runs`. Frontend: builder Tools tab wired (enable-tools, built-in toggles, HTTP tool builder + test, runs view). **Verified live: qwen3:14b called the `calculator` tool mid-conversation ("47 × 89" → tool run `{expression:"47 * 89"}`→`4183`, used in the answer), and the Tools tab shows the built-in toggled on + the real run.** 97 tests pass; ruff+mypy clean. |
 | 10 | n8n integration | ✅ | Backend `app/integrations/n8n_client` (list/get workflows via public API, HMAC-signed `trigger_webhook`, `verify_callback` w/ replay protection, webhook-URL extraction). `type="n8n"` tool slots into the Phase-9 dispatch/loop (ADR-024): **sync** (Respond to Webhook → fed to model) + **async** (callback resolves a pending `tool_run`). `/v1/tools/n8n/{workflows,bind,callback}`. Starter workflows in `infra/n8n/` + import README. Frontend: `/automations` lists real workflows + bind-as-tool dialog (agent + mode). **Verified live end-to-end: created+activated the echo workflow in the running n8n, bound it, and qwen3:14b called it — the real webhook responded `{received:{message:"n8n works"}}` and the model used it.** 106 tests pass; ruff+mypy clean. |
-| 11 | Web widget | ✅ | Backend `app/modules/public`: `GET /config`, `POST /chat` (SSE + JSON, rate-limited, optional visitor identity, no dashboard auth) + `WS /ws`, keyed by `public_key`; reuses the dashboard runtime (refactored `build_tooling`/`_resolve_provider`/`_finalize_turn` to be org-context-free). `packages/widget`: single dependency-free `widget.js` (Shadow DOM, launcher, streaming, sanitized markdown, quick replies, file attach, theming, `window.BotForge` SDK) → served at `/widget.js`. Frontend: builder Channels tab (color/position/launcher/mode/branding → `persona.widget`, autosaved) with live preview + copyable embed snippet. **Verified live: embedded the snippet on a plain HTML page — the widget loaded its themed config and `BotForge.sendMessage()` streamed a reply from the public endpoint (Shadow-DOM isolated, cross-origin).** 110 tests pass; ruff+mypy clean. |
+| 11 | Web widget | ✅ | Backend `app/modules/public`: `GET /config`, `POST /chat` (SSE + JSON, rate-limited, optional visitor identity, no dashboard auth) + `WS /ws`, keyed by `public_key`; reuses the dashboard runtime (refactored `build_tooling`/`_resolve_provider`/`_finalize_turn` to be org-context-free). `packages/widget`: single dependency-free `widget.js` (Shadow DOM, launcher, streaming, sanitized markdown, quick replies, file attach, theming, `window.Vicero` SDK) → served at `/widget.js`. Frontend: builder Channels tab (color/position/launcher/mode/branding → `persona.widget`, autosaved) with live preview + copyable embed snippet. **Verified live: embedded the snippet on a plain HTML page — the widget loaded its themed config and `Vicero.sendMessage()` streamed a reply from the public endpoint (Shadow-DOM isolated, cross-origin).** 110 tests pass; ruff+mypy clean. |
 | 12 | Messaging channels | ✅ | `app/channels`: a `BaseChannel` adapter interface + registry; Telegram (setWebhook + secret-token verify), WhatsApp (GET verify challenge + `X-Hub-Signature-256`), Slack (v0 signature + `url_verification` + `chat.postMessage`), Discord (Ed25519 interaction verify + PING/PONG + inline slash-command reply). Channel CRUD with **encrypted, masked** tokens; the shared inbound turn factored into `app/chat/inbound.InboundTurn` (also honours handoff-pause). Frontend Channels tab: per-channel connect flows (token entry, enable/disable, webhook URL). **Verified live: a signed Telegram inbound webhook produced a real Groq reply ("Paris.") on a `channel="telegram"` conversation.** Real provider *delivery* is mock-tested (this env can't reach provider hosts / has no public webhook URL). 117 tests pass; ruff+mypy clean. |
 | 13 | Inbox & handoff | ✅ | Handoff triggers (keyword in `app/chat/handoff` + a `request_handoff` built-in tool) pause the bot (`InboundTurn` honours `status="handoff"`); `handoffs` records; inbox endpoints (list/detail/takeover/handback/reply/assign/close/notes/tags); an in-process pub/sub (`app/realtime/hub`) drives the operator inbox WS **and** a widget listen-socket so operator replies reach the end user live. Two-pane Inbox UI wired + realtime. **Verified live end-to-end in the browser: widget user asks for a human → canned handoff message → appears in the inbox → operator takes over + replies → the reply pushes to the widget live → handback → bot resumes.** 123 tests pass; ruff+mypy clean. |
 | 14 | Analytics & metering | ✅ | `app/modules/analytics`: overview (conversations/messages/users/tokens/cost/handoff+resolution rate), usage grouped by day/provider/model, latency (p50/p95/avg via `percentile_cont`), top-questions, unanswered (escalation heuristic), CSV export — all aggregated **live from `messages`/`conversations`/`handoffs`** (org-scoped). `app/worker/rollup`: Celery task upserting `usage_records` + refreshing `quotas` with a threshold event. Frontend: `/analytics` + dashboard stat row/chart wired to real aggregates. **Verified live against real Groq usage: the UI/overview (51 msgs, 3789+956 tokens) matches a direct `messages` aggregate exactly, and the rollup's `usage_records` matches the message sums.** 129 tests pass; ruff+mypy clean. |
@@ -113,7 +113,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   the real `:8000` API's `--reload` watcher picked up this session's backend edits and got
   stuck mid-shutdown ("Waiting for background tasks to complete"), so every browser-driven e2e
   test hung on "Loading your workspace…" regardless of what it tested — not a code regression.
-  Fixed by restarting `botforge-api-1`/`botforge-worker-1`; also found and killed a duplicate
+  Fixed by restarting `vicero-api-1`/`vicero-worker-1`; also found and killed a duplicate
   uvicorn+Celery pair on the keyless :8010 rig left over from earlier in the same long session.
 - **Dual-theme UI redesign, R0–R8 complete (2026-09-27, ADR-099).** `docs/20-UI-REDESIGN-
   DUAL-THEME.md` executed phase by phase: **R0** baseline (35 routes × 2 themes screenshotted,
@@ -155,7 +155,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   per language, nothing written to `localStorage`/`sessionStorage`, no key in the URL — and 18 pages x 2 themes x every tab
   pass axe (which found and fixed two contrast failures in the code themes). **Not done:** no authenticated "Try it" (needs
   the secret in browser JS — left as a future architecture task, as briefed); the example host is `YOUR_API_HOST`, not
-  `api.botforge.ai`, because the real host differs per deployment; not run in the Docker dev container (Docker was down).
+  `api.vicero.ai`, because the real host differs per deployment; not run in the Docker dev container (Docker was down).
 - **API-key explanation moved to the admin area (2026-09-26, ADR-097 addendum).** Reported as "the API key is public".
   Checked in a real browser and by searching every public page and the build output for any real `.env` credential: no
   actual key value was ever public — the page in question explained how `bf_` keys, scopes and revocation work, with
@@ -175,7 +175,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   page down from ~395 KB to ~143 KB; 31 tests pin it. The self-hosting page no longer explains how `SECRET_KEY`
   protects stored credentials. **Not verified in the Docker dev container** (Docker Desktop was down this session).
 - **Private admin area with its own login, `/vault` (2026-09-25, ADR-096).** Replaces the `is_staff` page: a
-  **separate sign-in, unconnected to BotForge accounts**, where only addresses in `VAULT_ADMIN_EMAILS` can enter, with a
+  **separate sign-in, unconnected to Vicero accounts**, where only addresses in `VAULT_ADMIN_EMAILS` can enter, with a
   scrypt-hashed password (`make vault-password`) and an 8-hour signed session. Inside: the internal architecture, all
   215 endpoints (admin tags included) and every configuration entry with its **real value behind a Reveal button** —
   masked in the HTML, fetched per click from a route that re-checks the session and logs the name, never the value.
@@ -234,14 +234,14 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   **Follow-up:** a conversation silenced by the plan now also lands in the Inbox handoff queue with a "plan limit"
   badge (`reason=plan_limit`), so the owner sees waiting visitors; details in docs/18-SELF-SERVE-PLAN.md §8.
 - **n8n bind-time signature enforcement, audit, and a single home for the signing secret (2026-09-25, R15, ADR-089).**
-  Binding an n8n tool now fails unless the workflow verifies BotForge's signature (by id or by pasted URL,
+  Binding an n8n tool now fails unless the workflow verifies Vicero's signature (by id or by pasted URL,
   resolved via the n8n API); `GET /v1/admin/n8n-signature-audit` reports every already-bound tool that
   doesn't; `N8N_WEBHOOK_SIGNING_SECRET` lives only in the root `.env` (`make up` passes both env files).
   New `N8N_REQUIRE_SIGNATURE_CHECK`. R15 (b) — no production n8n — stays open.
 - **n8n webhook signatures are now verified, and the demo workflows live in the repo (2026-09-24, RISK-REGISTER R15).**
-  BotForge signed every call to an n8n webhook, but no workflow checked it: an unsigned `curl` to a
+  Vicero signed every call to an n8n webhook, but no workflow checked it: an unsigned `curl` to a
   workflow URL ran the automation, bypassing the agent, RBAC and budgets.
-  - **Verification** (`infra/n8n/*.json`): `Webhook (rawBody)` -> `Verify BotForge signature` (Code) ->
+  - **Verification** (`infra/n8n/*.json`): `Webhook (rawBody)` -> `Verify Vicero signature` (Code) ->
     `Signature valid?` (IF) -> automation | `401`. Same scheme as `n8n_client.sign()/verify_callback()`:
     hex HMAC-SHA256 of `"<ts>." + raw body`, constant-time, 300 s window, **fails closed** (no secret,
     missing header, no raw body => 401). Applied to the four demo workflows, the provisioning template
@@ -253,14 +253,14 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
     requirement is written up in docs/07 and `infra/n8n/README.md`.
   - **Verified live** against all four demo workflows: an 8-case attack matrix each (no headers, wrong MAC,
     no timestamp, 10-min replay, future timestamp, tampered body, wrong secret, **empty secret**) = all 401;
-    a request signed by BotForge's own `sign()` with a non-ASCII body = accepted and the automation ran;
-    and a real agent turn (BotForge signing, n8n verifying) worked. Then all 7 repo JSONs were imported
+    a request signed by Vicero's own `sign()` with a non-ASCII body = accepted and the automation ran;
+    and a real agent turn (Vicero signing, n8n verifying) worked. Then all 7 repo JSONs were imported
     into n8n and hit signed/unsigned.
   - **Enforcement, not just docs:** `provision-client.mjs` refuses to clone a template without the verify
     node; `tests/test_n8n_workflows_signed.py` pins the structure of every JSON under `infra/n8n/`, runs
     the verifier's real JavaScript under Node against Python `sign()`, and checks no secret/state is
     exported (mutation-checked: unwiring the gate fails it).
-  - **Not covered:** a workflow hand-built in the n8n UI is unverified and BotForge does not inspect nodes
+  - **Not covered:** a workflow hand-built in the n8n UI is unverified and Vicero does not inspect nodes
     at bind time; there is no production n8n yet. R15 stays open for both.
   - **Demo workflows exported** to `infra/n8n/demo-niches/` (Harbor Table Bistro, CityCare Clinic, Luxe Glow
     Salon, Threadline Fabrics) from the live n8n with `staticData` (the test bookings) stripped; the
@@ -451,7 +451,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
     (no uploads volume at all) keeps working unchanged. Same for `restore.sh` with no second arg.
   - **Verified against real Postgres and real client-shaped data, not fixtures.** Ran the actual
     `backup` service's own command (a `postgres:16` container, network-joined to the real dev
-    `botforge-postgres-1`, the real dev `apps/api/var/uploads` bind-mounted read-only in place of
+    `vicero-postgres-1`, the real dev `apps/api/var/uploads` bind-mounted read-only in place of
     the volume): 48 tables dumped, 2993 real uploaded-file entries archived. Restored BOTH into a
     throwaway database and a throwaway directory — `organizations` row count matched source
     exactly (2 = 2) and `diff -rq` between the original uploads directory and the restored one
@@ -847,7 +847,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   wiring, no React Flow canvas, 7 of 11 node types, no test-mode execution against a draft version,
   no Approval→Handoff inbox integration.
   **DB-verified, not just test-suite-verified.** Migration `0023` re-run against the real
-  `botforge-postgres-1` (port 5433): `upgrade head` (no-op, already current) → `downgrade -1`
+  `vicero-postgres-1` (port 5433): `upgrade head` (no-op, already current) → `downgrade -1`
   (`0023_workflows` → `0022_agentic_runtime`) → `upgrade head` (back to `0023_workflows`), all
   three clean. Then a live smoke test through the actual running API (keyless E2E mode, port
   8010, `ALLOW_SELF_SERVE_ORGS=true`) rather than the httpx test client: created a workflow,
@@ -903,7 +903,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   `ruff check` and `mypy app/` clean (206 source files — the initial draft needed four unused
   `type: ignore` comments removed and two `bool()` casts added on `evaluate_condition()`'s
   `==`/`!=` branches once mypy actually ran against it). Migration `0023` applied to the real
-  Postgres (`botforge-postgres-1`, port 5433), then downgraded and re-upgraded — clean both
+  Postgres (`vicero-postgres-1`, port 5433), then downgraded and re-upgraded — clean both
   directions, same check migration `0022` got. All 9 workflow paths confirmed in the live
   OpenAPI schema. `tests/test_workflow_graph.py`'s 27 tests (graph validation, the no-`eval()`
   condition parser incl. a direct code-injection regression case, template escaping,
@@ -922,7 +922,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
 - **docs/17 Phase 1 — Agentic Runtime (2026-08-19).** The first phase of the agentic
   runtime/builder track (`docs/17-AGENTIC-RUNTIME-AND-BUILDER.md`, triggered by name per
   CLAUDE.md §10b — not autonomous). Closes the biggest gap the repo-comparison analysis
-  identified: BotForge's chat path was one retrieval + one generation + at most one bound n8n
+  identified: Vicero's chat path was one retrieval + one generation + at most one bound n8n
   tool call, with no multi-step think→act→observe loop and no generic MCP tool provider.
 
   **What shipped.** `app/chat/budget.AgentBudget` — a single mutable four-dimensional ceiling
@@ -972,7 +972,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
 
   **Verification — the real dev stack, end to end, not the isolated slice.** `ruff check`
   clean across `app/` and `tests/`. `mypy app/` clean (200 source files, strict). Migration
-  `0022` applied to the real Postgres (`botforge-postgres-1`, port 5433), then downgraded and
+  `0022` applied to the real Postgres (`vicero-postgres-1`, port 5433), then downgraded and
   re-upgraded to confirm reversibility — clean both directions. Full suite:
   **950 passed, 4 skipped, 1 failed, 17 warnings in ~173s.** The one failure
   (`test_playground_without_handoff_feature_does_not_trigger`, a 502 where 200 was expected) is
@@ -1017,7 +1017,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
 
 - **Admin console: soft-deleted orgs were never filtered, and two more fixture sources were
   invisible to the sweep (2026-08-05).** Follow-up to the E2E sweep below, after the console
-  still showed `provision@botforge.dev`, `owner@botforge.local`, *Acme Co*, *Globex Inc* and
+  still showed `provision@vicero.dev`, `owner@vicero.local`, *Acme Co*, *Globex Inc* and
   *Deny Default Probe*.
 
   **The code bug:** `admin.service.list_orgs` had no `deleted_at` filter, while `list_users`
@@ -1027,13 +1027,13 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   when" is a real question, just not what the default roster should answer. Regression test
   asserts both directions.
 
-  **The data:** two fixture accounts predate the `%@example.com` rule. `owner@botforge.local`
+  **The data:** two fixture accounts predate the `%@example.com` rule. `owner@vicero.local`
   is `seed.py`'s account and is now swept — its demo org is rebuilt in full by `make seed`, so
   nothing is lost that one command cannot restore.
 
-  **`@botforge.dev` is deliberately NOT swept, and the docstring says why.** It is
+  **`@vicero.dev` is deliberately NOT swept, and the docstring says why.** It is
   `PROVISION_STAFF_EMAIL`, the account `scripts/provision-client.mjs` uses to stand up **real
-  clients** — every org it provisions carries `created_by = provision@botforge.dev`. A pattern
+  clients** — every org it provisions carries `created_by = provision@vicero.dev`. A pattern
   sweep on that domain would have deleted a real client workspace the first time one was
   provisioned through the script. Its leftover test orgs are indistinguishable from a real
   tenant at the schema level, so *Acme Co*, *Globex Inc* and *Deny Default Probe* were removed
@@ -1525,7 +1525,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   `Globex Inc — Starter Automation`, which are still bound as tools and keep working at runtime
   (the runtime calls the stored `webhook_url` and never re-checks visibility) but can no longer
   be discovered or re-bound. The `:5678` inventory could not be touched at all: that instance
-  belongs to the separate AUROZEN AI compose and rejects BotForge's key with 401.
+  belongs to the separate AUROZEN AI compose and rejects Vicero's key with 401.
 - **Logged out seconds after logging in — fixed (2026-07-31).** `AuthGate` bootstraps every page
   load with `Promise.all([me(), listOrgs()])` under a bare `catch` that ran `clearAuth()` and
   bounced to `/login`. Navigating *while that bootstrap is still in flight* **aborts** those
@@ -1598,7 +1598,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   Frontend: `AuthGate`'s zero-org branch renders **`NoWorkspace`** instead of `CreateFirstOrg` — a
   dead end with no form, naming the user's own email so they know which address the invite must go
   to, since offering a button that now always 403s would be worse than offering nothing. The
-  "No account? Create one" line is gone from `/login` (replaced with "Ask your BotForge contact
+  "No account? Create one" line is gone from `/login` (replaced with "Ask your Vicero contact
   for an invitation"); `/signup` stays in the codebase because the invite-accept page needs
   account creation, and a stray direct visit now simply ends at the dead end.
   **A test-only escape was unavoidable:** 29 backend test files and 22 of 23 E2E specs bootstrap
@@ -1655,8 +1655,8 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   both instances on 2026-07-30: on the AUROZEN n8n (`:5678`) **6 of 9** workflows are still
   untagged and therefore visible to every org — `00001 — Load KB`, `00001 — Main Agent`,
   `00002 — Load KB`, `00002 — Main Agent`, `Website Lead — Contact Form` and
-  `BotForge — Echo (sync)`; the three `SHARED — …` ones are already hidden by the name rule. On
-  BotForge's own n8n (`:5679`) all three are untagged (`Acme Co`/`Globex Inc` starter automations
+  `Vicero — Echo (sync)`; the three `SHARED — …` ones are already hidden by the name rule. On
+  Vicero's own n8n (`:5679`) all three are untagged (`Acme Co`/`Globex Inc` starter automations
   and the `TEMPLATE`, which should be `internal` so no client can bind it).
 - **One-command client provisioning (2026-07-30).** `scripts/provision-client.mjs` takes
   `--name` / `--email` / `--plan` and stands a client up end to end: org → agent (starter
@@ -1686,9 +1686,9 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   now left strictly alone — nor is its unreviewed draft published behind its owner's back.
   **Infra:** the bundled dev `n8n` service now takes `N8N_HOST_PORT` (default 5678, so the
   canonical setup is unchanged) and sets `N8N_DIAGNOSTICS_ENABLED=false` — n8n resolves
-  `telemetry.n8n.io` at boot and *exits* when DNS fails, which is why `botforge-n8n-1` had been
+  `telemetry.n8n.io` at boot and *exits* when DNS fails, which is why `vicero-n8n-1` had been
   dead for two days on this machine. It now runs on **5679**, isolated from the unrelated n8n
-  on 5678 that belongs to another project; BotForge creating and activating workflows in
+  on 5678 that belongs to another project; Vicero creating and activating workflows in
   someone else's instance is not acceptable, so `.env` points at its own.
   **Still needs a human:** the n8n API key (n8n → Settings → API, with workflow
   read/list/create/update/activate scopes) and a staff account for
@@ -1806,7 +1806,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   boundaries. The real docs.n8n.io page is committed as a test fixture — one test pins the
   *old* broken behaviour so the file documents what was wrong, others assert the nav is gone
   and the first chunk is content. 8 tests.
-- **Creating an organization is staff-only (2026-07-29).** BotForge is run as one org per
+- **Creating an organization is staff-only (2026-07-29).** Vicero is run as one org per
   client, provisioned for them — not a self-serve product where anyone spins up as many as
   they like. A client seeing "New organization" invites an empty, confusing second org.
   `OrgSwitcher` now gates the create item + dialog on `is_staff` (the same
@@ -1909,7 +1909,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   `whatsapp_window_closed` (409) per CLAUDE.md §8 instead of a swallowed no-op. Meta's own
   `131047` is honoured too, in case our clock disagrees. `send_template()` posts
   `type: "template"` with positional body params; approved names live on `Channel.config`
-  (`templates`, comma-separated — Meta approval is a Meta-side process BotForge can't do).
+  (`templates`, comma-separated — Meta approval is a Meta-side process Vicero can't do).
   `InboxDetail.send_window` reports `{open, closes_at, templates}` (null on channels with no
   such limit), and the composer swaps the free-text box for a warning + template picker when
   it's shut. 7 backend tests, 3 Playwright checks.
@@ -2012,7 +2012,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   per request; only the bug fix was re-applied.)
 - **Widget preview single-host + sidebar flex fix (2026-07-27).** (1) A reported preview "overlap"
   (a white panel + dark launcher behind the themed one) was diagnosed live in the real Channels tab
-  (Playwright): exactly **one** `#botforge-widget` host — not a duplicate mount. Hardened `widget.js`
+  (Playwright): exactly **one** `#vicero-widget` host — not a duplicate mount. Hardened `widget.js`
   anyway: `build()` removes any pre-existing host first (idempotency), and now builds the widget
   **detached and themes it before inserting into the DOM**, so there's no unstyled/default first
   paint (the white/black flash the screenshot caught). New Playwright asserts a single host across
@@ -2061,12 +2061,12 @@ Check the Model tab against this list before publishing.
   `scripts/tag-n8n-workflows.mjs --apply` stops at its preflight and the whole inventory stays
   untagged — which under deny-by-default means invisible to every org. Mint a key with tag
   read/create **plus** workflow "update tags" (n8n → Settings → API) and re-run. Separately, the
-  `:5678` instance (AUROZEN AI's, not BotForge's) rejects BotForge's key with 401, so its
+  `:5678` instance (AUROZEN AI's, not Vicero's) rejects Vicero's key with 401, so its
   workflows can only be tagged with that project's own key or by hand in its UI.
-- **Two `:5678` workflow groups have no BotForge org to map to.** `00001 — Load KB` /
+- **Two `:5678` workflow groups have no Vicero org to map to.** `00001 — Load KB` /
   `00001 — Main Agent`, `00002 — …`, and `Website Lead — Contact Form` have no corresponding
   `organizations` row (checked by slug and by name), and `Website Lead — Contact Form` is bound
-  as a tool by nobody. They look like AUROZEN AI clients rather than BotForge tenants; decide per
+  as a tool by nobody. They look like AUROZEN AI clients rather than Vicero tenants; decide per
   workflow whether to create the org, tag it `internal`, or leave it to the other project.
 - **No `PATCH /v1/auth/me`, so the profile page can't be edited.** Name and email render
   read-only (2026-07-30) because the endpoint doesn't exist — the page previously showed inputs
@@ -2083,7 +2083,7 @@ Check the Model tab against this list before publishing.
   They're harmless but they're also exactly how this bug happened — a fixture sitting in the tree
   long enough to look importable. Delete them once nothing is mid-flight against those screens.
 - ✅ ~~**Consider deny-by-default for n8n visibility**~~ **DONE (2026-07-31, ADR-042)** — untagged
-  is now visible-to-none. The alternative floated at the time, a BotForge-side
+  is now visible-to-none. The alternative floated at the time, a Vicero-side
   `workflow_id → org_id` mapping table that doesn't depend on the operator remembering to tag, is
   still the more robust design and worth revisiting if tagging discipline slips; n8n tags were
   kept because they need no migration and no second place to look.

@@ -83,6 +83,9 @@ class OutputVerdict:
     #: `{kind: count}` of contact details redacted from the reply. Counts only — the values
     #: are what we are trying not to disclose, so they are never carried or logged.
     pii_redacted: dict[str, int] = field(default_factory=dict)
+    #: `{kind: count}` of contact details left in the reply *because the customer typed them in this
+    #: conversation* (see `pii.customer_supplied_contacts`). Counts only, for the same reason.
+    pii_echoed: dict[str, int] = field(default_factory=dict)
 
     @property
     def violated(self) -> bool:
@@ -95,8 +98,29 @@ def redact_pii(
     *,
     regions: list[str] | None = None,
     redact_addresses: bool = False,
+    customer_supplied: set[str] | None = None,
 ) -> tuple[str, dict[str, int]]:
+    """`redact_pii_detailed` without the echo counts — the shape every older caller expects."""
+    out, redacted, _ = redact_pii_detailed(
+        text, allowlist, regions=regions, redact_addresses=redact_addresses, customer_supplied=customer_supplied
+    )
+    return out, redacted
+
+
+def redact_pii_detailed(
+    text: str,
+    allowlist: set[str],
+    *,
+    regions: list[str] | None = None,
+    redact_addresses: bool = False,
+    customer_supplied: set[str] | None = None,
+) -> tuple[str, dict[str, int], dict[str, int]]:
     """Strip contact details the org has not published, leaving allowlisted ones intact.
+
+    Returns `(text, redacted_counts, echoed_counts)`. A match survives in exactly two cases, kept
+    deliberately separate: it is in `allowlist` (the org's own public contacts), or it is in
+    `customer_supplied` (something the customer typed themselves in this conversation, reflected
+    back to them — `pii.customer_supplied_contacts`). Addresses are never exempted by the second.
 
     The allowlist is the whole point: a support agent saying "email support@theirbusiness.com"
     is the product working, and an agent that cannot give out its own support address is
@@ -105,9 +129,10 @@ def redact_pii(
     """
     matches = find_pii(text, regions=regions, include_addresses=redact_addresses)
     if not matches:
-        return text, {}
+        return text, {}, {}
 
     counts: dict[str, int] = {}
+    echoed: dict[str, int] = {}
     out = []
     cursor = 0
     for m in matches:
@@ -115,12 +140,15 @@ def redact_pii(
             continue
         if is_allowlisted(m.value, allowlist):
             continue
+        if customer_supplied and m.kind in ("phone", "email") and is_allowlisted(m.value, customer_supplied):
+            echoed[m.kind] = echoed.get(m.kind, 0) + 1
+            continue
         out.append(text[cursor : m.start])
         out.append(PII_REPLACEMENT)
         counts[m.kind] = counts.get(m.kind, 0) + 1
         cursor = m.end
     out.append(text[cursor:])
-    return "".join(out), counts
+    return "".join(out), counts, echoed
 
 
 def _shingles(text: str, n: int = _SHINGLE_N) -> set[str]:
@@ -173,6 +201,7 @@ def apply(
     pii_allowlist: set[str] | None = None,
     pii_regions: list[str] | None = None,
     redact_addresses: bool = False,
+    customer_supplied: set[str] | None = None,
 ) -> OutputVerdict:
     """Return a verdict whose `text` is safe to send and to persist.
 
@@ -186,9 +215,14 @@ def apply(
     verdict = inspect(reply, protected_prompt, leak_threshold=leak_threshold)
     safe = redact_secrets(verdict.text)
     pii_counts: dict[str, int] = {}
+    pii_echoed: dict[str, int] = {}
     if pii_allowlist is not None:
-        safe, pii_counts = redact_pii(
-            safe, pii_allowlist, regions=pii_regions, redact_addresses=redact_addresses
+        safe, pii_counts, pii_echoed = redact_pii_detailed(
+            safe,
+            pii_allowlist,
+            regions=pii_regions,
+            redact_addresses=redact_addresses,
+            customer_supplied=customer_supplied,
         )
     if verdict.violated:
         # A suppression replaces the whole reply, so any redaction above is moot — but the
@@ -201,6 +235,7 @@ def apply(
         leak_score=verdict.leak_score,
         changed=safe != reply,
         pii_redacted=pii_counts,
+        pii_echoed=pii_echoed,
     )
 
 

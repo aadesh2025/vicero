@@ -95,7 +95,7 @@ class InvitationOut(BaseModel):
     # Raw accept token — returned ONLY outside production (email delivers it in prod).
     # Lets local/dev/CI accept an invite without a live SMTP inbox.
     accept_token: str | None = None
-    # Whether this address already has a BotForge account, so the admin knows to tell them
+    # Whether this address already has a Vicero account, so the admin knows to tell them
     # "sign in with your usual password" rather than "create an account".
     account_exists: bool = False
 

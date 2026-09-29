@@ -70,10 +70,10 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// BotForge signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-botforge-signature'] || '');\nconst ts = String(h['x-botforge-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
+        "jsCode": "// Vicero signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-vicero-signature'] || '');\nconst ts = String(h['x-vicero-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
       },
       "id": "11ae42c8-ae44-5d12-829e-e35ad88a4d44",
-      "name": "Verify BotForge signature",
+      "name": "Verify Vicero signature",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -138,7 +138,7 @@
       "main": [
         [
           {
-            "node": "Verify BotForge signature",
+            "node": "Verify Vicero signature",
             "type": "main",
             "index": 0
           }
@@ -156,7 +156,7 @@
         ]
       ]
     },
-    "Verify BotForge signature": {
+    "Verify Vicero signature": {
       "main": [
         [
           {

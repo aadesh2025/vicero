@@ -17,7 +17,9 @@ import { useFeature } from "@/components/plan/use-plan";
 import { useSession } from "@/lib/store/session";
 import { ApiError } from "@/lib/api/client";
 
-const N8N_URL = "http://localhost:5678";
+// Public URL of the n8n editor. Baked in at build time (NEXT_PUBLIC_*), like NEXT_PUBLIC_API_BASE_URL.
+// Prod: https://n8n.<your-domain>. It was hard-coded to localhost, which is a dead link on a VPS.
+const N8N_URL = (process.env.NEXT_PUBLIC_N8N_URL || "http://localhost:5678").replace(/\/$/, "");
 
 function toToolName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "workflow";

@@ -103,7 +103,7 @@ function CanvasInner({ workflow, agentId }: { workflow: ApiWorkflow; agentId: st
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const type = e.dataTransfer.getData("application/botforge-node-type") as WorkflowNodeType;
+      const type = e.dataTransfer.getData("application/vicero-node-type") as WorkflowNodeType;
       const meta = NODE_TYPE_BY_ID[type];
       if (!meta) return;
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });

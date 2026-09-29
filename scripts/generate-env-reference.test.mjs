@@ -12,7 +12,7 @@ import { test } from "node:test";
 
 import { parseEnvExample } from "./generate-env-reference.mjs";
 
-const FIXTURE = `# BotForge environment. Copy to .env and fill in.
+const FIXTURE = `# Vicero environment. Copy to .env and fill in.
 # A file-level note that belongs to no variable.
 
 # ── Core ─────────────────────────────────────────────────────────────────────

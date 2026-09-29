@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -117,6 +118,41 @@ def build_allowlist(entries: list[str] | None) -> set[str]:
 
 def is_allowlisted(value: str, allowlist: set[str]) -> bool:
     return _normalize_contact(value) in allowlist
+
+
+# A digit run a person typed as a phone number: optional +, then digits with the usual separators.
+# Deliberately looser than `find_pii()` (which wants a `+`, a separator or a nearby "call"): this
+# only ever builds a *permit* list of values the customer literally typed, so over-matching here
+# can exempt a number the customer wrote themselves, never one they did not.
+_TYPED_PHONE = re.compile(r"\+?\d[\d ().\-\u00a0\t]{5,}\d")
+
+
+def customer_supplied_contacts(texts: Iterable[str | None]) -> set[str]:
+    """Normalised emails and phone numbers the **customer typed themselves** in `texts`.
+
+    This is the second, separate exemption from egress redaction. `build_allowlist()` (the org's
+    `public_contacts`) is the business's own contact details, which any visitor may be given. This
+    is different in kind: a value the customer wrote in this conversation, reflected back to that
+    same customer — "I have you down as +91 98450 12345" — is not a disclosure, it is the product
+    confirming what it was told. Scrubbing it (to "our contact page") makes every booking read-back
+    look broken.
+
+    **Callers must pass only the customer's own turns** (`role == "user"`). Never the reply, tool
+    output, retrieved context or a model-written summary: anything the model *produced or pulled
+    from elsewhere* is exactly what egress redaction exists to stop. Addresses and secrets are never
+    exempted — only emails and phone numbers.
+    """
+    found: set[str] = set()
+    for text in texts:
+        if not text:
+            continue
+        for m in _EMAIL.finditer(text):
+            found.add(_normalize_contact(m.group(0)))
+        for m in _TYPED_PHONE.finditer(text):
+            digits = re.sub(r"\D", "", m.group(0))
+            if 7 <= len(digits) <= 15:
+                found.add(_normalize_contact(m.group(0)))
+    return found
 
 
 def _matchable(text: str) -> str:

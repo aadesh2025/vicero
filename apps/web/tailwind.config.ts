@@ -119,12 +119,12 @@ const config: Config = {
         "caret-blink": "caret-blink 1.1s ease-in-out infinite",
         "bar-grow": "bar-grow 300ms ease-out both",
       },
-      // `prose-botforge` maps the typography plugin onto the app's own tokens, so docs
+      // `prose-vicero` maps the typography plugin onto the app's own tokens, so docs
       // inherit the palette instead of introducing a second one. Because every colour is a
       // token, light/dark are handled by `.dark` in globals.css — there is no `prose-invert`
       // and adding one would fight the tokens.
       typography: {
-        botforge: {
+        vicero: {
           css: {
             "--tw-prose-body": solid("--muted"),
             "--tw-prose-headings": solid("--text"),

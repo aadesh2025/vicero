@@ -3,7 +3,7 @@
 ## Why the heuristic had to go
 
 `estimate_tokens` returned `len(text) / 4`. That is roughly right for English prose and wrong
-in the way that matters most for this product: **it is wildly wrong for the languages BotForge
+in the way that matters most for this product: **it is wildly wrong for the languages Vicero
 is deployed into.** cl100k_base spends 3-6 tokens on a single Tamil or Devanagari word, so a
 1000-character Tamil chunk that the heuristic reported as 250 tokens is nearer 800. Every
 downstream number computed from it — the reported `token_count`, and now the chunker's size

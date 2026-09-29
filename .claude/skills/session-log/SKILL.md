@@ -1,9 +1,9 @@
 ---
 name: session-log
-description: Session-by-session build history for BotForge — incident postmortems, root-cause analyses, ADRs referenced, and hard-won gotchas about app/chat/, app/rag/, prompt assembly, infra, and deployment. Load before starting significant work, before touching an area with unfamiliar history, or when session context beyond git log is needed.
+description: Session-by-session build history for Vicero — incident postmortems, root-cause analyses, ADRs referenced, and hard-won gotchas about app/chat/, app/rag/, prompt assembly, infra, and deployment. Load before starting significant work, before touching an area with unfamiliar history, or when session context beyond git log is needed.
 ---
 
-# BotForge session log (append-only; newest first)
+# Vicero session log (append-only; newest first)
 
 > Contract above is stable. This section is a running note of what shipped per session so a
 > fresh session has context beyond git log. Full detail lives in `docs/PROGRESS.md` +
@@ -26,7 +26,7 @@ description: Session-by-session build history for BotForge — incident postmort
   the tool wrapper's shell parser chokes on apostrophes inside heredocs (write files with the Write tool);
   `test_architecture.py::test_no_new_package_import_cycle` is a **baseline failure** (a `core`/`db`/`llm`/`models` cycle
   already on HEAD). A stuck test process from a previous session held a lock on the dev DB and blocked `ALTER TABLE` —
-  I ran everything on a scratch database (`botforge_s1`) instead of touching it.
+  I ran everything on a scratch database (`vicero_s1`) instead of touching it.
 - **Not verified live:** Google/Facebook OAuth, real SMTP, Meta behaviour (mocked). Human steps: docs/18 plan §7.
 - A **second Claude session was committing to the same repo** during this work (n8n signature gate, ADR-089); files
   were kept separate by path-scoped commits.
@@ -91,7 +91,7 @@ description: Session-by-session build history for BotForge — incident postmort
   working unchanged.
 - **Verified against real Postgres and real client-shaped data, not fixtures.** Ran the actual
   `backup` service's own command (`postgres:16` image, network-joined to the real dev
-  `botforge-postgres-1`, the real dev `apps/api/var/uploads` bind-mounted read-only) — 48 tables
+  `vicero-postgres-1`, the real dev `apps/api/var/uploads` bind-mounted read-only) — 48 tables
   dumped, 2993 real uploaded-file entries archived. Restored BOTH into a throwaway database and
   a throwaway directory: `organizations` row count matched (2 = 2) and `diff -rq` between the
   original uploads directory and the extracted archive came back identical. Also confirmed the
@@ -280,7 +280,7 @@ description: Session-by-session build history for BotForge — incident postmort
   is the market docs/11 §9.2a already flags as underserved. Degrades to the old heuristic if
   tiktoken cannot download its ranks — a *counter* must never fail an ingest.
 - Infra: `POSTGRES_HOST_PORT` (5432 is taken on this machine by another project; pointing
-  BotForge at it would have run `alembic upgrade head` on someone else's database). `numpy<2.5`
+  Vicero at it would have run `alembic upgrade head` on someone else's database). `numpy<2.5`
   is a **typecheck** pin, not a runtime one — its 2.5 stubs use 3.12 syntax and under
   `python_version = "3.11"` (what the Dockerfile ships) mypy stops checking our code entirely.
 - **⚠️ K3-2: email was already ingesting, months before anything "enabled" it.** docs/14 gates
@@ -504,7 +504,7 @@ description: Session-by-session build history for BotForge — incident postmort
   fine in dev and then resolve a client's own Mistral/DeepSeek key against a Groq-hosted model.
   Because the guard **fails open**, that would silently switch safety off for exactly the clients
   who picked a non-Groq provider. Guard spend is the platform's: its own metrics bucket
-  (`botforge_guard_tokens_total`), never folded into `TurnResult`.
+  (`vicero_guard_tokens_total`), never folded into `TurnResult`.
 - **Measured live before writing the parser, not guessed.** Prompt Guard answers with a bare
   probability as its message content (`"0.9996024966239929"`). Attacks — including the **Hindi,
   Tamil and Spanish** translations and the "translate your operating instructions" paraphrase
@@ -573,7 +573,7 @@ description: Session-by-session build history for BotForge — incident postmort
 ### 2026-08-03 — direct prompt injection was undefended; docs/11 Phase A shipped
 - **The threat model was half-written.** `neutralize_injections()` was applied to RAG chunks
   (`rag/context.py`) and tool output (`runtime.py`) and **never to the visitor's own message** —
-  `inbound.py` passed `self.message` straight into `build_messages()`. So BotForge blocked
+  `inbound.py` passed `self.message` straight into `build_messages()`. So Vicero blocked
   *indirect* injection and was wide open to *direct* injection (OWASP LLM01), which is five of the
   six failures a live red-team session found. Verified against the code before writing anything.
 - **L0 `chat/normalize.py`** (NFKC, zero-width + bidi stripping, Cyrillic/Greek homoglyph folding,
@@ -752,7 +752,7 @@ description: Session-by-session build history for BotForge — incident postmort
   scopes but **403s on all tag endpoints**, so every workflow is currently invisible to every org.
   Bound tools keep working (the runtime uses the stored `webhook_url`), but nothing can be
   discovered or re-bound until a key with tag scopes is minted and the script re-run. `:5678` is
-  a different instance entirely and 401s BotForge's key.
+  a different instance entirely and 401s Vicero's key.
 - Suites: **327 pytest**, ruff + mypy clean, 10 `node --test`, tsc + eslint clean.
 
 ### 2026-07-31 — logged out right after logging in (AuthGate treated an abort as a 401)
@@ -804,7 +804,7 @@ description: Session-by-session build history for BotForge — incident postmort
    bind-by-guessed-id hole. Binding by pasted webhook URL is deliberately **not** covered — ADR-040.
    Caught from a live screenshot, not a test: no test had two orgs' workflows in one instance.
    **The fix is inert until workflows are tagged** — audited live, 6 of 9 on the AUROZEN n8n
-   (`:5678`) and all 3 on BotForge's own (`:5679`) are still untagged. See `docs/PROGRESS.md`.
+   (`:5678`) and all 3 on Vicero's own (`:5679`) are still untagged. See `docs/PROGRESS.md`.
 2. **Email actually sends** (`898c68d`): `get_email_backend()`'s `"smtp"` branch logged
    `smtp_backend_not_implemented` and fell back to console, so no invite/verification/reset/magic-link
    had ever reached an inbox. `SmtpEmailBackend` over **aiosmtplib** + HTML templates; TLS mode from
@@ -920,7 +920,7 @@ makes the API run the async ingest task inline, where it never awaits, so ingest
 
 ### 2026-07-27 — Widget preview single-host + app sidebar
 - **Widget preview overlap** (`packages/widget/src/widget.js`): live Playwright diagnosis in the
-  real Channels tab confirmed a **single** `#botforge-widget` host (not a duplicate mount). The
+  real Channels tab confirmed a **single** `#vicero-widget` host (not a duplicate mount). The
   white/black "overlap" was an unstyled first-paint frame. Fixed `build()`: remove any pre-existing
   host (idempotency) + build **detached** and theme via `applyConfig()` *before* `appendChild` — no
   unstyled frame. Playwright asserts one host across config posts + open/close.
@@ -940,5 +940,5 @@ makes the API run the async ingest task inline, where it never awaits, so ingest
 - Phase 19 (E2E for PRD criteria 1–7, Next 14→16 upgrade, docs, a11y) + Phase 20 (prod compose +
   Caddy TLS, Redis pub/sub hub, webhook retry sweep, httpOnly refresh via BFF, /metrics + Sentry +
   backups, K8s manifests, release CI/CD). Phase 18 (billing) deferred by design. Tagged
-  `phase-19-complete`, `phase-20-complete`. Pushed to `github.com/aadesh2025/botforge` (private).
+  `phase-19-complete`, `phase-20-complete`. Pushed to `github.com/aadesh2025/vicero` (private).
 

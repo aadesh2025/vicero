@@ -30,7 +30,7 @@ CI presumably has network access; this was not verified.
 
 ## Local environment notes
 
-* Containers up: `botforge-postgres-1` (host port **5750**), `botforge-redis-1`. At the time of the first baseline `.env` said
+* Containers up: `vicero-postgres-1` (host port **5750**), `vicero-redis-1`. At the time of the first baseline `.env` said
   5433; the verification pass (see below) changed the gitignored `.env` and `infra/.env` to 5750, so no override is needed now.
 * Python 3.14 in `.venv` (CLAUDE.md says 3.11); everything above still passed.
 
@@ -50,4 +50,4 @@ CI presumably has network access; this was not verified.
 | Playwright (isolated stack: fake-LLM API :8010, worker on Redis db 5, `next start` :3002) | 66 passed, 7 failed. The same 7 fail identically on the pre-work API code (worktree at f1957d4), so they are pre-existing: `10-sidebar`, `15-canned-responses` x2, `16-macros` x2, `25-dashboard-real-data` (empty-state test), `31-workflow-run-history`. Cause not investigated |
 
 `npm run test:e2e` (the wrapper that sweeps `@example.com` fixtures) was deliberately not used: its cleanup also deletes the
-`@botforge.local` seed account. The raw `playwright test` leaves ~53+ fixture orgs in the dev DB; `make clean-devdata` removes them.
+`@vicero.local` seed account. The raw `playwright test` leaves ~53+ fixture orgs in the dev DB; `make clean-devdata` removes them.

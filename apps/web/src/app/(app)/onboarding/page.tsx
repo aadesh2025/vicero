@@ -27,7 +27,7 @@ export default function OnboardingPage() {
         <Bot className="size-7" />
       </span>
       <h1 className="mt-6 font-display text-3xl font-extrabold tracking-tight text-text">
-        {first ? `Welcome, ${first}.` : "Welcome to BotForge."}
+        {first ? `Welcome, ${first}.` : "Welcome to Vicero."}
       </h1>
       <p className="mt-2 font-medium text-muted">
         Your workspace is ready and your 10-day free trial has started. Create your first agent — pick a role

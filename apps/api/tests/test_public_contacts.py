@@ -15,6 +15,8 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from app.llm.fake import FakeChatProvider
+
 SUPPORT_EMAIL = "support@acme.com"
 SUPPORT_PHONE = "+91 80 4000 1000"
 
@@ -122,7 +124,10 @@ async def test_only_org_managers_can_change_the_allowlist(client: AsyncClient) -
 # ── The behaviour the allowlist exists for: both directions, same value ──────────────────
 
 
-async def test_an_allowlisted_contact_reaches_the_visitor(client: AsyncClient) -> None:
+async def test_an_allowlisted_contact_reaches_the_visitor(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(FakeChatProvider, "scripted_reply", f"Reach us on {SUPPORT_EMAIL} or {SUPPORT_PHONE}.")
     headers = await _org(client, "pc.allowed@example.com", "PC Allowed")
     await client.patch(
         f"/v1/orgs/{headers['X-Org-Id']}",
@@ -130,10 +135,10 @@ async def test_an_allowlisted_contact_reaches_the_visitor(client: AsyncClient) -
         headers=headers,
     )
     aid = await _agent(client, headers)
-    # The Fake provider echoes the visitor, so the reply carries these values back out.
+    # The scripted model reply carries these values out; the visitor typed none of them.
     r = await client.post(
         f"/v1/agents/{aid}/chat",
-        json={"message": f"is {SUPPORT_EMAIL} or {SUPPORT_PHONE} the right contact?", "stream": False},
+        json={"message": "what is the right contact?", "stream": False},
         headers=headers,
     )
     content = r.json()["content"]
@@ -142,14 +147,15 @@ async def test_an_allowlisted_contact_reaches_the_visitor(client: AsyncClient) -
 
 
 async def test_the_same_contact_is_redacted_for_an_org_that_has_not_allowlisted_it(
-    client: AsyncClient,
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(FakeChatProvider, "scripted_reply", f"Reach us on {SUPPORT_EMAIL} or {SUPPORT_PHONE}.")
     """Identical value, identical message — only the allowlist differs."""
     headers = await _org(client, "pc.denied@example.com", "PC Denied")
     aid = await _agent(client, headers)
     r = await client.post(
         f"/v1/agents/{aid}/chat",
-        json={"message": f"is {SUPPORT_EMAIL} or {SUPPORT_PHONE} the right contact?", "stream": False},
+        json={"message": "what is the right contact?", "stream": False},
         headers=headers,
     )
     content = r.json()["content"]
@@ -158,7 +164,12 @@ async def test_the_same_contact_is_redacted_for_an_org_that_has_not_allowlisted_
     assert "our contact page" in content
 
 
-async def test_allowlisting_one_contact_does_not_allowlist_another(client: AsyncClient) -> None:
+async def test_allowlisting_one_contact_does_not_allowlist_another(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        FakeChatProvider, "scripted_reply", f"Mail {SUPPORT_EMAIL} or the founder at founder.personal@gmail.com."
+    )
     """The allowlist is per-value, not a switch that turns redaction off for the org."""
     headers = await _org(client, "pc.mixed@example.com", "PC Mixed")
     await client.patch(
@@ -167,7 +178,7 @@ async def test_allowlisting_one_contact_does_not_allowlist_another(client: Async
     aid = await _agent(client, headers)
     r = await client.post(
         f"/v1/agents/{aid}/chat",
-        json={"message": f"mail {SUPPORT_EMAIL} or the founder at founder.personal@gmail.com", "stream": False},
+        json={"message": "what is the right contact?", "stream": False},
         headers=headers,
     )
     content = r.json()["content"]

@@ -1,7 +1,7 @@
 """Guardrails: blocked topics, prompt-injection defence, output redaction.
 
 Threat model (docs/11 §1, docs/06 §3, docs/02 §Security):
-- **Untrusted content is anything BotForge did not write.** That means retrieved RAG chunks,
+- **Untrusted content is anything Vicero did not write.** That means retrieved RAG chunks,
   tool output, *and the visitor's own message*. The first two were defended from Phase 16;
   the third was not, which is the asymmetry docs/11 §1.1 was written about — direct prompt
   injection (OWASP LLM01) walked straight through while indirect injection was blocked.
@@ -133,7 +133,7 @@ _DELIMITER_ESCAPE = [
 _SECRET_PATTERNS = [
     re.compile(r"\bsk-[A-Za-z0-9]{20,}\b"),  # OpenAI-style keys
     re.compile(r"\bgsk_[A-Za-z0-9]{20,}\b"),  # Groq keys
-    re.compile(r"\bbf_[A-Za-z0-9_\-]{20,}\b"),  # BotForge API keys
+    re.compile(r"\bbf_[A-Za-z0-9_\-]{20,}\b"),  # Vicero API keys
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),  # AWS access key id
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),  # Slack tokens
     re.compile(r"\b(?:\d[ -]?){13,16}\b"),  # card-like number runs

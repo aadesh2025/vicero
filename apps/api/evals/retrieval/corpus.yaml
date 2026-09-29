@@ -1,7 +1,7 @@
 # Retrieval eval corpus — seed set (docs/13 R2, docs/14 P0-2).
 #
 # A support knowledge base for a fictional clothing/fabric retailer, which is the shape of a
-# real BotForge client. Deliberately built to be HARD for a lexical retriever:
+# real Vicero client. Deliberately built to be HARD for a lexical retriever:
 #
 #   * every document has at least one NEAR-MISS SIBLING that shares most of its vocabulary and
 #     answers a different question (domestic vs international refunds, store hours vs support

@@ -1,7 +1,7 @@
 [project]
-name = "botforge-api"
+name = "vicero-api"
 version = "0.1.0"
-description = "BotForge API — FastAPI backend for the AI chatbot & automation platform"
+description = "Vicero API — FastAPI backend for the AI chatbot & automation platform"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

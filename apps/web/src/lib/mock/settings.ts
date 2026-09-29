@@ -55,7 +55,7 @@ export interface WebhookEndpoint {
 }
 
 export const webhooks: WebhookEndpoint[] = [
-  { id: "w1", url: "https://n8n.local/webhook/botforge", events: ["message.created", "handoff.requested"], status: "active", lastDelivery: "2026-07-17T06:38:00Z" },
+  { id: "w1", url: "https://n8n.local/webhook/vicero", events: ["message.created", "handoff.requested"], status: "active", lastDelivery: "2026-07-17T06:38:00Z" },
   { id: "w2", url: "https://hooks.aurozen.ai/analytics", events: ["conversation.closed"], status: "failing", lastDelivery: "2026-07-17T03:10:00Z" },
 ];
 

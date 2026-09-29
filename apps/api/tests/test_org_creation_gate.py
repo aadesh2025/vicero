@@ -1,6 +1,6 @@
 """Creating an organization is staff-only — with no first-org exception.
 
-BotForge is run as one organization per client, provisioned for them. The gate used to allow
+Vicero is run as one organization per client, provisioned for them. The gate used to allow
 every user their *first* org, which is what made the product self-serve: a stranger could sign
 up on the public form and the create-first-org screen handed them a workspace. Now every
 creation needs `is_staff`. Enforced server-side: hiding the button doesn't stop a direct API call.

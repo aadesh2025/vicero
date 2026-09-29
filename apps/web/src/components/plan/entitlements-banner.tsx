@@ -106,7 +106,7 @@ export function EntitlementsBanner() {
             )}
           </p>
         </div>
-        <ContactUsButtons subject="Renew my BotForge workspace" />
+        <ContactUsButtons subject="Renew my Vicero workspace" />
       </div>
     );
   }
@@ -136,7 +136,7 @@ export function EntitlementsBanner() {
         {used.toLocaleString()} / {limit.toLocaleString()} messages this period
       </span>
       <div className="ml-auto">
-        <ContactUsButtons subject="Add messages to my BotForge workspace" />
+        <ContactUsButtons subject="Add messages to my Vicero workspace" />
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ Before writing a single line of implementation code:
      don't go looking for orchestration logic that isn't there.
 3. For each repo, write one short paragraph in `docs/DECISIONS.md` (new ADR, next available
    number) stating: what pattern you are borrowing, what you are explicitly leaving behind
-   (vendor lock-in, missing production concerns, etc.), and how it maps onto BotForge's
+   (vendor lock-in, missing production concerns, etc.), and how it maps onto Vicero's
    existing stack (Postgres/SQLAlchemy/Alembic, Celery/Redis, FastAPI, `app/core/rbac.py`,
    the existing guardrail pipeline in `app/chat/`). This is the same discipline
    `docs/11-SAFETY-GUARDRAILS.md`'s ADRs already follow — a decision without a written reason

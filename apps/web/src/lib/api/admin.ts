@@ -142,7 +142,7 @@ export interface FeatureFlag {
   updated_at: string;
 }
 
-/** One BotForge tool pointing at a workflow. */
+/** One Vicero tool pointing at a workflow. */
 export interface AutomationBinding {
   organization_slug: string;
   organization_name: string;

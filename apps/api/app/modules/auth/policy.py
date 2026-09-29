@@ -47,7 +47,7 @@ COMMON_PASSWORDS: frozenset[str] = frozenset(
         "iloveyou", "iloveyou1", "letmein1", "letmein123", "welcome1", "welcome123",
         "admin123", "administrator", "abc12345", "abcd1234", "abcdefgh", "monkey123",
         "dragon123", "football1", "baseball1", "superman1", "trustno1", "sunshine1",
-        "princess1", "changeme", "changeme123", "botforge", "botforge123", "aurozen123",
+        "princess1", "changeme", "changeme123", "vicero", "vicero123", "aurozen123",
         "asdfghjk", "zxcvbnm1", "starwars1", "whatever1", "internet1", "computer1",
     }
 )

@@ -1,6 +1,6 @@
 # ENV.md — Environment Variables
 
-Every variable BotForge reads. Mirror these as placeholders in `.env.example`. "Needs human"
+Every variable Vicero reads. Mirror these as placeholders in `.env.example`. "Needs human"
 = only the human can create it; if unset, the code must stub the feature, log a loud warning,
 and keep building (`CLAUDE.md §7`).
 
@@ -31,14 +31,15 @@ which parses the file with its own rules that the Python fix cannot reach.
 | `SECRET_KEY` | JWT signing + key encryption | yes | — | yes (generate) |
 | `DATABASE_URL` | Postgres async DSN | yes | compose default | no |
 | `POSTGRES_HOST_PORT` | host port the bundled Postgres binds (default `5432`); must agree with `DATABASE_URL`. **Compose-only**, same as `N8N_HOST_PORT` — read from the shell or `infra/.env` (machine-specific ports only; secrets live in the root `.env`) | no |
-| `REDIS_URL` | Redis DSN | yes | compose default | no |
+| `REDIS_URL` | Redis DSN. In dev it carries the password: `redis://:<REDIS_PASSWORD>@127.0.0.1:6379/0` (use `127.0.0.1`, not `localhost` — the containers publish on IPv4 loopback only) | yes | compose default | no |
+| `REDIS_PASSWORD` | Password for the dev Redis; compose refuses to start without it. Use the same value in `REDIS_URL`. | dev | — | yes |
 | `API_BASE_URL` / `WEB_BASE_URL` | absolute URLs | yes | localhost | no |
 
 `POSTGRES_HOST_PORT` exists for the same reason as `N8N_HOST_PORT`: on a machine running more
 than one project, 5432 is usually already bound. The tempting shortcut — leaving `DATABASE_URL`
 on 5432 and using whatever Postgres answers there — is the dangerous one, because
-`alembic upgrade head` would then migrate another project's database. Move BotForge's own
-instead (`POSTGRES_HOST_PORT=5433`, `DATABASE_URL=...@localhost:5433/botforge`); the container
+`alembic upgrade head` would then migrate another project's database. Move Vicero's own
+instead (`POSTGRES_HOST_PORT=5433`, `DATABASE_URL=...@localhost:5433/vicero`); the container
 port and the `pgdata` volume are unchanged, so no data moves with it.
 
 ## LLM providers (free-first)
@@ -64,6 +65,7 @@ resolves `${VAR}` from the shell and from `infra/.env` — never from the `../.e
 | Variable | Purpose |
 |---|---|
 | `POSTGRES_PASSWORD`, `DOMAIN`, `API_DOMAIN`, `ACME_EMAIL`, `NEXT_PUBLIC_API_BASE_URL` | required; compose refuses to start without them |
+| `NEXT_PUBLIC_N8N_URL` | public URL of the n8n editor, used by the dashboard's "Open n8n" link on the Automations page (default `http://localhost:5678`). **Baked into the web image at build time**, like `NEXT_PUBLIC_API_BASE_URL` - rebuild `web` after changing it | no |
 | `POSTGRES_HOST_PORT`, `N8N_HOST_PORT` | host ports, for machines where 5432/5678 are taken |
 | `POSTGRES_MEM_LIMIT` (3g), `WORKER_MEM_LIMIT` (3g), `OLLAMA_MEM_LIMIT` (4g), `API_MEM_LIMIT` (2g), `REDIS_MEM_LIMIT` (1g), `WEB_MEM_LIMIT` (1g), `MIGRATE_MEM_LIMIT` (1g), `BEAT_MEM_LIMIT` (512m), `BACKUP_MEM_LIMIT` (512m), `CADDY_MEM_LIMIT` (256m) | per-service memory ceilings (docs/15 PROD-3) |
 | `POSTGRES_MEM_RESERVATION` (1g), `REDIS_MEM_RESERVATION` (256m) | soft floors — what actually protects the datastores under host pressure |
@@ -147,11 +149,11 @@ serves photos from token-bearing URLs we deliberately never persist (see ADR-036
 | `N8N_BASE_URL` | n8n REST/webhook base (default `http://n8n:5678`) | no |
 | `N8N_HOST_PORT` | host port the bundled n8n binds (default `5678`); must agree with `N8N_BASE_URL`. **Compose-only** — read from the shell or `infra/.env`, not from the root `.env` (which is passed to containers via `env_file` and so never reaches `${...}` interpolation) | no |
 | `N8N_API_KEY` | n8n public API auth — needs the workflow read/list/create/update/activate scopes | yes (from n8n UI) |
-| `N8N_WEBHOOK_SIGNING_SECRET` | sign BotForge→n8n calls; **n8n workflows verify it** (docs/07 "Webhook signature verification"). **Lives only in the root `.env`** — the n8n container gets it by compose interpolation, so start with `make up` / `--env-file .env --env-file ../.env`, never a copy in `infra/.env`. Without it n8n has an empty secret and rejects every call (fail closed) | generate |
-| `N8N_REQUIRE_SIGNATURE_CHECK` | `true` (default): binding an n8n tool is refused unless its workflow verifies BotForge's signature (RISK-REGISTER R15); a pasted webhook URL is resolved via the n8n API, so it needs `N8N_API_KEY`. `false` only for a deliberately unsigned dev n8n. Audit existing binds: `GET /v1/admin/n8n-signature-audit` | no |
+| `N8N_WEBHOOK_SIGNING_SECRET` | sign Vicero→n8n calls; **n8n workflows verify it** (docs/07 "Webhook signature verification"). **Lives only in the root `.env`** — the n8n container gets it by compose interpolation, so start with `make up` / `--env-file .env --env-file ../.env`, never a copy in `infra/.env`. Without it n8n has an empty secret and rejects every call (fail closed) | generate |
+| `N8N_REQUIRE_SIGNATURE_CHECK` | `true` (default): binding an n8n tool is refused unless its workflow verifies Vicero's signature (RISK-REGISTER R15); a pasted webhook URL is resolved via the n8n API, so it needs `N8N_API_KEY`. `false` only for a deliberately unsigned dev n8n. Audit existing binds: `GET /v1/admin/n8n-signature-audit` | no |
 
 `N8N_HOST_PORT` exists because 5678 is often already taken — on the build machine by an
-unrelated n8n belonging to another project. BotForge must not create or activate workflows in
+unrelated n8n belonging to another project. Vicero must not create or activate workflows in
 someone else's instance, so point it at its own (`N8N_HOST_PORT=5679`,
 `N8N_BASE_URL=http://localhost:5679`). n8n 2.x also binds its editor session cookie to a
 `browser-id` header, so minting an API key over `/rest/*` requires sending one; the UI
@@ -161,13 +163,13 @@ someone else's instance, so point it at its own (`N8N_HOST_PORT=5679`,
 
 | Var | Purpose | Needs human |
 |---|---|---|
-| `BOTFORGE_API_BASE_URL` | which BotForge to provision into (default `http://localhost:8000`) | no |
+| `VICERO_API_BASE_URL` | which Vicero to provision into (default `http://localhost:8000`) | no |
 | `PROVISION_STAFF_EMAIL` | a login with `is_staff=true` | yes |
 | `PROVISION_STAFF_PASSWORD` | that account's password | yes |
 
 The script signs in as a **staff user** rather than using a `bf_…` API key: creating an
 organization is gated on `User.is_staff` server-side and no key scope grants it. Point
-`BOTFORGE_API_BASE_URL`/`N8N_BASE_URL` at localhost today and at the VPS later — that is the
+`VICERO_API_BASE_URL`/`N8N_BASE_URL` at localhost today and at the VPS later — that is the
 only difference between provisioning on a laptop and provisioning in production.
 
 ## Email
@@ -181,7 +183,7 @@ magic-link sign-in. All four funnel through one backend chosen by `EMAIL_BACKEND
 | `SMTP_HOST` | relay hostname, e.g. `smtp.resend.com` | yes |
 | `SMTP_PORT` | relay port; blank is read as the default `587` (STARTTLS) | no |
 | `SMTP_USER` / `SMTP_PASS` | relay credentials from your provider | yes |
-| `SMTP_FROM` | envelope sender, e.g. `BotForge <noreply@yourdomain.com>` | yes |
+| `SMTP_FROM` | envelope sender, e.g. `Vicero <noreply@yourdomain.com>` | yes |
 
 **Plain SMTP on purpose.** Resend, Postmark, SendGrid, Mailgun and Amazon SES all expose an
 SMTP relay with exactly these settings, so changing provider is an env change and never a code
@@ -197,11 +199,9 @@ there is nothing to protect the request from — which is also what keeps the te
 synchronous. If `SMTP_HOST`/`SMTP_FROM` are unset while the backend is `smtp`, a send raises
 `email.not_configured` rather than silently dropping the message.
 
-## Billing (optional)
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` — needs-human; unset → billing
 ## Private admin area (`/vault`) — ADR-096
 
-A sign-in that is **separate from BotForge accounts** and shows the internal reference plus the
+A sign-in that is **separate from Vicero accounts** and shows the internal reference plus the
 real value of every setting in `.env.example`. Off until all three of the first rows are set.
 
 | Var | Purpose | Needs human |
@@ -225,6 +225,8 @@ The `VAULT_*` names are excluded from the vault's own listing and can never be r
 Changing `VAULT_SESSION_SECRET` (or removing an address from `VAULT_ADMIN_EMAILS`) ends the
 affected sessions on their next request.
 
+## Billing (optional)
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` — needs-human; unset → billing
 disabled.
 
 ## Observability
@@ -356,7 +358,7 @@ to RRF ordering, logged, never an error and never an empty result set.
   the OWASP **LLM10** unbounded-consumption control: without it one caller can push an
   arbitrarily large prompt through a paid provider.
 - `GUARD_INPUT_ENABLED` (default `true`) — the L1 static pre-filter on the visitor's own
-  message (direct prompt injection, **LLM01**). With it off, BotForge still defends retrieved
+  message (direct prompt injection, **LLM01**). With it off, Vicero still defends retrieved
   documents and tool output but not the person typing — the asymmetry docs/11 §1.1 documents.
   Switchable because a false positive costs a real customer a real answer; the benign fixture
   corpus in `tests/fixtures/redteam/benign.yaml` is what keeps that rate at zero.
@@ -407,7 +409,7 @@ to RRF ordering, logged, never an error and never an empty result set.
 > its agent on any of 13 providers and hold no Groq key; resolving through the normal credential
 > chain would silently switch safety off for exactly those clients, and because it fails open,
 > nothing would say so. A missing platform key logs `guard_l2_disabled` at startup **and** shows
-> in the admin console health card — `botforge_guard_calls_total{outcome="error"}` and
+> in the admin console health card — `vicero_guard_calls_total{outcome="error"}` and
 > `{outcome="unavailable"}` are the metrics to alert on, since a rising rate there means traffic
 > is running unguarded rather than that nothing is being attempted.
 
@@ -422,7 +424,7 @@ to RRF ordering, logged, never an error and never an empty result set.
 > **On `elevated` the bot keeps answering.** Only `crisis` suppresses the reply, and it emits a
 > fixed written holding message before handing to a human — never silence. `attention` is a
 > separate axis from `status` (ADR-057), so a crisis a human has taken over is still visibly a
-> crisis. Alert on `botforge_policy_calls_total{outcome="error"}`: L3 fails open, so an outage
+> crisis. Alert on `vicero_policy_calls_total{outcome="error"}`: L3 fails open, so an outage
 > looks exactly like "nobody is in distress today".
 
 - `WEB_SEARCH_ENABLED` (default **false**) — scoped web access (docs/11 §L7). Off platform-wide

@@ -1,4 +1,4 @@
-# docs/13 — `daveebbelaar/ai-cookbook` review: what is worth taking into BotForge
+# docs/13 — `daveebbelaar/ai-cookbook` review: what is worth taking into Vicero
 
 > Review date: 2026-08-12. Repo reviewed at `HEAD` (207 files, 9 top-level areas).
 > Source: https://github.com/daveebbelaar/ai-cookbook
@@ -11,7 +11,7 @@
 > in `docs/14-KNOWLEDGE-PIPELINE-V2.md` §0. **Read docs/14 §0 before acting on finding 3 or R4a.**
 >
 > **⚠️ CORRECTED 2026-08-13 — two more claims in this document were wrong, and R2 is what found
-> them.** §1 says BotForge "already does BM25-equivalent + dense + RRF — that stage is done."
+> them.** §1 says Vicero "already does BM25-equivalent + dense + RRF — that stage is done."
 > Measured: the keyword half scored **NDCG@10 0.0278, one query in thirty-six**, and `hybrid`
 > came out byte-identical to `dense`. **That stage was not done; it was inert.** And R4b's
 > "Postgres ships no Tamil/Hindi dictionary" is false — PostgreSQL 16 ships both, and `tamil`
@@ -24,13 +24,13 @@
 - The repo is a **teaching cookbook**, not a library. There is no package to install and no
   code to vendor wholesale. The value is in **four specific patterns** and the **measured
   numbers** behind them.
-- BotForge is already ahead of most of it. `rag/retrieval.py` already does BM25-equivalent
+- Vicero is already ahead of most of it. `rag/retrieval.py` already does BM25-equivalent
   (Postgres FTS) + dense (pgvector) + **RRF at k=60** — the exact fusion the cookbook builds
   in `knowledge/hybrid-retrieval/4-rrf.py`. That stage is done.
-- **BotForge stops one stage short.** The cookbook's four-stage pipeline is
-  `BM25 → dense → RRF → cross-encoder rerank`. BotForge has the first three. The **reranker is
+- **Vicero stops one stage short.** The cookbook's four-stage pipeline is
+  `BM25 → dense → RRF → cross-encoder rerank`. Vicero has the first three. The **reranker is
   missing**, and on the cookbook's FiQA benchmark that stage is the single largest jump.
-- **The bigger gap is not a technique, it is a measurement.** BotForge has 773 pytest tests and
+- **The bigger gap is not a technique, it is a measurement.** Vicero has 773 pytest tests and
   **zero retrieval-quality metrics**. `score_threshold` was moved 0.7 → 0.35 on 2026-07-21 with
   no number attached. `docs/11 §9` records grounding as the weakest link at **12/15 fabricated**
   — and the 2026-08-02 incident showed the cause was *retrieval legitimately missing*
@@ -41,23 +41,23 @@
 
 ## 2. What is actually in the repo
 
-| Folder | Contents | Relevance to BotForge |
+| Folder | Contents | Relevance to Vicero |
 |---|---|---|
 | `knowledge/hybrid-retrieval/` | BM25 + dense + RRF + Cohere rerank + **NDCG@10 eval** on FiQA-2018 | **HIGHEST** — the reranker and the eval harness |
 | `knowledge/agentic-rag/` | `list_files` / `grep` / `read_file` agent loop, production hardening notes | Low for the widget, medium for operator tooling |
 | `knowledge/docling/` | Docling extraction + `HybridChunker` + real tokenizer wrapper | **HIGH** — fixes the PDF extraction and chunking gaps |
-| `knowledge/mem0/` | mem0 long-term memory, ADD/UPDATE/DELETE/NONE ops | Low — BotForge already has `memory_summary` + CRM |
-| `agents/building-blocks/` | 7 primitives: intelligence, memory, tools, validation, control, recovery, feedback | Conceptual — BotForge already implements 6 of 7 |
+| `knowledge/mem0/` | mem0 long-term memory, ADD/UPDATE/DELETE/NONE ops | Low — Vicero already has `memory_summary` + CRM |
+| `agents/building-blocks/` | 7 primitives: intelligence, memory, tools, validation, control, recovery, feedback | Conceptual — Vicero already implements 6 of 7 |
 | `agents/agent-complexity/` | 5 levels: augmented LLM → prompt chains → tool agent → harness → multi-agent | Conceptual — useful framing for the agent-template catalog |
 | `patterns/workflows/` | Prompt chaining, routing, parallelization, orchestrator | Medium — routing pattern maps onto guardrail layers |
-| `mcp/` | MCP crash course, stdio/SSE/HTTP clients, Docker, lifecycle | Low now, relevant if BotForge exposes an MCP server |
+| `mcp/` | MCP crash course, stdio/SSE/HTTP clients, Docker, lifecycle | Low now, relevant if Vicero exposes an MCP server |
 | `models/openai/` | Structured output, Instructor, Responses API, **human-in-the-loop tool approval** | Medium — the approval gate is a real gap for n8n actions |
 | `context/web/` | Web search + fetch tools for an agent | Low — docs/11 Phase G already shipped this |
 | `roadmaps/`, `tools/uv-guide/` | Learning roadmaps, uv guide | None |
 
 ---
 
-## 3. Verified gaps in BotForge (checked against the code, not assumed)
+## 3. Verified gaps in Vicero (checked against the code, not assumed)
 
 | # | Finding | File | Severity |
 |---|---|---|---|
@@ -82,7 +82,7 @@ the top `k`. A bi-encoder embeds query and document *separately*; a cross-encode
 one model with joint attention, so it can judge "does this passage actually answer this question?"
 in a way two independent vectors cannot.
 
-**Why it matters here specifically.** BotForge's worst live failure mode is fabrication when
+**Why it matters here specifically.** Vicero's worst live failure mode is fabrication when
 retrieval misses and no context block is appended. Every point of retrieval accuracy is a turn
 where the model has real grounding instead of inventing opening hours. This is the one change
 that attacks `docs/11 §9`'s "grounding remains the weakest link" from the retrieval side rather
@@ -100,7 +100,7 @@ than the prompt side — and §11's own rule says a prompt line is not enforceme
 Two-stage retrieval also lifts Recall@5 ~0.69 → ~0.82 on prose corpora (cited in
 `docs/agentic-rag-vs-semantic-rag.md`).
 
-**How it fits BotForge's architecture.**
+**How it fits Vicero's architecture.**
 
 - Slots in as one function between `search()`'s RRF sort and the `[:top_k]` slice.
 - Fetch `candidate_k = 50` instead of the current `top_k * 4`.
@@ -108,7 +108,7 @@ Two-stage retrieval also lifts Recall@5 ~0.69 → ~0.82 on prose corpora (cited 
   protocol with a Cohere implementation and a no-op default, so an org without a rerank
   credential degrades to today's behaviour rather than erroring.
 
-**⚠️ Two constraints the cookbook does not have and BotForge does:**
+**⚠️ Two constraints the cookbook does not have and Vicero does:**
 
 1. **Latency.** NFR-1 is p50 417 ms first token. A Cohere rerank call adds one network round
    trip *before* generation starts. This is a per-turn cost on the critical path. Measure before
@@ -171,7 +171,7 @@ tests, "1 failed" reads as flake. Same reasoning as Phase D's separate gate.
 2. **Real token counts.** `utils/tokenizer.py` in the cookbook is a ~40-line `tiktoken` wrapper
    that satisfies the HuggingFace tokenizer interface. Replaces `len(text) / 4`.
 3. **Structure-aware chunk boundaries.** `HybridChunker(merge_peers=True)` splits on document
-   structure, then merges undersized neighbours. BotForge already gets this benefit for HTML via
+   structure, then merges undersized neighbours. Vicero already gets this benefit for HTML via
    trafilatura's markdown output — Docling extends it to PDF, DOCX, XLSX, PPTX.
 
 **⚠️ Cost check first.** Docling pulls in `transformers` and layout models. That is a meaningful
@@ -207,11 +207,11 @@ is still far better than English stemming applied to Tamil.
 ### R5 — Human-in-the-loop tool approval (worth a look, not urgent)
 
 `models/openai/10-human-in-the-loop/2-tool-call-approval.py` shows an approval gate before a tool
-executes. BotForge has *conversation* handoff but no *tool-call* approval — an n8n automation
+executes. Vicero has *conversation* handoff but no *tool-call* approval — an n8n automation
 bound to an agent runs without a checkpoint. This matters as soon as an automation does something
 irreversible (issues a refund, sends an email, writes to a client CRM).
 
-`agents/agent-complexity/4-agent-harness.py` is also worth reading for two runtime guards BotForge
+`agents/agent-complexity/4-agent-harness.py` is also worth reading for two runtime guards Vicero
 does not have: `max_budget_usd` (a hard dollar cap per run, alongside the existing `max_iters`
 turn cap) and structured-output validation of the final answer shape.
 
@@ -240,8 +240,8 @@ mistake in a new area.
 **Agentic RAG (grep-loop) for the widget path — no.**
 
 - The cookbook's own decision table puts *"FAQs, customer-support tickets, marketing content"*
-  squarely in the **Semantic RAG** column. That is exactly BotForge's corpus.
-- Latency: 5–15 s per answer vs BotForge's 417 ms p50 first-token target.
+  squarely in the **Semantic RAG** column. That is exactly Vicero's corpus.
+- Latency: 5–15 s per answer vs Vicero's 417 ms p50 first-token target.
 - Token cost: 3–10× vanilla RAG, on a platform where 61 checklist probes already exhausted the
   Groq free tier in one session.
 - Multi-tenancy: a filesystem-grep tool means giving a model a path-scoped filesystem per org.
@@ -250,21 +250,21 @@ mistake in a new area.
 - **Where it *would* fit:** an internal operator/admin tool for searching across a client's docs
   and runbooks, where latency does not matter and the operator is trusted. Not the visitor path.
 
-**mem0 — no.** BotForge already has `chat/memory.py` (rolling `memory_summary` on a small model)
+**mem0 — no.** Vicero already has `chat/memory.py` (rolling `memory_summary` on a small model)
 and a CRM with entity resolution by email/phone. mem0 would duplicate both and add Qdrant +
 Neo4j to a stack that deliberately standardised on pgvector. *Do* steal the idea of its
 ADD/UPDATE/DELETE/NONE extraction ops as a framing for CRM capture conflicts — but not the
 dependency.
 
-**MCP crash course — not now.** Well written, but BotForge's integration story is n8n over
-REST + signed webhooks and that works. Revisit only if you decide to expose BotForge itself as an
+**MCP crash course — not now.** Well written, but Vicero's integration story is n8n over
+REST + signed webhooks and that works. Revisit only if you decide to expose Vicero itself as an
 MCP server for third-party agents. That is a product decision, not a performance one.
 
 ---
 
 ## 7. Confidence
 
-**High** on the gap analysis (§3) — every finding was verified by reading BotForge's actual source
+**High** on the gap analysis (§3) — every finding was verified by reading Vicero's actual source
 and migrations, not inferred. The absence of a GIN index, of any reranker, and of any retrieval
 metric are all directly observable.
 
@@ -272,7 +272,7 @@ metric are all directly observable.
 
 **Medium** on R1's *magnitude*. The ~40+ NDCG figure is FiQA (financial forum posts), not a
 customer-support KB. The direction of the effect is very well established across the literature;
-the size on BotForge's corpora is unknown until R2 exists to measure it. **That uncertainty is
+the size on Vicero's corpora is unknown until R2 exists to measure it. **That uncertainty is
 the argument for R2 first, not an argument against R1.**
 
 **Medium** on R3 — the extraction-quality and safety benefits are clear, the container-size and

@@ -51,7 +51,7 @@ def _configure_smtp(monkeypatch: pytest.MonkeyPatch, **over: object) -> None:
         "smtp_port": 587,
         "smtp_user": "apikey",
         "smtp_pass": "secret",
-        "smtp_from": "BotForge <noreply@botforge.test>",
+        "smtp_from": "Vicero <noreply@vicero.test>",
     }
     values.update(over)
     for key, value in values.items():
@@ -96,7 +96,7 @@ async def test_send_builds_a_multipart_message_with_both_parts(
     assert len(relay.sent) == 1
     mime, kwargs = relay.sent[0]
     assert mime["To"] == "person@example.com"
-    assert mime["From"] == "BotForge <noreply@botforge.test>"
+    assert mime["From"] == "Vicero <noreply@vicero.test>"
     assert mime["Subject"] == "You're invited to Acme"
     assert mime.is_multipart()
     types = [p.get_content_type() for p in mime.walk()]

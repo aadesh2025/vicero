@@ -1,17 +1,17 @@
 ---
 title: Outbound webhooks
-description: Receive signed events when something happens in BotForge.
+description: Receive signed events when something happens in Vicero.
 group: API
 order: 5
 ---
 
-Register an endpoint and BotForge will POST to it when things happen — a message arrives, a
+Register an endpoint and Vicero will POST to it when things happen — a message arrives, a
 conversation closes, a document finishes ingesting, a visitor asks for a human.
 
 ## Registering
 
 **Settings → Webhooks**, or `POST /v1/webhooks`. You give a URL and choose which events you
-want. BotForge gives you a **signing secret**, shown once.
+want. Vicero gives you a **signing secret**, shown once.
 
 ## The event catalog
 
@@ -31,7 +31,7 @@ want. BotForge gives you a **signing secret**, shown once.
 
 ## Verifying the signature
 
-Every delivery carries `X-BotForge-Signature`, an HMAC-SHA256 over the request body using
+Every delivery carries `X-Vicero-Signature`, an HMAC-SHA256 over the request body using
 your endpoint secret.
 
 ```js

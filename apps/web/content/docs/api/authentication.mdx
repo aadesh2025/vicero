@@ -1,16 +1,16 @@
 ---
 title: API authentication
-description: How to authenticate requests to the BotForge API with an API key.
+description: How to authenticate requests to the Vicero API with an API key.
 group: API
 order: 1
 ---
 
-The BotForge REST API is served under `/v1`. Everything is JSON, and every request must be
+The Vicero REST API is served under `/v1`. Everything is JSON, and every request must be
 authenticated.
 
 ## Authentication
 
-BotForge API requests require an **API key**. Send it with every request in the
+Vicero API requests require an **API key**. Send it with every request in the
 `Authorization` header:
 
 ```http
@@ -33,7 +33,7 @@ and you do not need to say which one you mean. You create and manage keys in the
 1. Create a key in **Settings → API Keys** and store it somewhere safe. A key is shown when it is
    created, so copy it then.
 2. Send it as a bearer token in the `Authorization` header of every request.
-3. BotForge checks the key and runs the request as your workspace.
+3. Vicero checks the key and runs the request as your workspace.
 4. A missing, wrong or revoked key is refused with a `401` and a typed error — see
    [Errors](/docs/api/errors).
 
@@ -86,7 +86,7 @@ secret manager.
 </Callout>
 
 - **Keep it on the server.** Anything that runs in a browser or a mobile app can be inspected;
-  call BotForge from your backend instead.
+  call Vicero from your backend instead.
 - **Never put it in a URL.** URLs end up in logs, browser history and proxy caches.
 - **Use a separate key for each environment**, so a leak in one does not touch the others.
 - **Revoke a key the moment you suspect it has leaked**, from **Settings → API Keys**, and

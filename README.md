@@ -1,6 +1,6 @@
 <div align="center">
 
-# BotForge
+# Vicero
 
 **An original, enterprise-grade AI chatbot & automation platform.**
 Build AI agents, ground them in your own knowledge base (RAG), embed a chat widget,
@@ -10,7 +10,7 @@ connect messaging channels, wire automations to n8n, and operate it all from one
 
 ---
 
-BotForge is a multi-tenant SaaS: each organization creates **agents** (chatbots) with a
+Vicero is a multi-tenant SaaS: each organization creates **agents** (chatbots) with a
 persona, model, temperature and tools; attaches a **knowledge base** for retrieval-augmented
 answers with citations; embeds a **chat widget**; connects **channels** (Telegram, WhatsApp,
 Slack, Discord); binds **n8n workflows** as tools; hands off to **human operators**; and sees
@@ -23,7 +23,7 @@ Slack, Discord); binds **n8n workflows** as tools; hands off to **human operator
 - **Knowledge & RAG** — upload PDF/DOCX/CSV/TXT/MD/URL → chunk → embed (pgvector) → hybrid retrieval → grounded answers **with citations**.
 - **Tools & automations** — built-in tools, user-defined HTTP tools (SSRF-guarded), and **n8n** workflows bound as tools (sync + async callback).
 - **Channels & inbox** — signed inbound webhooks, a shared runtime, and a realtime operator inbox with human handoff.
-- **Embeddable widget** — one dependency-free `widget.js`, Shadow-DOM isolated, streaming, theming, `window.BotForge` SDK.
+- **Embeddable widget** — one dependency-free `widget.js`, Shadow-DOM isolated, streaming, theming, `window.Vicero` SDK.
 - **Guardrails** — prompt-injection neutralization (retrieved content treated as data), blocked-topic pre-LLM refusal, output secret redaction.
 - **Team & tenancy** — orgs, roles (owner/admin/editor/viewer/operator), invitations, API keys with scopes, outbound webhooks, audit log.
 - **Platform admin** — staff-only console over all orgs, usage, health, and feature flags.

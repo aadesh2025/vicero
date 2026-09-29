@@ -76,7 +76,7 @@ from app.rag.ingest import ingest_document
 
 # A fixed slug so an interrupted run is cleaned up by the next one rather than accumulating
 # scratch tenants. Deliberately unmistakable - nobody names a client this.
-SCRATCH_SLUG = "botforge-retrieval-eval-scratch"
+SCRATCH_SLUG = "vicero-retrieval-eval-scratch"
 BASELINE_PATH = EVAL_SET_DIR / "baseline.json"
 
 # `hybrid` uses the configured RRF weight; `hybrid@<w>` overrides it, so the weight can be

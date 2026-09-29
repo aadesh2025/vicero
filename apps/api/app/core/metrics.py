@@ -83,61 +83,61 @@ def observe_rerank_call(outcome: str, duration_ms: float) -> None:
 
 def render() -> str:
     lines: list[str] = []
-    lines.append("# HELP botforge_build_info Build/version info.")
-    lines.append("# TYPE botforge_build_info gauge")
-    lines.append(f'botforge_build_info{{version="{__version__}",env="{settings.env}"}} 1')
+    lines.append("# HELP vicero_build_info Build/version info.")
+    lines.append("# TYPE vicero_build_info gauge")
+    lines.append(f'vicero_build_info{{version="{__version__}",env="{settings.env}"}} 1')
 
-    lines.append("# HELP botforge_uptime_seconds Process uptime in seconds.")
-    lines.append("# TYPE botforge_uptime_seconds gauge")
-    lines.append(f"botforge_uptime_seconds {time.time() - _start:.1f}")
+    lines.append("# HELP vicero_uptime_seconds Process uptime in seconds.")
+    lines.append("# TYPE vicero_uptime_seconds gauge")
+    lines.append(f"vicero_uptime_seconds {time.time() - _start:.1f}")
 
-    lines.append("# HELP botforge_http_requests_total Total HTTP requests by method and status class.")
-    lines.append("# TYPE botforge_http_requests_total counter")
+    lines.append("# HELP vicero_http_requests_total Total HTTP requests by method and status class.")
+    lines.append("# TYPE vicero_http_requests_total counter")
     with _lock:
         for (method, klass), count in sorted(_requests.items()):
-            lines.append(f'botforge_http_requests_total{{method="{method}",status="{klass}"}} {count}')
+            lines.append(f'vicero_http_requests_total{{method="{method}",status="{klass}"}} {count}')
 
-        lines.append("# HELP botforge_http_request_duration_seconds HTTP request latency.")
-        lines.append("# TYPE botforge_http_request_duration_seconds histogram")
+        lines.append("# HELP vicero_http_request_duration_seconds HTTP request latency.")
+        lines.append("# TYPE vicero_http_request_duration_seconds histogram")
         # _bucket_counts[i] is already the cumulative count of observations <= edge[i].
         for i, edge in enumerate(_BUCKETS):
-            lines.append(f'botforge_http_request_duration_seconds_bucket{{le="{edge}"}} {_bucket_counts[i]}')
-        lines.append(f'botforge_http_request_duration_seconds_bucket{{le="+Inf"}} {_hist_count}')
-        lines.append(f"botforge_http_request_duration_seconds_sum {_hist_sum:.4f}")
-        lines.append(f"botforge_http_request_duration_seconds_count {_hist_count}")
+            lines.append(f'vicero_http_request_duration_seconds_bucket{{le="{edge}"}} {_bucket_counts[i]}')
+        lines.append(f'vicero_http_request_duration_seconds_bucket{{le="+Inf"}} {_hist_count}')
+        lines.append(f"vicero_http_request_duration_seconds_sum {_hist_sum:.4f}")
+        lines.append(f"vicero_http_request_duration_seconds_count {_hist_count}")
 
         # `outcome="error"` and `outcome="unavailable"` are the ones to alert on: the guard
         # fails open, so a rising rate there means traffic is running unguarded rather than
         # that nothing is being attempted.
-        lines.append("# HELP botforge_guard_calls_total L2 injection-guard decisions by outcome.")
-        lines.append("# TYPE botforge_guard_calls_total counter")
+        lines.append("# HELP vicero_guard_calls_total L2 injection-guard decisions by outcome.")
+        lines.append("# TYPE vicero_guard_calls_total counter")
         for outcome, count in sorted(_guard_calls.items()):
-            lines.append(f'botforge_guard_calls_total{{outcome="{outcome}"}} {count}')
+            lines.append(f'vicero_guard_calls_total{{outcome="{outcome}"}} {count}')
         lines.append(
-            "# HELP botforge_guard_tokens_total Tokens spent on guard models, on the platform key."
+            "# HELP vicero_guard_tokens_total Tokens spent on guard models, on the platform key."
         )
-        lines.append("# TYPE botforge_guard_tokens_total counter")
-        lines.append(f"botforge_guard_tokens_total {_guard_tokens}")
+        lines.append("# TYPE vicero_guard_tokens_total counter")
+        lines.append(f"vicero_guard_tokens_total {_guard_tokens}")
 
         # level_crisis rising is a product-safety signal, not just a metric.
-        lines.append("# HELP botforge_policy_calls_total L3 policy/distress decisions by outcome.")
-        lines.append("# TYPE botforge_policy_calls_total counter")
+        lines.append("# HELP vicero_policy_calls_total L3 policy/distress decisions by outcome.")
+        lines.append("# TYPE vicero_policy_calls_total counter")
         for outcome, count in sorted(_policy_calls.items()):
-            lines.append(f'botforge_policy_calls_total{{outcome="{outcome}"}} {count}')
-        lines.append("# HELP botforge_policy_tokens_total Tokens spent on the policy classifier.")
-        lines.append("# TYPE botforge_policy_tokens_total counter")
-        lines.append(f"botforge_policy_tokens_total {_policy_tokens}")
+            lines.append(f'vicero_policy_calls_total{{outcome="{outcome}"}} {count}')
+        lines.append("# HELP vicero_policy_tokens_total Tokens spent on the policy classifier.")
+        lines.append("# TYPE vicero_policy_tokens_total counter")
+        lines.append(f"vicero_policy_tokens_total {_policy_tokens}")
 
         # `outcome="error"` is the one to alert on: the reranker fails open, so a rising rate
         # means turns are being ranked by RRF alone, not that there is nothing to rerank.
-        lines.append("# HELP botforge_rerank_calls_total Reranker decisions by outcome.")
-        lines.append("# TYPE botforge_rerank_calls_total counter")
+        lines.append("# HELP vicero_rerank_calls_total Reranker decisions by outcome.")
+        lines.append("# TYPE vicero_rerank_calls_total counter")
         for outcome, count in sorted(_rerank_calls.items()):
-            lines.append(f'botforge_rerank_calls_total{{outcome="{outcome}"}} {count}')
+            lines.append(f'vicero_rerank_calls_total{{outcome="{outcome}"}} {count}')
         lines.append(
-            "# HELP botforge_rerank_milliseconds_total Time spent reranking, before first token."
+            "# HELP vicero_rerank_milliseconds_total Time spent reranking, before first token."
         )
-        lines.append("# TYPE botforge_rerank_milliseconds_total counter")
-        lines.append(f"botforge_rerank_milliseconds_total {_rerank_ms:.1f}")
+        lines.append("# TYPE vicero_rerank_milliseconds_total counter")
+        lines.append(f"vicero_rerank_milliseconds_total {_rerank_ms:.1f}")
 
     return "\n".join(lines) + "\n"

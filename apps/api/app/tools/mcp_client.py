@@ -10,7 +10,7 @@ Deliberately does NOT use Anthropic's server-side remote-MCP-connector beta
 (`mcp_servers=[...]` on `client.beta.messages.create`) even when the agent's provider is
 Anthropic — ADR-071 found that's why open-agent-builder's MCP support only works on one
 provider. This client always runs the client-side call/execute/append loop uniformly, so MCP
-tool-calling behaves identically no matter which of BotForge's 13+ providers an org's agent
+tool-calling behaves identically no matter which of Vicero's 13+ providers an org's agent
 is configured on.
 """
 

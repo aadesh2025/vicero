@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useLayoutEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { niceTicks } from "@/lib/activity-chart-math";
 
 export interface ActivityBar {
@@ -26,6 +27,7 @@ const PAD = { top: 44, right: 8, bottom: 18, left: 28 };
 export function ActivityBars({
   bars,
   selectedIndex,
+  homeIndex,
   onSelect,
   format,
   selectedDelta,
@@ -34,10 +36,12 @@ export function ActivityBars({
 }: {
   bars: ActivityBar[];
   selectedIndex: number;
+  /** The bar selection returns here when the cursor leaves the chart — today's bucket. */
+  homeIndex: number;
   onSelect: (i: number) => void;
   format: (n: number) => string;
-  /** Delta pill for the selected bar vs. the previous one, e.g. "▲ +12%" / "▼ −5%" / "New". */
-  selectedDelta: { label: string; tone: "up" | "down" | "new" } | null;
+  /** Delta pill for the selected bar vs. the previous one, e.g. "+12%" / "-5%" / "New". */
+  selectedDelta: { text: string; tone: "up" | "down" | "new" } | null;
   height?: number;
   ariaLabel: string;
 }) {
@@ -85,7 +89,15 @@ export function ActivityBars({
   }
 
   return (
-    <div ref={wrapRef} className="relative" role="group" aria-label={ariaLabel} tabIndex={0} onKeyDown={handleKeyDown}>
+    <div
+      ref={wrapRef}
+      className="relative"
+      role="group"
+      aria-label={ariaLabel}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onMouseLeave={() => onSelect(homeIndex)}
+    >
       <svg width={w} height={height} className="overflow-visible">
         <defs>
           <pattern id={`${uid}-stripe`} width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
@@ -186,14 +198,14 @@ export function ActivityBars({
                 ))}
               {selected && selectedDelta && (
                 <foreignObject
-                  x={Math.min(w - PAD.right - 56, Math.max(PAD.left, x + barW / 2 - 28))}
+                  x={Math.min(w - PAD.right - 68, Math.max(PAD.left, x + barW / 2 - 34))}
                   y={Math.max(4, y - 34)}
-                  width={56}
+                  width={68}
                   height={22}
                 >
                   <div
                     className={
-                      "flex h-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold text-white " +
+                      "flex h-[20px] items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[10px] font-extrabold leading-none text-white " +
                       (selectedDelta.tone === "up"
                         ? "bg-success"
                         : selectedDelta.tone === "down"
@@ -201,7 +213,9 @@ export function ActivityBars({
                           : "bg-accent")
                     }
                   >
-                    {selectedDelta.label}
+                    {selectedDelta.tone === "up" && <ArrowUp className="size-2.5 shrink-0" />}
+                    {selectedDelta.tone === "down" && <ArrowDown className="size-2.5 shrink-0" />}
+                    <span>{selectedDelta.text}</span>
                   </div>
                 </foreignObject>
               )}

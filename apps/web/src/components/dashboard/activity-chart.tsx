@@ -121,16 +121,23 @@ export function ActivityChart() {
     [data, granularity, todayKey, metric],
   );
 
-  // Default selection = the current bucket (today/this week/this month); falls back to the
-  // last bar when the range doesn't include it (e.g. a past custom Range). Reset during render
-  // (React's documented "adjusting state when an input changes" pattern) rather than an effect,
-  // so switching period/metric/range doesn't flash the *previous* dataset's selection first.
+  // The bar selection "rests" on the current bucket (today/this week/this month); falls back
+  // to the last bar when the range doesn't include it (e.g. a past custom Range). Hovering
+  // another bar previews it temporarily — moving the cursor off the chart returns here.
+  const homeIndex = useMemo(() => {
+    if (bars.length === 0) return 0;
+    const idx = bars.findIndex((b) => b.key === todayKey);
+    return idx >= 0 ? idx : bars.length - 1;
+  }, [bars, todayKey]);
+
+  // Reset during render (React's documented "adjusting state when an input changes" pattern)
+  // rather than an effect, so switching period/metric/range doesn't flash the *previous*
+  // dataset's selection first.
   const datasetId = data ? `${metric}|${granularity}|${fromIso}|${toIso}` : null;
   const [resetFor, setResetFor] = useState<string | null>(null);
   if (datasetId !== null && datasetId !== resetFor) {
     setResetFor(datasetId);
-    const idx = bars.findIndex((b) => b.key === todayKey);
-    setSelectedIndex(bars.length === 0 ? 0 : idx >= 0 ? idx : bars.length - 1);
+    setSelectedIndex(homeIndex);
   }
 
   const total = (data?.points ?? []).reduce((sum, p) => sum + p.value, 0);
@@ -145,10 +152,9 @@ export function ActivityChart() {
       ? null
       : (() => {
           const d = deltaPct(selectedBar.value, prevBarValue);
-          if (d.isNew) return { label: "New", tone: "new" as const };
-          const sign = d.pct >= 0 ? "▲" : "▼";
+          if (d.isNew) return { text: "New", tone: "new" as const };
           const tone: "up" | "down" = d.pct >= 0 ? "up" : "down";
-          return { label: `${sign} ${d.pct >= 0 ? "+" : ""}${Math.round(d.pct)}%`, tone };
+          return { text: `${d.pct >= 0 ? "+" : ""}${Math.round(d.pct)}%`, tone };
         })()
     : null;
 
@@ -262,6 +268,7 @@ export function ActivityChart() {
           <ActivityBars
             bars={bars}
             selectedIndex={clampedIndex}
+            homeIndex={homeIndex}
             onSelect={setSelectedIndex}
             format={(n) => formatMetric(metric, n)}
             selectedDelta={barDelta}

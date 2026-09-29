@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Menu, Search } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { useUI } from "@/lib/store/ui";
@@ -18,15 +18,6 @@ export function Topbar() {
         aria-label="Open navigation"
       >
         <Menu className="size-5" />
-      </button>
-
-      {/* Command / search launcher */}
-      <button className="group flex h-[38px] w-full max-w-sm items-center gap-2.5 rounded-[11px] border border-border bg-surface px-3 text-sm font-medium text-faint transition-colors hover:border-border-strong hover:text-muted">
-        <Search className="size-4" />
-        <span className="flex-1 text-left">Search or jump to…</span>
-        <kbd className="hidden items-center gap-0.5 rounded-md border border-border bg-surface-2 px-1.5 font-mono text-[11px] text-faint sm:inline-flex">
-          ⌘K
-        </kbd>
       </button>
 
       <div className="ml-auto flex items-center gap-2">

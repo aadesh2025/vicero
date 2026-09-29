@@ -94,8 +94,17 @@ describe("AuthGate session bootstrap", () => {
     expect(clearAuth).not.toHaveBeenCalled();
   });
 
-  it("bounces to /login when there is no access token at all", async () => {
+  it("still loads the session when there is no access-token cookie (the refresh cookie covers it)", async () => {
+    // The access-token cookie is short-lived (~30m); its absence must not be treated as "never
+    // logged in" while the 30-day httpOnly refresh cookie is still valid. `api()` transparently
+    // refreshes on a 401 — this only pins that AuthGate no longer bails out before giving it
+    // the chance, which previously bounced returning visitors to /login every ~30 minutes.
     vi.mocked(getAccessToken).mockReturnValue(null as never);
+    vi.mocked(me).mockResolvedValue({
+      user: { id: "u1", email: "a@b.c" },
+      memberships: [],
+    } as never);
+    vi.mocked(listOrgs).mockResolvedValue([{ id: "o1", name: "Acme" }] as never);
 
     render(
       <AuthGate>
@@ -103,9 +112,22 @@ describe("AuthGate session bootstrap", () => {
       </AuthGate>,
     );
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
-    expect(me).not.toHaveBeenCalled();
-    // No token to clear — and clearing would also drop the refresh cookie's sibling state.
-    expect(clearAuth).not.toHaveBeenCalled();
+    expect(await screen.findByText("dashboard")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("bounces to /login when there is no access token and the refresh cookie has also expired", async () => {
+    vi.mocked(getAccessToken).mockReturnValue(null as never);
+    vi.mocked(me).mockRejectedValue(new ApiError(401, "auth.invalid_token", "Invalid"));
+    vi.mocked(listOrgs).mockResolvedValue([] as never);
+
+    render(
+      <AuthGate>
+        <p>dashboard</p>
+      </AuthGate>,
+    );
+
+    await waitFor(() => expect(clearAuth).toHaveBeenCalled());
+    expect(replace).toHaveBeenCalledWith("/login");
   });
 });

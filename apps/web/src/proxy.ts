@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { REFRESH_COOKIE } from "@/app/api/auth/_bff";
 
 // `/help/:agentKey`, `/docs` and `/vault` are deliberately absent. The first two are public by
 // design. `/vault` has its own sign-in and its own session, entirely separate from BotForge
@@ -21,7 +22,12 @@ const AUTH_ROUTES = ["/login", "/signup"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const authed = Boolean(request.cookies.get("bf_access")?.value);
+  // `bf_access` lives ~30 minutes; the httpOnly `bf_refresh` cookie lives 30 days. Checking
+  // only `bf_access` bounced returning visitors to /login every time it expired, even though
+  // AuthGate (client-side) already knows how to silently mint a fresh access token from the
+  // refresh cookie via `api()`'s 401 retry — this redirect ran first, at the edge, before that
+  // code ever got a chance to.
+  const authed = Boolean(request.cookies.get("bf_access")?.value || request.cookies.get(REFRESH_COOKIE)?.value);
 
   if (PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/")) && !authed) {
     const url = request.nextUrl.clone();

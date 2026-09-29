@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { me } from "@/lib/api/auth";
 import { createOrg, listOrgs } from "@/lib/api/orgs";
-import { getAccessToken, getActiveOrgId, setActiveOrgId, clearAuth } from "@/lib/api/tokens";
+import { getActiveOrgId, setActiveOrgId, clearAuth } from "@/lib/api/tokens";
 import { useSession } from "@/lib/store/session";
 import { LogoMark } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const { ready, orgs, setSession } = useSession();
 
   useEffect(() => {
-    if (!getAccessToken()) {
-      router.replace("/login");
-      return;
-    }
+    // No early bail when there's no access-token cookie: it only lives ~30 minutes, so
+    // returning here after that window incorrectly treated "token expired" the same as
+    // "never logged in" and skipped straight to /login. `api()` already retries a 401 via
+    // the httpOnly 30-day refresh cookie before giving up — letting `me()`/`listOrgs()` run
+    // unconditionally is what actually uses that cookie instead of ignoring it.
     let cancelled = false;
     (async () => {
       try {

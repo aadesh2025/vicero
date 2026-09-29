@@ -78,22 +78,19 @@ export function DashboardStats() {
         </div>
       </div>
 
-      {/* Side by side only when there's genuinely room; below xl the table would be
-          squeezed to the point of clipping, so it stacks full width instead. */}
-      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_420px]">
-        <ActivityChart />
-        <section aria-labelledby="dash-by-channel" className="overflow-hidden rounded-card border border-border bg-surface">
-          <div className="border-b border-border p-5">
-            <h3 id="dash-by-channel" className="font-display text-[15px] font-extrabold text-text">
-              By channel
-            </h3>
-            <p className="text-[13px] font-medium text-muted">Where your conversations came from.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <ChannelBreakdown buckets={overview?.by_channel} isLoading={overviewLoading} />
-          </div>
-        </section>
-      </div>
+      <ActivityChart />
+
+      <section aria-labelledby="dash-by-channel" className="overflow-hidden rounded-card border border-border bg-surface">
+        <div className="border-b border-border p-5">
+          <h3 id="dash-by-channel" className="font-display text-[15px] font-extrabold text-text">
+            By channel
+          </h3>
+          <p className="text-[13px] font-medium text-muted">Where your conversations came from.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <ChannelBreakdown buckets={overview?.by_channel} isLoading={overviewLoading} />
+        </div>
+      </section>
 
       <section aria-labelledby="dash-by-agent" className="overflow-hidden rounded-card border border-border bg-surface">
         <div className="border-b border-border p-5">

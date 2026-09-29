@@ -7,6 +7,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { OrgSwitcher } from "./org-switcher";
 import { UserMenu } from "./user-menu";
 import { TrialMeter } from "@/components/plan/trial-banner";
+import { EntitlementsMeter } from "@/components/plan/entitlements-banner";
 import { usePlan } from "@/components/plan/use-plan";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/brand";
@@ -81,6 +82,7 @@ export function Sidebar() {
 
         <div className={cn("flex flex-col gap-2 border-t border-border p-3", collapsed && "px-2")}>
           {!collapsed && plan && plan.status === "trial" && <TrialMeter plan={plan} variant="card" />}
+          {!collapsed && <EntitlementsMeter />}
           <UserMenu collapsed={collapsed} />
           <Button
             variant="ghost"

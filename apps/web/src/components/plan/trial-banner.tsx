@@ -16,7 +16,11 @@ import { cn } from "@/lib/utils";
 export function TrialBanner() {
   const { data: plan } = usePlan();
   const user = useSession((s) => s.user);
-  if (!plan || plan.status === "legacy") return null;
+  // `PlanStatus["status"]` is typed to these two plus "legacy", but the backend's actual
+  // `get_entitlements()` status can also be starter/pro/business/plan_expired (docs/22) — an
+  // untyped string slipping through would otherwise render this trial-only strip's "Free trial"
+  // copy on a paying customer. Those statuses have their own banner (`EntitlementsBanner`).
+  if (!plan || (plan.status !== "trial" && plan.status !== "trial_expired")) return null;
   const unverified = user && !user.email_verified;
   return (
     <div className="space-y-px">

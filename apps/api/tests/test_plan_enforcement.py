@@ -374,3 +374,80 @@ async def test_mcp_servers_share_the_tool_cap_with_ordinary_tools(
     blocked = await _create_builtin_tool(client, headers)
     assert blocked.status_code == 402, blocked.text
     assert blocked.json()["error"]["details"]["feature"] == "tools"
+
+
+async def _create_webhook(client: AsyncClient, headers: dict[str, str], url: str) -> Response:
+    return await client.post("/v1/webhooks", json={"url": url, "events": ["*"]}, headers=headers)
+
+
+async def test_webhook_creation_blocked_at_the_cap(client: AsyncClient, db_session: AsyncSession) -> None:
+    """`pro` allows 5 webhook endpoints."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+
+    for i in range(5):
+        resp = await _create_webhook(client, headers, f"https://example.com/hook{i}")
+        assert resp.status_code == 201, resp.text
+
+    blocked = await _create_webhook(client, headers, "https://example.com/hook5")
+    assert blocked.status_code == 402, blocked.text
+    assert blocked.json()["error"]["details"]["feature"] == "webhooks"
+
+
+async def test_webhook_creation_not_included_on_a_plan_with_zero(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`starter` doesn't include webhooks at all (`max_webhooks=0`) - unlike workflows/tools,
+    there's no separate feature-flag check here, so `require_webhook_slot`'s own zero-branch
+    message is what fires."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)
+    resp = await _create_webhook(client, headers, "https://example.com/hook")
+    assert resp.status_code == 402, resp.text
+    assert "does not include" in resp.json()["error"]["message"]
+
+
+async def test_webhook_creation_always_succeeds_on_an_unlimited_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)  # max_webhooks=None
+    for i in range(7):  # past Pro's own cap of 5
+        resp = await _create_webhook(client, headers, f"https://example.com/hook{i}")
+        assert resp.status_code == 201, resp.text
+
+
+async def test_webhook_creation_blocked_when_the_plan_has_expired(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=PAST)
+    resp = await _create_webhook(client, headers, "https://example.com/hook")
+    assert resp.status_code == 402, resp.text
+
+
+async def test_an_org_already_over_a_new_lower_webhook_cap_keeps_its_existing_webhooks(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    from app.models import WebhookEndpoint
+
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)
+    for i in range(6):
+        assert (
+            await _create_webhook(client, headers, f"https://example.com/hook{i}")
+        ).status_code == 201
+
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)  # webhooks -> 0
+
+    existing = (
+        await db_session.execute(
+            WebhookEndpoint.__table__.select().where(
+                WebhookEndpoint.organization_id == uuid.UUID(org_id)
+            )
+        )
+    ).fetchall()
+    assert len(existing) == 6
+
+    blocked = await _create_webhook(client, headers, "https://example.com/hook6")
+    assert blocked.status_code == 402, blocked.text

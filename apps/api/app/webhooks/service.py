@@ -8,6 +8,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.core import rbac
 from app.core.audit import write_audit
 from app.core.errors import AppError
@@ -39,6 +40,7 @@ async def create_webhook(
     session: AsyncSession, ctx: OrgContext, data: schemas.CreateWebhookRequest
 ) -> schemas.WebhookOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
+    await usage.require_webhook_slot(session, ctx.org)
     ep = WebhookEndpoint(
         organization_id=ctx.org.id,
         url=data.url,

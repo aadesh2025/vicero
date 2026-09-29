@@ -9,14 +9,16 @@ regardless of count, and an org already over a *new*, lower cap keeps what it ha
 from __future__ import annotations
 
 import datetime as dt
+import re
 import uuid
 
 import pytest
 from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.email import get_email_backend
 from app.models import KnowledgeBase, Organization
-from tests.selfserve_helpers import trial_org
+from tests.selfserve_helpers import bearer, signup, trial_org
 
 pytestmark = pytest.mark.usefixtures("self_serve")
 
@@ -450,4 +452,120 @@ async def test_an_org_already_over_a_new_lower_webhook_cap_keeps_its_existing_we
     assert len(existing) == 6
 
     blocked = await _create_webhook(client, headers, "https://example.com/hook6")
+    assert blocked.status_code == 402, blocked.text
+
+
+def _last_invite_token() -> str:
+    body = get_email_backend().outbox[-1].body
+    m = re.search(r"Token:\s*(\S+)", body)
+    assert m, body
+    return m.group(1)
+
+
+async def _invite(
+    client: AsyncClient, headers: dict[str, str], org_id: str, email: str, role: str = "editor"
+) -> Response:
+    return await client.post(
+        f"/v1/orgs/{org_id}/invitations", json={"email": email, "role": role}, headers=headers
+    )
+
+
+async def _invite_and_accept(
+    client: AsyncClient, headers: dict[str, str], org_id: str, email: str
+) -> Response:
+    inv = await _invite(client, headers, org_id, email)
+    assert inv.status_code == 201, inv.text
+    token = _last_invite_token()
+    invitee_auth = await signup(client, email)
+    return await client.post(f"/v1/orgs/invitations/{token}/accept", headers=bearer(invitee_auth))
+
+
+async def test_team_invite_blocked_at_the_cap(client: AsyncClient, db_session: AsyncSession) -> None:
+    """`pro` allows 5 team members; the owner already occupies one seat."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+
+    for i in range(4):  # + the owner = 5, at the cap
+        resp = await _invite_and_accept(client, headers, org_id, f"member{i}.{org_id[:8]}@example.com")
+        assert resp.status_code == 200, resp.text
+
+    blocked = await _invite(client, headers, org_id, f"one-too-many.{org_id[:8]}@example.com")
+    assert blocked.status_code == 402, blocked.text
+    assert blocked.json()["error"]["details"]["feature"] == "team_members"
+
+
+async def test_team_invite_succeeds_under_the_cap(client: AsyncClient, db_session: AsyncSession) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+    resp = await _invite(client, headers, org_id, f"newbie.{org_id[:8]}@example.com")
+    assert resp.status_code == 201, resp.text
+
+
+async def test_team_accept_blocked_when_the_cap_fills_before_this_invite_is_accepted(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Gating only invite-creation would let an org pre-invite past its seat count — the
+    accept-time check is what actually stops the overage once other invitees fill the cap
+    first (docs/22 §11)."""
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
+
+    early = await _invite(client, headers, org_id, f"early.{org_id[:8]}@example.com")
+    assert early.status_code == 201, early.text
+    early_token = _last_invite_token()
+
+    for i in range(4):  # + the owner = 5, fills the cap before `early` gets accepted
+        resp = await _invite_and_accept(client, headers, org_id, f"filler{i}.{org_id[:8]}@example.com")
+        assert resp.status_code == 200, resp.text
+
+    early_invitee = await signup(client, f"early.{org_id[:8]}@example.com")
+    late_accept = await client.post(
+        f"/v1/orgs/invitations/{early_token}/accept", headers=bearer(early_invitee)
+    )
+    assert late_accept.status_code == 402, late_accept.text
+    assert late_accept.json()["error"]["details"]["feature"] == "team_members"
+
+
+async def test_team_invite_always_succeeds_on_an_unlimited_plan(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "legacy")  # max_team_members=None
+    for i in range(6):  # past Pro's own cap of 5
+        resp = await _invite_and_accept(client, headers, org_id, f"m{i}.{org_id[:8]}@example.com")
+        assert resp.status_code == 200, resp.text
+
+
+async def test_team_invite_blocked_when_the_plan_has_expired(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "pro", expires_at=PAST)
+    resp = await _invite(client, headers, org_id, f"nope.{org_id[:8]}@example.com")
+    assert resp.status_code == 402, resp.text
+
+
+async def test_an_org_already_over_a_new_lower_team_cap_keeps_its_existing_members(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    from app.models import Membership
+
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "business", expires_at=FUTURE)  # cap=15
+    for i in range(4):  # + the owner = 5 active members
+        resp = await _invite_and_accept(client, headers, org_id, f"m{i}.{org_id[:8]}@example.com")
+        assert resp.status_code == 200, resp.text
+
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)  # cap -> 1
+
+    existing = (
+        await db_session.execute(
+            Membership.__table__.select().where(
+                Membership.organization_id == uuid.UUID(org_id), Membership.status == "active"
+            )
+        )
+    ).fetchall()
+    assert len(existing) == 5
+
+    blocked = await _invite(client, headers, org_id, f"sixth.{org_id[:8]}@example.com")
     assert blocked.status_code == 402, blocked.text

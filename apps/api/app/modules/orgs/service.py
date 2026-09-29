@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import usage
 from app.billing.usage import load_entitlements, unanswered_messages
 from app.core import rbac
 from app.core.audit import write_audit
@@ -352,6 +353,7 @@ async def create_invitation(
     session: AsyncSession, ctx: OrgContext, email: str, role: str
 ) -> schemas.InvitationOut:
     rbac.require_permission(ctx.role, rbac.MEMBERS_MANAGE)
+    await usage.require_team_member_slot(session, ctx.org)
     email = email.lower()
     existing_user = (
         await session.execute(select(User).where(User.email == email))
@@ -524,13 +526,19 @@ async def accept_invitation(session: AsyncSession, user: User, token: str) -> sc
             )
         )
     ).scalar_one_or_none()
-    if existing is not None:
-        existing.status = "active"
+    if existing is not None and existing.status == "active":
         existing.role = invitation.role
     else:
-        session.add(
-            Membership(organization_id=org.id, user_id=user.id, role=invitation.role, status="active")
-        )
+        # A brand-new membership, or one being reactivated, adds a seat — gate it here too
+        # (docs/22 §11): gating only at invite-creation lets an org pre-invite past its cap.
+        await usage.require_team_member_slot(session, org)
+        if existing is not None:
+            existing.status = "active"
+            existing.role = invitation.role
+        else:
+            session.add(
+                Membership(organization_id=org.id, user_id=user.id, role=invitation.role, status="active")
+            )
     invitation.accepted_at = _now()
     await _write_audit(
         session, org.id, user.id, "invitation.accepted",

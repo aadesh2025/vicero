@@ -257,7 +257,7 @@ export function ActivityChart() {
 
       <div className="px-2 pb-1 pt-2">
         {isLoading ? (
-          <Skeleton className="h-36 rounded-lg" />
+          <Skeleton className="h-80 rounded-lg" />
         ) : (
           <ActivityBars
             bars={bars}
@@ -265,7 +265,7 @@ export function ActivityChart() {
             onSelect={setSelectedIndex}
             format={(n) => formatMetric(metric, n)}
             selectedDelta={barDelta}
-            height={144}
+            height={320}
             ariaLabel={`${METRIC_LABEL[metric]} per ${granularity}, ${fromIso} to ${toIso}`}
           />
         )}

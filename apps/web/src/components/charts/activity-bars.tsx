@@ -12,7 +12,9 @@ export interface ActivityBar {
   ariaLabel: string;
 }
 
-const PAD = { top: 30, right: 8, bottom: 18, left: 28 };
+// `top` leaves headroom above even a 100%-of-scale bar for its delta pill (22px tall, offset
+// 34px above the bar) without colliding with the top gridline's own label.
+const PAD = { top: 44, right: 8, bottom: 18, left: 28 };
 
 /**
  * The dashboard "Activity" bar chart (docs/20 §9.3.2, ADR-101), styled after
@@ -158,19 +160,37 @@ export function ActivityBars({
                   style={{ transformBox: "fill-box" }}
                 />
               )}
-              {selected && b.value > 0 && (
-                <text
-                  x={x + barW / 2}
-                  y={y + h - 10}
-                  textAnchor="middle"
-                  className="tabular-nums"
-                  style={{ fill: "rgb(var(--on-accent))", fontSize: 12, fontWeight: 800 }}
-                >
-                  {format(b.value)}
-                </text>
-              )}
+              {b.value > 0 &&
+                (selected ? (
+                  <text
+                    x={x + barW / 2}
+                    y={y + h - 10}
+                    textAnchor="middle"
+                    className="tabular-nums"
+                    style={{ fill: "rgb(var(--on-accent))", fontSize: 12, fontWeight: 800 }}
+                  >
+                    {format(b.value)}
+                  </text>
+                ) : (
+                  // Shown for every bar, not just the selected one — a count that only reveals
+                  // itself on hover isn't readable at a glance.
+                  <text
+                    x={x + barW / 2}
+                    y={Math.max(12, y - 8)}
+                    textAnchor="middle"
+                    className="tabular-nums"
+                    style={{ fill: "rgb(var(--chart-axis))", fontSize: 10, fontWeight: 700 }}
+                  >
+                    {format(b.value)}
+                  </text>
+                ))}
               {selected && selectedDelta && (
-                <foreignObject x={x + barW / 2 - 28} y={Math.max(0, y - 28)} width={56} height={22}>
+                <foreignObject
+                  x={Math.min(w - PAD.right - 56, Math.max(PAD.left, x + barW / 2 - 28))}
+                  y={Math.max(4, y - 34)}
+                  width={56}
+                  height={22}
+                >
                   <div
                     className={
                       "flex h-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold text-white " +

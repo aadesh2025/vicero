@@ -320,6 +320,12 @@ async def test_an_invited_teammate_does_not_get_a_stray_trial_workspace(
 ) -> None:
     owner = await signup(client)
     headers = await org_headers(client, owner)
+    # Trial's team-member cap is 1 (docs/22 §11) — the owner already fills it, so the invite
+    # itself needs a plan with room; this test's actual subject is the invitee's own signup.
+    org = await db_session.get(Organization, uuid.UUID(headers["X-Org-Id"]))
+    assert org is not None
+    org.plan = "pro"
+    await db_session.flush()
     invitee = unique_email("inv")
     inv = await client.post(
         f"/v1/orgs/{headers['X-Org-Id']}/invitations",
@@ -338,6 +344,12 @@ async def test_a_user_with_no_workspace_can_create_their_one(
     """The lapsed-invitation case: no workspace yet, so the first create is allowed."""
     owner = await signup(client)
     headers = await org_headers(client, owner)
+    # Trial's team-member cap is 1 (docs/22 §11) — bump the owner's plan so the invite itself
+    # succeeds; the test's subject is what happens when the invitee never accepts it.
+    org = await db_session.get(Organization, uuid.UUID(headers["X-Org-Id"]))
+    assert org is not None
+    org.plan = "pro"
+    await db_session.flush()
     invitee = unique_email("late")
     await client.post(
         f"/v1/orgs/{headers['X-Org-Id']}/invitations",

@@ -312,8 +312,16 @@ async def test_publishing_needs_a_verified_email_on_a_trial(client: AsyncClient)
     assert ok.status_code == 200, ok.text
 
 
-async def test_enabling_a_channel_needs_a_verified_email_on_a_trial(client: AsyncClient) -> None:
-    _, headers, _ = await trial_org(client)
+async def test_enabling_a_channel_needs_a_verified_email_on_a_trial(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, headers, org_id = await trial_org(client)
+    # Trial's channel allowlist is web-only (docs/22 §11); this test is about the email-verify
+    # gate specifically, so use a plan that includes telegram and still requires verification.
+    org = await db_session.get(Organization, uuid.UUID(org_id))
+    assert org is not None
+    org.plan = "business"
+    await db_session.flush()
     agent = (await client.post("/v1/agents", json={"name": "One"}, headers=headers)).json()
     channel = await client.post(
         "/v1/channels",

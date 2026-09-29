@@ -142,6 +142,7 @@ async def test_list_n8n_workflows_hides_internal_and_other_orgs(monkeypatch: pyt
         slug = "acme"
         plan = "legacy"  # the n8n gate reads the org's plan (docs/18)
         trial_ends_at = None
+        plan_expires_at = None
 
     class _Ctx:
         role = "owner"
@@ -169,6 +170,7 @@ async def test_bind_by_id_rejects_workflow_from_another_org(monkeypatch: pytest.
         slug = "acme"
         plan = "legacy"  # the n8n gate reads the org's plan (docs/18)
         trial_ends_at = None
+        plan_expires_at = None
 
     class _Ctx:
         role = "owner"

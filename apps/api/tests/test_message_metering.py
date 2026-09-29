@@ -15,7 +15,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
 from app.channels import get_channel
@@ -32,6 +32,7 @@ from app.models import (
     Organization,
     OrgMessageUsage,
 )
+from tests.dbconn import new_engine
 from tests.selfserve_helpers import chat, make_agent_public, set_trial_end, trial_org
 
 pytestmark = pytest.mark.usefixtures("self_serve")
@@ -260,6 +261,12 @@ async def test_a_messaging_channel_is_silenced_and_counted_like_the_widget(
     get_channel("telegram").transport = _telegram_capture(calls)  # type: ignore[union-attr]
     try:
         headers, org_id, _ = await _setup(client)
+        # Trial's channel allowlist is web-only (docs/22 §11) — telegram needs a plan that
+        # includes it, unrelated to what this test is actually exercising.
+        org = await db_session.get(Organization, uuid.UUID(org_id))
+        assert org is not None
+        org.plan = "legacy"
+        await db_session.flush()
         agent = (await client.get("/v1/agents", headers=headers)).json()[0]
         created = await client.post(
             "/v1/channels",
@@ -270,6 +277,7 @@ async def test_a_messaging_channel_is_silenced_and_counted_like_the_widget(
         channel = await db_session.get(Channel, uuid.UUID(cid))
         assert channel is not None
         channel.enabled = True  # enabling through the API needs a verified email; not the subject here
+        org.plan = "trial"  # restore, so the trial-expiry silencing below is still exercised
         await db_session.flush()
         hook = {"X-Telegram-Bot-Api-Secret-Token": channel.webhook_secret}
         update_body = {"message": {"chat": {"id": 55}, "text": "hello telegram"}}
@@ -321,7 +329,7 @@ async def test_concurrent_reservations_never_exceed_the_cap() -> None:
     Real committed rows on separate connections: the shared-transaction test fixture cannot
     exhibit a race, because every statement there runs on one connection.
     """
-    engine = create_async_engine(settings.database_url)
+    engine = new_engine()
     org_id = uuid.uuid4()
     try:
         from sqlalchemy.ext.asyncio import AsyncSession as S
@@ -351,7 +359,7 @@ async def test_concurrent_reservations_never_exceed_the_cap() -> None:
 
 
 async def test_a_refund_returns_exactly_one() -> None:
-    engine = create_async_engine(settings.database_url)
+    engine = new_engine()
     org_id = uuid.uuid4()
     try:
         async with AsyncSession(engine) as s:

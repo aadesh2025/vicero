@@ -51,6 +51,9 @@ Describes the repository as it is, measured from the code. Where a document disa
 
 ## Documentation drift
 
-| Document | Claim | Reality | Fix |
-|---|---|---|---|
-| | | | |
+| Document | Claim | State (current / historical / planned / deferred / unknown) | Reality | Fix |
+|---|---|---|---|---|
+| | | | | |
+
+Only correct a row classified **current**. A **historical** row describing an older architecture is not drift
+to fix — see `references/state-and-sources.md`.

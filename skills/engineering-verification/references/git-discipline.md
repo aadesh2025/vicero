@@ -22,7 +22,12 @@ a lock file appears; test or dev processes you did not start are running against
 run of yours fails in ways that match someone else's edits.
 
 If you see any of these: stop, say what you saw, and ask how to proceed. Safer options to propose: work in a
-separate worktree of your own, or agree who edits when. Do not "win" the race by overwriting.
+separate worktree of your own, or agree who edits when. Do not "win" the race by overwriting, and do not
+attempt to automatically merge, rebase onto, or reconcile another agent's in-progress changes with yours —
+that decision belongs to a person, not to whichever agent noticed first. **Preserving another agent's
+uncommitted work takes priority over completing your own task.** If finishing the task would require touching
+a file they appear to own, stop before that file, report what you can still safely do, and name what is
+blocked and why.
 
 Do not run whole-suite checks or mutation experiments in a tree another session is editing, and do not edit
 shared source temporarily. If your own experiment changes shared files, another process may run against the
@@ -88,3 +93,20 @@ Before reporting, list the complete change set and classify every file as: direc
 generated and removed or explained; local environment (untracked, not committed); pre-existing; or accidental.
 Revert only your own accidental changes. There must be no unexplained modification. Report the final clean or
 dirty state and why.
+
+### Negative verification checklist
+
+State these explicitly as confirmed facts (with the `git diff --stat` / full-diff evidence), not as silence.
+Scope each to what the task should have touched — a finding here is "this changed and the task did not call
+for it," not "this category exists somewhere in the repository":
+
+- No file outside the task's stated scope was modified.
+- No dependency, package-manifest or lockfile changed, unless the task was explicitly about dependencies.
+- No migration changed (new migrations added for a schema change are fine; editing a historical one is not).
+- No public API (routes, exported functions, schemas, wire format) changed, unless that was the task.
+- No security policy or guard changed, unless that was the task.
+- No architectural boundary or layering changed, unless that was the task.
+- No generated file changed beyond what a command you yourself ran explains (name the command).
+
+Treat this the same way a security finding is treated: state it as evidence, not assumption. "I did not touch
+X" is verified by the diff showing X absent, not by remembering not to have opened it.

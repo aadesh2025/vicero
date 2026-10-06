@@ -94,7 +94,8 @@ Method: `security.md`.
 - Add the minimum abstraction the feature needs.
 - Keep the feature separate from refactors, upgrades and migrations of frameworks.
 - Update documentation only where its truth changed. Record a decision when a boundary or abstraction changes.
-- Do not fix unrelated problems you notice; list them under follow-up.
+- Do not fix unrelated problems you notice; classify them (`SKILL.md`, "Change-scope guard") and list anything
+  short of REQUIRED FOR REQUEST/CORRECTNESS/SECURITY under follow-up instead of implementing it.
 
 ## 8. Feature report
 

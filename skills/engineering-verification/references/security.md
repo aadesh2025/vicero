@@ -9,6 +9,11 @@ a generic checklist against every project. It is not a full penetration test.
 Build the list from evidence, not from this document. For each surface note where it lives, who can reach it
 (anonymous, authenticated user, tenant admin, operator), and what it can touch.
 
+A surface that looks weaker than expected is not automatically a bug: check for an explicit, documented
+security decision before treating a shape in the code as an oversight to fix (`state-and-sources.md`, source-
+of-truth hierarchy). An undocumented weak surface is a finding; a deliberately accepted, recorded trade-off is
+not — report it as what it is and move on, do not silently "harden" it past what the decision describes.
+
 Look for: HTTP/RPC/WebSocket routes; webhooks and callbacks; file upload and download; server-side fetches of
 a configurable URL; command or process execution; template or query construction; deserialization; OAuth and
 session handling; API keys and tokens; background jobs and schedulers; message queues; admin or internal

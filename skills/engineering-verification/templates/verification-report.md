@@ -42,9 +42,9 @@ Include only if the product is multi-tenant; otherwise write "not applicable: si
 
 ## Tests
 
-| Suite | Command source | Result | Counts | Duration | Notes |
-|---|---|---|---|---|---|
-| | | pass / fail / not run | | | |
+| Suite | Command source | Result | Counts | Duration | Evidence level | Notes |
+|---|---|---|---|---|---|---|
+| | | pass / fail / not run | | | E0-E5 | |
 
 Failing tests, one label each (baseline failure / regression / environment failure / flaky failure / unknown):
 
@@ -54,32 +54,43 @@ Failing tests, one label each (baseline failure / regression / environment failu
 
 ## Static Checks
 
-| Check | Scope | Result |
-|---|---|---|
-| lint | | |
-| formatting (check mode) | | |
-| typecheck | | |
-| static analysis | | |
-| dependency audit | | |
+| Check | Scope | Result | Evidence level |
+|---|---|---|---|
+| lint | | | |
+| formatting (check mode) | | | |
+| typecheck | | | |
+| static analysis | | | |
+| dependency audit | | | |
 
 ## Build
 
-| Deliverable | Command source | Result | Tracked files changed by the build |
-|---|---|---|---|
-| | | | |
+| Deliverable | Command source | Result | Tracked files changed by the build | Evidence level |
+|---|---|---|---|---|
+| | | | | |
 
 ## E2E
 
 - Setup read (services, ports, data, environment): `<...>`
 - Isolation used: `<...>`
 - Result: `<counts; or not run, with the exact reason>`
+- Evidence level reached: `<E0-E5>`
 - Failures classified against the base: `<...>`
 
 ## Documentation
 
-- Checked: `<documents>`
-- Contradictions with the code found and corrected: `<list>`
-- Found and left, with reason: `<list>`
+- Checked: `<documents>`, each classified current / historical / planned / deferred / unknown
+  (`state-and-sources.md`) before any edit
+- Contradictions with the code found and corrected (current documents only): `<list>`
+- Found and left, with reason (historical, planned, deferred, or unresolved): `<list>`
+
+## CI/CD Consistency
+
+Only if CI/release configuration was in scope.
+
+- Repository's actual default/primary branch: `<...>`
+- Workflow triggers vs. that branch, and vs. each other (push/PR/tag/dispatch): `<...>`
+- Deployment conditions vs. the documented release process: `<...>`
+- Contradictions found and corrected, or found and left (reason): `<...>`
 
 ## Git Worktree
 
@@ -90,6 +101,13 @@ Failing tests, one label each (baseline failure / regression / environment failu
 - Commits made: `<none | hashes>`
 - Concurrent activity: `<none observed | what was observed>`
 - Final state: `<clean | dirty, and why>`
+
+### Negative verification
+
+Confirmed with the diff, not by assumption: no unrelated file modified `<yes/exceptions>`; no dependency or
+lockfile change `<yes/exceptions>`; no migration change `<yes/exceptions>`; no public API change
+`<yes/exceptions>`; no security-policy change `<yes/exceptions>`; no architecture/boundary change
+`<yes/exceptions>`; no unexplained generated-file change `<yes/exceptions>`.
 
 ## Regressions
 

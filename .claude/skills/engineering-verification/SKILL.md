@@ -3,7 +3,7 @@ name: engineering-verification
 description: Disciplined senior-engineer protocol for working in an existing repository. Three modes - investigate an unfamiliar codebase (read, analyze, report), verify that it is a stable baseline (baseline, checks, failure classification, justified fixes only), and add features safely (impact plan, change locality, reuse before creating). Discovers the project's real stack and commands instead of assuming them. Use to understand, assess or stabilize a repository, to check a recent change, or before a non-trivial feature. Not for redesigns or unsolicited refactors.
 ---
 
-# engineering-verification v1.0.1 (Claude Code adapter)
+# engineering-verification v1.1.0 (Claude Code adapter)
 
 This file is a pointer. The protocol is agent-neutral and lives in one place:
 

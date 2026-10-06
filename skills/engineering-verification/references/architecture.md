@@ -7,7 +7,12 @@ abstraction to a new one, and a local change to a repository-wide one.
 ## 1. Discover, do not assume
 
 Read the architecture documents and decision records, then check them against the code. Where the two
-disagree, the code is the truth and the document is drift to correct.
+disagree, prefer the code **for what it actually does** — but check `references/state-and-sources.md` before
+deciding what to do about the disagreement: a document with no historical framing that misdescribes current
+structure is drift to correct; a dated or explicitly historical document describing a past architecture is not
+drift, it is a record, and must not be rewritten to match today; and a documented, explicit architectural
+decision (an ADR that says "we chose X and know Y looks like an alternative") controls over a naive reading of
+the code, because the code alone cannot tell you whether a shape is an oversight or a decision.
 
 Record (use `templates/architecture-map.md`):
 

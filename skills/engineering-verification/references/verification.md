@@ -19,6 +19,11 @@ Write this before changing anything. Every later "pre-existing" claim is checked
   test with its first error line.
 - **Not run:** each check that was not run, with the exact reason.
 
+A document that already claims "all tests pass," "verified," or "production-ready" is historical evidence
+about whenever it was written, not current evidence about the tree you are about to baseline — re-run the
+checks yourself and report the evidence level you actually reached (`SKILL.md`, "Evidence levels"); do not
+carry the document's claim forward as if it were your own result (`state-and-sources.md`, claim freshness).
+
 Keep it in the working notes or the report; do not commit it unless asked.
 
 ## 2. Sequence
@@ -39,8 +44,12 @@ Run in order; skip a step only if it does not apply, and say so.
 7. **Build.** Production build for each deliverable. Check the worktree afterward for rewritten tracked files.
 8. **End-to-end.** Read the setup first (`testing.md` section 6). Prefer an isolated stack. If it cannot run,
    record why; a partial run is not a pass.
-9. **Documentation consistency.** Compare README, architecture docs, decision records, security, environment,
-   deployment and test docs with the implementation. Correct factual contradictions only.
+9. **Documentation and CI/CD consistency.** Compare README, architecture docs, decision records, security,
+   environment, deployment and test docs with the implementation; classify each as current, historical,
+   planned, deferred or unknown before touching it (`state-and-sources.md`), and correct factual contradictions
+   only in current documentation. Where the task touches process: compare the repository's actual default
+   branch, each workflow's triggers, and the documented release process for contradictions (`SKILL.md`,
+   "CI/CD consistency").
 10. **Git review.** Full diff; classify every modified file (`git-discipline.md` section 8).
 11. **Classify failures**, apply the fix rule, **re-verify**, then **report**.
 

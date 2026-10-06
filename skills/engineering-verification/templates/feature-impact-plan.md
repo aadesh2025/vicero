@@ -89,5 +89,7 @@ Checks run: `<commands and outcomes>`. Not run: `<... and why>`.
 
 ## Final Scope
 
-What changed, what deliberately did not, and what was noticed but left for follow-up. Confirm the diff was
-reviewed in full against the plan.
+What changed, what deliberately did not, and what was noticed but left for follow-up — each classified
+REQUIRED FOR REQUEST / REQUIRED FOR CORRECTNESS / REQUIRED FOR SECURITY (changed) or OPTIONAL FOLLOW-UP /
+UNRELATED (not changed, listed instead) per `SKILL.md`, "Change-scope guard". Confirm the diff was reviewed in
+full against the plan, and that negative verification (`references/git-discipline.md` §8) was done.

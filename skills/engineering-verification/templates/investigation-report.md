@@ -82,6 +82,19 @@ policy), what crosses boundaries, retention and deletion.
 
 Documents present, their apparent freshness, and factual contradictions with the code.
 
+| Document | Claim | State (current / historical / planned / deferred / unknown) | Contradiction? |
+|---|---|---|---|
+| | | | |
+
+## CI/CD Consistency
+
+Default/primary branch, each workflow's triggers, deployment conditions (automatic / manual dispatch / tag-
+gated), and the documented release process — only if CI/release configuration is in scope.
+
+| Item | Repository policy | Workflow/config says | Contradiction? |
+|---|---|---|---|
+| | | | |
+
 ## Technical Debt
 
 ### Required
@@ -105,6 +118,15 @@ Each risk with the reasoning for likelihood and impact.
 ## Open Questions
 
 | Question | What would settle it | Needs a user decision? |
+|---|---|---|
+| | | |
+
+## Not Run / Not Verified
+
+Checks or claims deliberately not run or not independently verified, and why (includes any document claim of
+"complete"/"verified"/"passing" taken as historical evidence only — `state-and-sources.md`).
+
+| Item | Why not run/verified | Evidence level reached (if any) |
 |---|---|---|
 | | | |
 

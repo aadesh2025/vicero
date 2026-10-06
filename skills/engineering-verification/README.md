@@ -35,7 +35,9 @@ engineering-verification/
 │   ├── architecture.md       discovering boundaries, measuring dependencies, lightweight enforcement
 │   ├── testing.md            command discovery, running checks, failure classification, flakes, E2E
 │   ├── git-discipline.md     preflight, concurrent sessions, worktrees, staging, lockfiles
-│   └── feature-safety.md     impact plan, change locality, duplicate-abstraction search
+│   ├── feature-safety.md     impact plan, change locality, duplicate-abstraction search
+│   ├── state-and-sources.md  current/historical/planned/deferred, source-of-truth hierarchy, claim freshness
+│   └── self-check.md         for maintainers of this skill package: its own structural self-test
 └── templates/            reusable output structures
     ├── investigation-report.md
     ├── verification-report.md
@@ -114,8 +116,28 @@ Copyright (c) 2026 Aadesh (aadesh2025). The `LICENSE` file is the authoritative 
 
 ## Version
 
-**engineering-verification v1.0.1.** v1.0.0 is the frozen protocol baseline; v1.0.1 changes no protocol
-behavior: it adds the `LICENSE` and makes this README independent of where the directory is placed.
+**engineering-verification v1.1.0.** v1.0.0 is the frozen protocol baseline; v1.0.1 changed no protocol
+behavior (added the `LICENSE`, made this README independent of where the directory is placed). **v1.1.0** is a
+MINOR, additive release — new capabilities, nothing an existing v1.0.x usage relies on was removed or
+redefined:
+
+- A current/historical/planned/deferred/unknown state classification, and a per-claim-type source-of-truth
+  hierarchy, replacing the old blanket "code is truth" framing (`references/state-and-sources.md`).
+- Claim-freshness checking: a document's own "verified"/"complete"/"all tests pass" wording is now explicitly
+  historical evidence, not current evidence, until re-checked.
+- A lightweight, provider-neutral CI/CD consistency check (branch triggers vs. the repository's actual
+  policy, release gating vs. documented process).
+- Evidence levels (E0-E5) for labeling how a claim was checked, without turning it into a score.
+- A named change-scope guard (REQUIRED FOR REQUEST / CORRECTNESS / SECURITY vs. OPTIONAL FOLLOW-UP / UNRELATED)
+  applied uniformly to anything found mid-task, not only to debt found during investigation.
+- A scoped "documentation reconciliation" procedure under Mode 2, for tasks that are specifically about fixing
+  stale documentation without rewriting history.
+- An explicit negative-verification checklist (no unrelated file, dependency, migration, API, security-policy
+  or architecture change) as a stated-and-evidenced fact, not a silent assumption.
+- A sharper concurrent-session rule: another agent's uncommitted work outranks finishing your own task, and
+  must never be auto-merged.
+- `references/self-check.md`, a portable checklist for validating this skill package's own structure and
+  version consistency when maintaining it.
 
 - The universal skill answers "what should an AI coding agent do?". Facts about a particular repository (its
   commands, layout, rules, decisions) belong in that repository's own instructions, never in this skill. Do not

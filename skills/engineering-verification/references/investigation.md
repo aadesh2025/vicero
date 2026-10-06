@@ -15,6 +15,12 @@ Every finding is one of:
 Never present an inference as a fact. Prefer measuring to reading: parse imports, list routes from the
 framework's own route table, read the CI file rather than guessing what CI runs.
 
+For any finding whose *timing* matters (a status, a count, a "done" marker, an architecture claim that might
+be superseded), also classify its state — **CURRENT, HISTORICAL, PLANNED, DEFERRED or UNKNOWN**
+(`state-and-sources.md`) — in addition to its FACT/INFERENCE/OPEN QUESTION label. The two axes are independent:
+a historical claim can be an observed FACT (the document genuinely says that) while also being the wrong
+evidence for a claim about today.
+
 ## 1. Repository
 
 Survey without modifying anything:

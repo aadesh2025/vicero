@@ -103,6 +103,8 @@ the worktree. Never mutate the shared tree; anything running against it will see
 
 ## 9. What "pass" means in the report
 
-State, per check: the command's source, the scope, the counts, and the outcome. "Not run" and "could not run"
-are valid outcomes with reasons. A check that passed at an earlier commit and was not re-run after later
-changes is not evidence about the current state.
+State, per check: the command's source, the scope, the counts, and the outcome, labeled with an evidence level
+(`SKILL.md`, "Evidence levels") so a reader can tell a full run from a targeted probe. "Not run" and "could not
+run" are valid outcomes with reasons. A check that passed at an earlier commit and was not re-run after later
+changes is historical evidence, not current evidence about the state in front of you
+(`state-and-sources.md`, claim freshness).

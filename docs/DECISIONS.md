@@ -6,6 +6,29 @@ Format each entry as below. Newest at the top.
 ---
 
 ## Template
+### ADR-106: Multi-currency price lists (USD / EUR / INR) with display-only geo detection (migration 0030)
+- **Date:** 2026-10-06
+- **Status:** accepted
+- **Context:** Prices were USD-only. Indian and EU visitors need local price lists; there is still no
+  payment processor (docs/23 deferred) and the site is not deployed, so detection cannot assume a host.
+- **Decision:** (1) Prices are integer minor units in `PlanSpec.price_minor` /
+  `extra_message_pack_price_minor`; `price_usd_month` / `extra_message_pack_usd` stay as derived USD
+  properties. `price_for()` raises on an unknown currency, never defaulting to USD. (2) Currency comes
+  from `?currency=`, then a country header (`GEO_COUNTRY_HEADERS`, only if `TRUST_GEO_HEADERS`), then
+  USD (`app/core/geo.py`, EU27 not the euro area). (3) **Display only**: the ledger's currency is the
+  operator's explicit choice and the amount is computed server-side from the plan table. (4)
+  `billing_cycles` and `plan_grants` gain `currency` (CHECK USD/EUR/INR) + `amount_minor`;
+  `amount_usd_cents` is kept, written only for USD rows, and is now nullable on `billing_cycles`.
+  (5) Money is never summed across currencies; `GET /v1/admin/billing/totals` returns one row per
+  currency. (6) `GET /v1/billing/plans` is `Cache-Control: private, no-store` with `Vary` on the geo headers.
+- **Choices made:** an unsupported `?currency=` (e.g. GBP) is **ignored** (falls through to the header,
+  then USD) rather than 400 - a stale bookmark still renders. Mark-paid may re-price a still-`pending`
+  cycle into the currency the client actually paid in (409 once settled). Tax is excluded and labelled
+  (excl. VAT / GST / taxes); none is calculated.
+- **Consequences:** Downgrading 0030 sets `amount_usd_cents = 0` on non-USD cycles (they cannot be
+  represented in the old shape). Adding a currency = one entry per price dict, `SUPPORTED_CURRENCIES`
+  and the migration CHECK.
+
 ### ADR-000: <title>
 - **Date:** YYYY-MM-DD
 - **Status:** proposed | accepted | superseded by ADR-XXX

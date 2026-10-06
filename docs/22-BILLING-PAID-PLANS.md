@@ -90,10 +90,13 @@ must always agree, and a test asserts it (§14).
 | | **Starter** | **Pro** | **Business** |
 |---|---:|---:|---:|
 | **Price (USD / month)** | **$49** | **$99** | **$199** |
+| Price (EUR / month, excl. VAT) | €45 | €89 | €179 |
+| Price (INR / month, excl. GST) | ₹1,499 | ₹3,499 | ₹6,999 |
 | **Workspaces** | 1 | 2 | 5 |
 | AI Agents | 3 | 10 | 30 |
 | Messages / month | 2,000 | 10,000 | 30,000 |
 | **Extra messages** | **$6 per 500** | **$5 per 500** | **$4 per 500** |
+| Extra messages (EUR · INR) | €5 · ₹199 per 500 | €4.50 · ₹149 per 500 | €3.50 · ₹99 per 500 |
 | Knowledge Bases | 1 | 5 | 20 |
 | Knowledge Storage | 500 MB | 5 GB | 10 GB |
 | Documents | 20 | 100 | 500 |
@@ -107,6 +110,11 @@ must always agree, and a test asserts it (§14).
 | Team Members | 1 | 5 | 15 |
 | Remove branding | — | ✓ | ✓ |
 | Support | Email | Priority | Priority |
+
+**Currencies (ADR-106).** Prices are stored as integer minor units (USD 4900 = $49; INR 149900 =
+₹1,499) in `PlanSpec.price_minor` / `extra_message_pack_price_minor`, read through `price_for()` /
+`pack_price_for()`. All prices exclude tax; no tax is calculated. Limits, features and enforcement
+are identical in every currency — only the price differs.
 
 **Rules that ship with the table**
 
@@ -930,6 +938,18 @@ Unlimited, never gated, never in the overdue list (use **Waive** on any cycle th
 Same for demo workspaces you show to prospects.
 
 ---
+
+### 16.6 Multi-currency display: geo picks what is SHOWN, never what is charged (ADR-106)
+- USD, EUR and INR price lists. IN → INR, the 27 EU states → EUR, everything else and unknown → USD.
+- Country comes from `?currency=` (the switcher) first, then a proxy header (`GEO_COUNTRY_HEADERS`)
+  only when `TRUST_GEO_HEADERS=true`, then USD. `XX`/`T1` mean unknown.
+- **Display only.** Headers are spoofable (VPN, a direct hit on the API); that is acceptable solely
+  because the worst case is seeing another region's price list. Ledger rows take their currency from
+  staff's explicit choice in the admin panel, and the amount is always computed from the plan table.
+- The ledger stores `currency` + `amount_minor` (migration 0030). Money is **never summed across
+  currencies**; totals are per currency.
+- Production: the proxy must forward one of the headers, and the API must be reachable only through it
+  when `TRUST_GEO_HEADERS=true` (docs/ENV.md).
 
 ## Appendix A — Your monthly operating runbook
 

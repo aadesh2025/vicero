@@ -192,6 +192,11 @@ class PlanGrant(Base, UUIDPrimaryKey):
     #: What was invoiced, in cents — recorded for your records, **never charged**. Nothing in
     #: this codebase moves money (docs/22 §5).
     amount_usd_cents: Mapped[int | None] = mapped_column(Integer)
+    #: ISO currency of `amount_minor` — USD | EUR | INR (CHECK-constrained, migration 0030).
+    currency: Mapped[str] = mapped_column(String(3), default="USD", server_default="USD", nullable=False)
+    #: Same amount in `currency`'s minor units (cents / paise). `amount_usd_cents` mirrors it for
+    #: USD rows only. Never sum this across currencies.
+    amount_minor: Mapped[int | None] = mapped_column(BigInteger)
     note: Mapped[str | None] = mapped_column(String(500))
     actor_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     #: A `pack_added` row not yet reflected in an invoice you sent the client (docs/22 §7's
@@ -225,9 +230,15 @@ class BillingCycle(Base, UUIDPrimaryKey):
     plan: Mapped[str] = mapped_column(String(32), nullable=False)
     period_start: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     period_end: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    #: Copied from `PlanSpec.price_usd_month * 100` at cycle open, so a later price change
+    #: Copied from the plan's price list at cycle open, so a later price change
     #: never rewrites this cycle's amount.
-    amount_usd_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Written for USD cycles only (legacy reader mirror); `None` for EUR/INR.
+    amount_usd_cents: Mapped[int | None] = mapped_column(Integer)
+    #: ISO currency of `amount_minor` — USD | EUR | INR (CHECK-constrained, migration 0030).
+    currency: Mapped[str] = mapped_column(String(3), default="USD", server_default="USD", nullable=False)
+    #: The cycle's price in `currency`'s minor units (cents / paise), copied from the plan table at
+    #: open. Never sum across currencies.
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     #: pending | paid | waived. Never a fourth value here — "overdue" is computed
     #: (`payment_state()`), not stored, since it is a function of the clock, not an event.
     status: Mapped[str] = mapped_column(String(16), default="pending", server_default="pending", nullable=False)

@@ -166,6 +166,15 @@ async def list_billing_cycles(
     return await service.list_billing_cycles(session, status=status)
 
 
+@router.get("/billing/totals", response_model=list[schemas.CurrencyTotalsOut])
+async def billing_totals(
+    _staff: User = Depends(require_staff),
+    session: AsyncSession = Depends(get_session),
+) -> list[schemas.CurrencyTotalsOut]:
+    """This month's collected / pending / overdue, one row per currency - never one combined sum."""
+    return await service.billing_totals(session)
+
+
 @router.post("/billing/cycles/{cycle_id}/paid", response_model=schemas.BillingCycleOut)
 async def mark_cycle_paid(
     cycle_id: uuid.UUID,

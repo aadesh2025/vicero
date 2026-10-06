@@ -43,10 +43,17 @@ class PlanFeaturesOut(BaseModel):
 class PlanOut(BaseModel):
     id: str
     name: str
+    #: Always USD, whole dollars — kept so nothing that read the pre-currency shape breaks.
     price_usd_month: int
+    #: Price in `PricingOut.currency`, INTEGER MINOR UNITS (cents / paise), excl. tax. Divide by
+    #: 100 only for display (docs/22 §3, ADR-106).
+    price_minor: int
     #: Extra conversations, sold in packs at this plan's rate (docs/22 §7).
     extra_message_pack_size: int
+    #: Always USD, whole dollars (legacy field).
     extra_message_pack_usd: int
+    #: One pack's price in `PricingOut.currency`, minor units.
+    extra_message_pack_price_minor: int
     limits: PlanLimitsOut
     features: PlanFeaturesOut
     #: `None` = every supported channel.
@@ -62,7 +69,14 @@ class PricingOut(BaseModel):
     """
 
     plans: list[PlanOut]
+    #: The currency every `*_minor` field below is in.
     currency: str = "USD"
+    #: Why this currency: `query` (manual switcher), `geo` (country header) or `default`.
+    #: Display only — never what anyone is charged.
+    currency_source: str = "default"
+    available_currencies: list[str] = ["USD", "EUR", "INR"]
+    #: "excl. taxes" (USD) · "excl. VAT" (EUR) · "excl. GST" (INR). No tax is calculated.
+    tax_note: str = "excl. taxes"
     contact_only: bool = True
 
 

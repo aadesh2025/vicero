@@ -205,6 +205,9 @@ class PlanGrantOut(BaseModel):
     expires_at: dt.datetime | None = None
     extra_messages: int | None = None
     amount_usd_cents: int | None = None
+    currency: str = "USD"
+    #: Minor units of `currency` (cents / paise). Never sum across currencies.
+    amount_minor: int | None = None
     note: str | None = None
     actor_email: str | None = None
     invoiced: bool = False
@@ -218,7 +221,11 @@ class BillingCycleOut(BaseModel):
     plan: str
     period_start: dt.datetime
     period_end: dt.datetime
-    amount_usd_cents: int
+    #: Legacy mirror - `None` unless the cycle is in USD.
+    amount_usd_cents: int | None = None
+    currency: str = "USD"
+    #: Minor units of `currency`. Never sum across currencies.
+    amount_minor: int
     #: The raw stored value — pending | paid | waived.
     status: str
     #: The **computed** value `cycles.payment_state()` returns — adds `overdue` when a
@@ -248,6 +255,9 @@ class GrantPlanIn(BaseModel):
     payment_received: bool = False
     method: str | None = None
     reference: str | None = None
+    #: USD | EUR | INR. The amount is computed server-side from the plan's price list in this
+    #: currency; any amount a client sends is ignored. Never inferred from a visitor's country.
+    currency: str = "USD"
 
 
 class RevokePlanIn(BaseModel):
@@ -260,12 +270,17 @@ class AddPacksIn(BaseModel):
     #: messages", so the client can never invent its own price.
     packs: int
     note: str
+    #: USD | EUR | INR - the per-pack price is read from the plan's list in this currency.
+    currency: str = "USD"
 
 
 class MarkCyclePaidIn(BaseModel):
     method: str
     reference: str | None = None
     note: str | None = None
+    #: Only if the client paid in a different currency than the cycle was opened in: re-prices a
+    #: `pending` cycle from the plan table. Omit to keep the cycle's own currency.
+    currency: str | None = None
     #: "Mark paid & renew" — also extends `plan_expires_at` by 30 days and opens the next
     #: cycle as `pending`, in one transaction (docs/22 §5.1).
     renew: bool = False
@@ -283,6 +298,8 @@ class PackOut(BaseModel):
     organization_name: str | None = None
     extra_messages: int | None = None
     amount_usd_cents: int | None = None
+    currency: str = "USD"
+    amount_minor: int | None = None
     note: str | None = None
     invoiced: bool
     created_at: dt.datetime
@@ -290,3 +307,14 @@ class PackOut(BaseModel):
 
 class PackInvoicedIn(BaseModel):
     invoiced: bool
+
+
+class CurrencyTotalsOut(BaseModel):
+    """This calendar month's ledger for ONE currency. Amounts are minor units of `currency`; a
+    row exists per currency present, and no field ever combines two currencies."""
+
+    currency: str
+    collected_minor: int
+    pending_minor: int
+    overdue_minor: int
+    overdue_count: int

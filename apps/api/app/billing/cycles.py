@@ -19,8 +19,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit
-from app.core.plans import PLANS
+from app.core.errors import AppError
+from app.core.plans import DEFAULT_CURRENCY, price_for
 from app.models import BillingCycle, Organization, PlanGrant
+
+
+def usd_mirror(currency: str, amount_minor: int | None) -> int | None:
+    """What goes in the legacy `amount_usd_cents` column: the amount for USD rows, `None` for
+    every other currency, so an old reader can never mistake paise for cents."""
+    return amount_minor if currency == "USD" else None
 
 
 async def open_cycle(
@@ -30,6 +37,7 @@ async def open_cycle(
     plan: str,
     days: int = 30,
     paid: bool = False,
+    currency: str = DEFAULT_CURRENCY,
     method: str | None = None,
     reference: str | None = None,
     note: str | None = None,
@@ -39,17 +47,20 @@ async def open_cycle(
     already received" checkbox — the normal case (client pays, then you grant) opens the cycle
     already settled instead of `pending` followed by an immediate separate `mark_paid`.
 
-    `amount_usd_cents` is read from the plan's spec **now** and copied onto the row, so a later
-    price change never rewrites what this cycle actually cost.
+    The amount is read from the plan's price list in `currency` **now** (minor units) and copied
+    onto the row, so a later price change never rewrites what this cycle actually cost. The
+    currency is the operator's explicit choice — never inferred from a visitor's country.
     """
     now = dt.datetime.now(tz=dt.UTC)
-    amount = (PLANS[plan].price_usd_month or 0) * 100
+    amount = price_for(plan, currency)  # raises on an unknown currency; never falls back
     cycle = BillingCycle(
         organization_id=org_id,
         plan=plan,
         period_start=now,
         period_end=now + dt.timedelta(days=days),
-        amount_usd_cents=amount,
+        currency=currency,
+        amount_minor=amount,
+        amount_usd_cents=usd_mirror(currency, amount),
         status="paid" if paid else "pending",
         paid_at=now if paid else None,
         method=method if paid else None,
@@ -64,13 +75,15 @@ async def open_cycle(
             action="granted",
             to_plan=plan,
             expires_at=cycle.period_end,
-            amount_usd_cents=amount,
+            currency=currency,
+            amount_minor=amount,
+            amount_usd_cents=usd_mirror(currency, amount),
             note=note,
             actor_id=marked_by,
         )
     )
     await write_audit(
-        session, org_id, marked_by, "billing.cycle_opened", meta={"plan": plan, "paid": paid}
+        session, org_id, marked_by, "billing.cycle_opened", meta={"plan": plan, "paid": paid, "currency": currency}
     )
     await session.commit()
     await session.refresh(cycle)
@@ -86,15 +99,27 @@ async def mark_paid(
     note: str | None = None,
     marked_by: uuid.UUID,
     renew: bool = False,
+    currency: str | None = None,
 ) -> BillingCycle:
     """Record that `cycle_id` was paid. `renew=True` (the "Mark paid & renew" monthly-renewal
     button) also extends `Organization.plan_expires_at` by 30 days and opens the next cycle as
     `pending`, in this same transaction.
+
+    `currency` is for the client who was invoiced in one currency and paid in another: a still
+    `pending` cycle is re-priced from the plan table in that currency (the amount is never taken
+    from the caller). A cycle that is already settled keeps the amount it was settled at.
     """
     now = dt.datetime.now(tz=dt.UTC)
     cycle = await session.get(BillingCycle, cycle_id)
     if cycle is None:
         raise ValueError(f"billing cycle {cycle_id} not found")
+
+    if currency is not None and currency != cycle.currency:
+        if cycle.status != "pending":
+            raise AppError("cycle_settled", "A settled cycle's currency cannot be changed.", 409)
+        cycle.amount_minor = price_for(cycle.plan, currency)
+        cycle.currency = currency
+        cycle.amount_usd_cents = usd_mirror(currency, cycle.amount_minor)
 
     cycle.status = "paid"
     cycle.paid_at = now
@@ -108,6 +133,8 @@ async def mark_paid(
             organization_id=cycle.organization_id,
             action="payment_marked",
             to_plan=cycle.plan,
+            currency=cycle.currency,
+            amount_minor=cycle.amount_minor,
             amount_usd_cents=cycle.amount_usd_cents,
             note=note,
             actor_id=marked_by,
@@ -132,6 +159,8 @@ async def mark_paid(
             plan=cycle.plan,
             period_start=cycle.period_end,
             period_end=new_expiry,
+            currency=cycle.currency,
+            amount_minor=cycle.amount_minor,
             amount_usd_cents=cycle.amount_usd_cents,
             status="pending",
         )

@@ -15,7 +15,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.usage import load_entitlements, unanswered_messages
-from app.core.plans import FEATURES, PAID_PLANS, PLANS, PlanSpec
+from app.core.plans import (
+    DEFAULT_CURRENCY,
+    FEATURES,
+    PAID_PLANS,
+    PLANS,
+    SUPPORTED_CURRENCIES,
+    PlanSpec,
+    pack_price_for,
+    price_for,
+)
 from app.models import (
     Agent,
     Document,
@@ -57,7 +66,11 @@ def _features(spec: PlanSpec) -> schemas.PlanFeaturesOut:
     return schemas.PlanFeaturesOut(**{name: bool(getattr(spec, name)) for name in FEATURES})
 
 
-def plan_out(plan_id: str) -> schemas.PlanOut:
+#: What the price excludes, per currency. Text only — no tax is calculated anywhere.
+TAX_NOTE = {"USD": "excl. taxes", "EUR": "excl. VAT", "INR": "excl. GST"}
+
+
+def plan_out(plan_id: str, currency: str = DEFAULT_CURRENCY) -> schemas.PlanOut:
     spec = PLANS[plan_id]
     # Guaranteed by `test_only_paid_plans_carry_a_price`; asserted here so a None can never reach
     # the wire as a price.
@@ -68,8 +81,10 @@ def plan_out(plan_id: str) -> schemas.PlanOut:
         id=plan_id,
         name=_title(plan_id),
         price_usd_month=spec.price_usd_month,
+        price_minor=price_for(plan_id, currency),
         extra_message_pack_size=spec.extra_message_pack_size,
         extra_message_pack_usd=spec.extra_message_pack_usd,
+        extra_message_pack_price_minor=pack_price_for(plan_id, currency),
         limits=_limits(spec),
         features=_features(spec),
         channels=None if spec.channels is None else sorted(spec.channels),
@@ -77,9 +92,18 @@ def plan_out(plan_id: str) -> schemas.PlanOut:
     )
 
 
-def pricing_table() -> schemas.PricingOut:
-    """Every plan that is for sale, cheapest first (the order `PAID_PLANS` is declared in)."""
-    return schemas.PricingOut(plans=[plan_out(plan_id) for plan_id in PAID_PLANS])
+def pricing_table(
+    currency: str = DEFAULT_CURRENCY, currency_source: str = "default"
+) -> schemas.PricingOut:
+    """Every plan that is for sale, cheapest first (the order `PAID_PLANS` is declared in), priced
+    in `currency`. Limits and features are identical in every currency."""
+    return schemas.PricingOut(
+        plans=[plan_out(plan_id, currency) for plan_id in PAID_PLANS],
+        currency=currency,
+        currency_source=currency_source,
+        available_currencies=list(SUPPORTED_CURRENCIES),
+        tax_note=TAX_NOTE[currency],
+    )
 
 
 async def _usage_counts(session: AsyncSession, org_id: uuid.UUID, messages_used: int) -> schemas.UsageCountsOut:

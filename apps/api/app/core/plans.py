@@ -24,6 +24,7 @@ Counts, not booleans (docs/22 §4.1)
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -123,9 +124,22 @@ class PlanSpec:
     # ── commercial metadata: DISPLAY AND INVOICING ONLY ───────────────────────
     #: Never read for an access decision. Used by the pricing endpoint and by the admin panel to
     #: say what to invoice for an extra-message pack (docs/22 §7).
-    price_usd_month: int | None = None
+    #: Per-currency price lists in INTEGER MINOR UNITS (cents / euro cents / paise), excl. tax.
+    #: Never floats. `None` = not a sold plan. Read through `price_for()` / `pack_price_for()`.
+    price_minor: Mapping[str, int] | None = None
     extra_message_pack_size: int | None = None
-    extra_message_pack_usd: int | None = None
+    extra_message_pack_price_minor: Mapping[str, int] | None = None
+
+    # ── derived USD views: whole dollars, kept so every pre-currency caller still works ──
+    @property
+    def price_usd_month(self) -> int | None:
+        return None if self.price_minor is None else self.price_minor["USD"] // 100
+
+    @property
+    def extra_message_pack_usd(self) -> int | None:
+        if self.extra_message_pack_price_minor is None:
+            return None
+        return self.extra_message_pack_price_minor["USD"] // 100
 
     # ── derived on/off flags: keep every pre-existing caller working ──────────
     @property
@@ -201,9 +215,9 @@ PLANS: dict[str, PlanSpec] = {
         remove_branding=False,
         support="email",
         publish_needs_verified_email=True,
-        price_usd_month=49,
+        price_minor={"USD": 4900, "EUR": 4500, "INR": 149900},
         extra_message_pack_size=500,
-        extra_message_pack_usd=6,
+        extra_message_pack_price_minor={"USD": 600, "EUR": 500, "INR": 19900},
     ),
     "pro": PlanSpec(
         trial_days=None,
@@ -225,9 +239,9 @@ PLANS: dict[str, PlanSpec] = {
         remove_branding=True,
         support="priority",
         publish_needs_verified_email=True,
-        price_usd_month=99,
+        price_minor={"USD": 9900, "EUR": 8900, "INR": 349900},
         extra_message_pack_size=500,
-        extra_message_pack_usd=5,
+        extra_message_pack_price_minor={"USD": 500, "EUR": 450, "INR": 14900},
     ),
     "business": PlanSpec(
         trial_days=None,
@@ -249,9 +263,9 @@ PLANS: dict[str, PlanSpec] = {
         remove_branding=True,
         support="priority",
         publish_needs_verified_email=True,
-        price_usd_month=199,
+        price_minor={"USD": 19900, "EUR": 17900, "INR": 699900},
         extra_message_pack_size=500,
-        extra_message_pack_usd=4,
+        extra_message_pack_price_minor={"USD": 400, "EUR": 350, "INR": 9900},
     ),
     "legacy": PlanSpec(
         trial_days=None,
@@ -302,6 +316,33 @@ _EXPIRED = PlanSpec(
 
 #: Plans that are sold. Ordered cheapest first — the pricing page renders them in this order.
 PAID_PLANS = ("starter", "pro", "business")
+
+#: Currencies a price list exists for (docs/22 §3, ADR-106). USD is the default and the fallback.
+SUPPORTED_CURRENCIES = ("USD", "EUR", "INR")
+DEFAULT_CURRENCY = "USD"
+
+
+def price_for(plan: str, currency: str) -> int:
+    """Monthly price of `plan` in `currency`, in minor units. Raises on an unknown plan, an
+    unsold plan or an unknown currency — it never silently falls back to USD, because a wrong
+    currency on a ledger row is a wrong amount of money."""
+    spec = PLANS.get(plan)
+    if spec is None or spec.price_minor is None:
+        raise ValueError(f"{plan!r} is not a sold plan")
+    if currency not in SUPPORTED_CURRENCIES:
+        raise ValueError(f"unsupported currency {currency!r}")
+    return spec.price_minor[currency]
+
+
+def pack_price_for(plan: str, currency: str) -> int:
+    """Price of one extra-message pack on `plan` in `currency`, in minor units. Same raising rules
+    as `price_for`."""
+    spec = PLANS.get(plan)
+    if spec is None or spec.extra_message_pack_price_minor is None:
+        raise ValueError(f"{plan!r} does not sell extra-message packs")
+    if currency not in SUPPORTED_CURRENCIES:
+        raise ValueError(f"unsupported currency {currency!r}")
+    return spec.extra_message_pack_price_minor[currency]
 #: What an admin may grant from the panel (docs/22 §8.2). `trial` and `legacy` are included so
 #: staff can reset a workspace or mark one of their own unlimited.
 GRANTABLE_PLANS = (*PAID_PLANS, "trial", "legacy")

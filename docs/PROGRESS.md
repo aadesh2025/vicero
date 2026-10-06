@@ -2137,3 +2137,8 @@ Check the Model tab against this list before publishing.
 ## Out of scope for v1
 Full visual flow builder (ship minimal first), voice/telephony, native mobile apps, bot
 marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/Helm.
+
+## Billing B - multi-currency pricing (2026-10-06)
+- **B1 (backend):** USD/EUR/INR price lists in minor units, `app/core/geo.py` display-only country
+  detection, `GET /v1/billing/plans?currency=`, ledger migration 0030 (`currency`, `amount_minor`),
+  admin grant/packs/mark-paid take a currency, per-currency totals endpoint. ADR-106.

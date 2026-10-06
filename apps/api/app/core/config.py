@@ -302,6 +302,12 @@ class Settings(BaseSettings):
     # this machine, which covers the web app running beside the API in dev; when both run in Docker
     # add the compose network (the compose files do). Never put a public range here.
     trusted_proxies: str = "127.0.0.1,::1"
+    # Display-only geo currency (docs/22 §3, ADR-106). The country a visitor appears to be in picks which
+    # price list the pricing page SHOWS — never what is charged or which plan an org gets. Headers are
+    # read only when TRUST_GEO_HEADERS is true, which is safe only when the API is reachable solely
+    # through a proxy that sets/overwrites one of them (docs/ENV.md).
+    trust_geo_headers: bool = False
+    geo_country_headers: str = "CF-IPCountry,X-Vercel-IP-Country,CloudFront-Viewer-Country,X-Country-Code"
     # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
     signups_per_ip_per_day: int = 3
     # Refuse throwaway-mailbox domains (modules/auth/policy.py) so one person cannot mint

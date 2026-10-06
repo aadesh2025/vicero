@@ -11,9 +11,10 @@ what the signed-in org may do right now.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.geo import geo_headers, resolve_currency
 from app.db.session import get_session
 from app.modules.billing import schemas, service
 from app.modules.orgs.deps import OrgContext, current_org
@@ -22,13 +23,23 @@ router = APIRouter(tags=["billing"])
 
 
 @router.get("/v1/billing/plans", response_model=schemas.PricingOut)
-async def list_plans() -> schemas.PricingOut:
-    """The pricing table, rendered from `app.core.plans.PLANS`.
+async def list_plans(
+    request: Request, response: Response, currency: str | None = None
+) -> schemas.PricingOut:
+    """The pricing table, rendered from `app.core.plans.PLANS`, in USD, EUR or INR.
 
     The marketing page must call this rather than hardcoding numbers, so a plan change is one
     edit in `plans.py` and never a stale price on a public page.
+
+    The currency is **display only** (see `app.core.geo`): `?currency=` wins, then a country
+    header (only when `TRUST_GEO_HEADERS`), then USD. An unsupported `?currency=` is ignored.
+    Because the body varies by country, the response is `Cache-Control: private` and lists the
+    geo headers in `Vary`, so a shared cache can never hand the INR list to a German visitor.
     """
-    return service.pricing_table()
+    chosen, source = resolve_currency(request, currency)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Vary"] = ", ".join(geo_headers())
+    return service.pricing_table(chosen, source)
 
 
 @router.get("/v1/me/entitlements", response_model=schemas.EntitlementsOut)

@@ -17,7 +17,14 @@ from app.chat import guard_models
 from app.core.audit import write_audit
 from app.core.config import settings
 from app.core.errors import AppError
-from app.core.plans import GRANTABLE_PLANS, PAID_PLANS, PLANS, get_entitlements
+from app.core.plans import (
+    GRANTABLE_PLANS,
+    PAID_PLANS,
+    PLANS,
+    SUPPORTED_CURRENCIES,
+    get_entitlements,
+    pack_price_for,
+)
 from app.core.probes import check_database, check_redis
 from app.integrations.n8n_client import N8nClient
 from app.integrations.n8n_client import get_client as get_n8n_client
@@ -710,6 +717,16 @@ async def _org_out(session: AsyncSession, org_id: uuid.UUID) -> schemas.OrgAdmin
     return rows[0]
 
 
+def _require_currency(currency: str) -> str:
+    if currency not in SUPPORTED_CURRENCIES:
+        raise AppError(
+            "invalid_currency",
+            f"Unsupported currency {currency!r}. Use one of {', '.join(SUPPORTED_CURRENCIES)}.",
+            400,
+        )
+    return currency
+
+
 def _cycle_out(
     cycle: BillingCycle, now: dt.datetime, org_name: str | None = None
 ) -> schemas.BillingCycleOut:
@@ -721,6 +738,8 @@ def _cycle_out(
         period_start=cycle.period_start,
         period_end=cycle.period_end,
         amount_usd_cents=cycle.amount_usd_cents,
+        currency=cycle.currency,
+        amount_minor=cycle.amount_minor,
         status=cycle.status,
         payment_state=billing_cycles.payment_state(cycle, now),
         paid_at=cycle.paid_at,
@@ -782,6 +801,8 @@ async def get_org_detail(session: AsyncSession, org_id: uuid.UUID) -> schemas.Or
                 expires_at=g.expires_at,
                 extra_messages=g.extra_messages,
                 amount_usd_cents=g.amount_usd_cents,
+                currency=g.currency,
+                amount_minor=g.amount_minor,
                 note=g.note,
                 actor_email=actors.get(g.actor_id) if g.actor_id else None,
                 invoiced=bool(g.invoiced),
@@ -812,6 +833,7 @@ async def grant_plan(
     if data.expires_at is not None and data.expires_at <= now:
         raise AppError("invalid_expiry", "Expiry must be in the future.", 400)
     note = _require_note(data.note)
+    currency = _require_currency(data.currency)
     org = await _get_org(session, org_id)
     previous = org.plan
 
@@ -834,6 +856,7 @@ async def grant_plan(
             "to": data.plan,
             "expires_at": data.expires_at.isoformat() if data.expires_at else None,
             "payment_received": data.payment_received,
+            "currency": currency,
         },
         ip=ip,
     )
@@ -849,6 +872,7 @@ async def grant_plan(
             org_id,
             plan=data.plan,
             paid=data.payment_received,
+            currency=currency,
             method=data.method,
             reference=data.reference,
             note=note,
@@ -962,10 +986,11 @@ async def add_packs(
     if data.packs < 1:
         raise AppError("invalid_packs", "Number of packs must be at least 1.", 400)
     note = _require_note(data.note)
+    currency = _require_currency(data.currency)
     org = await _get_org(session, org_id)
 
     spec = PLANS.get(org.plan)
-    if spec is None or spec.extra_message_pack_size is None or spec.extra_message_pack_usd is None:
+    if spec is None or spec.extra_message_pack_size is None or spec.extra_message_pack_price_minor is None:
         raise AppError(
             "packs_not_sold",
             f"The {org.plan!r} plan has no extra-message pack rate. Grant a paid plan first.",
@@ -973,7 +998,7 @@ async def add_packs(
         )
 
     messages = spec.extra_message_pack_size * data.packs
-    amount_cents = spec.extra_message_pack_usd * data.packs * 100
+    amount_minor = pack_price_for(org.plan, currency) * data.packs
 
     await billing_usage.add_extra_messages(session, org_id, messages)
     session.add(
@@ -982,7 +1007,9 @@ async def add_packs(
             action="pack_added",
             to_plan=org.plan,
             extra_messages=messages,
-            amount_usd_cents=amount_cents,
+            currency=currency,
+            amount_minor=amount_minor,
+            amount_usd_cents=billing_cycles.usd_mirror(currency, amount_minor),
             note=note,
             actor_id=staff.id,
         )
@@ -994,7 +1021,12 @@ async def add_packs(
         "billing.pack_added",
         target_type="organization",
         target_id=str(org_id),
-        meta={"packs": data.packs, "messages": messages, "amount_usd_cents": amount_cents},
+        meta={
+            "packs": data.packs,
+            "messages": messages,
+            "currency": currency,
+            "amount_minor": amount_minor,
+        },
         ip=ip,
     )
     await session.commit()
@@ -1030,6 +1062,7 @@ async def mark_cycle_paid(
 ) -> schemas.BillingCycleOut:
     """Record a payment that arrived outside the app. `renew=True` is the monthly button: it
     also pushes `plan_expires_at` out 30 days and opens the next cycle, in one transaction."""
+    currency = _require_currency(data.currency) if data.currency is not None else None
     try:
         cycle = await billing_cycles.mark_paid(
             session,
@@ -1039,6 +1072,7 @@ async def mark_cycle_paid(
             note=data.note,
             marked_by=staff.id,
             renew=data.renew,
+            currency=currency,
         )
     except ValueError as exc:
         raise AppError("cycle_not_found", "Billing cycle not found.", 404) from exc
@@ -1077,6 +1111,8 @@ async def list_uninvoiced_packs(
             organization_name=name,
             extra_messages=g.extra_messages,
             amount_usd_cents=g.amount_usd_cents,
+            currency=g.currency,
+            amount_minor=g.amount_minor,
             note=g.note,
             invoiced=bool(g.invoiced),
             created_at=g.created_at,
@@ -1105,7 +1141,53 @@ async def mark_pack_invoiced(
         organization_name=name,
         extra_messages=grant.extra_messages,
         amount_usd_cents=grant.amount_usd_cents,
+        currency=grant.currency,
+        amount_minor=grant.amount_minor,
         note=grant.note,
         invoiced=bool(grant.invoiced),
         created_at=grant.created_at,
     )
+
+
+def totals_by_currency(
+    cycles: list[BillingCycle], now: dt.datetime
+) -> list[schemas.CurrencyTotalsOut]:
+    """Collected / pending / overdue per currency for `cycles`. **Never adds across currencies**:
+    amounts are bucketed by `cycle.currency` first, so INR paise and USD cents can never meet in
+    one number. Sorted by currency for a stable response."""
+    buckets: dict[str, dict[str, int]] = {}
+    for c in cycles:
+        b = buckets.setdefault(
+            c.currency, {"collected": 0, "pending": 0, "overdue": 0, "overdue_count": 0}
+        )
+        state = billing_cycles.payment_state(c, now)
+        if state == "paid":
+            b["collected"] += c.amount_minor
+        elif state == "pending":
+            b["pending"] += c.amount_minor
+        elif state == "overdue":
+            b["overdue"] += c.amount_minor
+            b["overdue_count"] += 1
+    return [
+        schemas.CurrencyTotalsOut(
+            currency=cur,
+            collected_minor=b["collected"],
+            pending_minor=b["pending"],
+            overdue_minor=b["overdue"],
+            overdue_count=b["overdue_count"],
+        )
+        for cur, b in sorted(buckets.items())
+    ]
+
+
+async def billing_totals(session: AsyncSession) -> list[schemas.CurrencyTotalsOut]:
+    """The Billing tab's header strip: cycles whose period started this calendar month (UTC),
+    one row per currency."""
+    now = dt.datetime.now(tz=dt.UTC)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    rows = (
+        (await session.execute(select(BillingCycle).where(BillingCycle.period_start >= month_start)))
+        .scalars()
+        .all()
+    )
+    return totals_by_currency(list(rows), now)

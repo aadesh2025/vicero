@@ -229,6 +229,15 @@ affected sessions on their next request.
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` — needs-human; unset → billing
 disabled.
 
+### Display currency by visitor country — ADR-106
+`TRUST_GEO_HEADERS` (default `false`) and `GEO_COUNTRY_HEADERS` (default
+`CF-IPCountry,X-Vercel-IP-Country,CloudFront-Viewer-Country,X-Country-Code`) choose the currency
+`GET /v1/billing/plans` *shows* (IN → INR, EU27 → EUR, else USD). **Display only** — never what is
+charged or which plan an org gets. Set `TRUST_GEO_HEADERS=true` in production only when (1) the
+production proxy forwards exactly one of those headers, and (2) the API is reachable **only**
+through that proxy — otherwise any client can send the header itself. `?currency=USD|EUR|INR`
+always wins over the header. `XX` / `T1` (Cloudflare unknown / Tor) are treated as unknown → USD.
+
 ## Observability
 `SENTRY_DSN` (optional), `LOG_LEVEL` (default info).
 

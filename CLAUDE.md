@@ -43,7 +43,7 @@ A task is done only when ALL are true:
 
 - Initialize git at Phase 0. Commit after **every task**, not every phase.
 - Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`.
-- One branch per phase is fine (`phase/03-ai-engine`) but committing to `main` directly
+- One branch per phase is fine (`phase/03-ai-engine`) but committing to `master` directly
   is acceptable for a solo build. Never force-push.
 - Tag the end of each phase: `git tag phase-03-complete`.
 
@@ -51,12 +51,12 @@ A task is done only when ALL are true:
 
 | Layer | Choice |
 |---|---|
-| Frontend | **Next.js 14** (App Router, TypeScript), Tailwind CSS, shadcn/ui, Framer Motion, TanStack Query, Zustand |
+| Frontend | **Next.js 16** (App Router, TypeScript), Tailwind CSS, shadcn/ui, Framer Motion, TanStack Query, Zustand |
 | Backend | **Python 3.11 + FastAPI**, Pydantic v2, SQLAlchemy 2.0 (async), Alembic |
 | DB | **PostgreSQL 16** + **pgvector** extension |
 | Cache/Queue | **Redis 7** (cache, rate limits, Celery broker), **Celery** for background jobs |
 | Vector store | pgvector (default). Abstract behind an interface so Qdrant can be swapped in later |
-| Auth | JWT access + refresh, OAuth (Google/GitHub), password (argon2), magic links |
+| Auth | JWT access + refresh, OAuth (Google/GitHub), password (argon2), magic links. Refresh token is `httpOnly`; the **access token is intentionally JS-readable** (cross-origin API + SSE + the inbox WebSocket's `?token=` param) — this is a deliberate trade-off, not a gap. Do not "fix" it to httpOnly without reading `docs/SECURITY.md §1` first. |
 | LLM | **Groq first**, then other free (OpenRouter free tier, Google Gemini free, Ollama local), then **OpenAI** and **Anthropic** paid |
 | Embeddings | Free-first: `nomic-embed-text` via Ollama or Groq/OpenAI-compatible; fallback OpenAI `text-embedding-3-small` |
 | Automation | **n8n** running in Docker locally (see §6), connected via REST + webhooks |

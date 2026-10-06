@@ -9,7 +9,7 @@
 | Path | Kind | Purpose |
 |---|---|---|
 | `apps/api` | domain + infra | FastAPI modular monolith (217 py files in `app/`, 81 in `tests/`) |
-| `apps/web` | frontend | Next.js 14 dashboard (128 tsx, 58 test/e2e files, 0 `any`) |
+| `apps/web` | frontend | Next.js 16 dashboard (128 tsx, 58 test/e2e files, 0 `any`) |
 | `packages/widget` | public product surface | Single-file vanilla JS embeddable widget (898 lines, no imports); build copies to `apps/web/public/widget.js` |
 | `infra/` | deployment | compose (dev/prod), caddy, k8s, n8n, perf, scripts |
 | `docs/` | docs | numbered spec docs 00–17, `DECISIONS.md`, `SECURITY.md`, `RISK-REGISTER.md`, runbooks |

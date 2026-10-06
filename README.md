@@ -69,7 +69,7 @@ make dev-web                  # Next.js on :3000
 ## Testing
 
 ```bash
-cd apps/api && uv run pytest -q          # backend (157 tests)
+cd apps/api && uv run pytest -q          # backend test suite
 cd apps/web && npm run lint && npx tsc --noEmit && npm run build
 cd apps/web && npx playwright test       # E2E, PRD criteria 1–7 (needs a booted stack)
 ```

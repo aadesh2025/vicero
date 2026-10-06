@@ -1,14 +1,15 @@
-# 05 — Frontend (Next.js 14 Dashboard + Design System)
+# 05 — Frontend (Next.js 16 Dashboard + Design System)
 
 ## 1. Stack & conventions
-- Next.js 14 App Router, TypeScript strict, Tailwind CSS, **shadcn/ui** components, Framer
+- Next.js 16 App Router, TypeScript strict, Tailwind CSS, **shadcn/ui** components, Framer
   Motion for motion, **TanStack Query** for server state, **Zustand** for local UI state,
   `react-hook-form` + `zod` for forms, `next-themes` for dark mode.
 - Typed API client generated from backend `openapi.json` (e.g., `openapi-typescript` +
   a thin fetch wrapper). No `any`. All network calls go through `lib/api`.
-- Auth: access token in httpOnly cookie; a Next.js route handler proxies refresh. Middleware
-  guards `/app/*` routes. Server components fetch with the cookie; client components use the
-  query client.
+- Auth: refresh token in an `httpOnly` cookie set by a Next BFF route; the **access token is
+  intentionally JS-readable** (cross-origin API + SSE + the inbox WebSocket's `?token=` param)
+  — see `docs/SECURITY.md §1` before treating this as a bug. `proxy.ts` guards `/app/*` routes.
+  Server components fetch with the cookie; client components use the query client.
 - Accessibility: keyboard nav, focus states, ARIA, color-contrast AA.
 
 ## 2. Route map (App Router)

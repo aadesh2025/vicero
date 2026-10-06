@@ -9,13 +9,13 @@
     messaging apps)     └───────────────┬─────────────────────────────┘
                                         │  HTTPS / webhooks / WS
                        ┌────────────────▼─────────────────────────────┐
-   Dashboard users ─►  │  Next.js 14 web app (apps/web)               │
+   Dashboard users ─►  │  Next.js 16 web app (apps/web)               │
                        │  - dashboard, agent builder, KB, inbox, etc. │
                        └────────────────┬─────────────────────────────┘
                                         │  REST + WS (typed client)
                        ┌────────────────▼─────────────────────────────┐
                        │  FastAPI backend (apps/api)                  │
-                       │  Routers → Services → Repositories           │
+                       │  Routers → Services → SQLAlchemy session     │
                        │  Auth · Orgs/RBAC · Agents · KB · Chat ·     │
                        │  Tools · Channels · Inbox · Analytics · Admin│
                        └───┬──────────┬──────────┬─────────┬──────────┘

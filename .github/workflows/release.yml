@@ -1,11 +1,11 @@
 name: Release (build · push · smoke · deploy)
 
-# Builds + pushes the api/web images to GHCR on main and version tags, smoke-tests the built
+# Builds + pushes the api/web images to GHCR on master and version tags, smoke-tests the built
 # API image against /readyz, and (tag/dispatch, gated on secrets) deploys + verifies on the host.
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ["v*"]
   workflow_dispatch:
 

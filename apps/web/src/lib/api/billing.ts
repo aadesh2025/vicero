@@ -32,9 +32,14 @@ export interface PlanFeatures {
 export interface Plan {
   id: string;
   name: string;
+  /** Always USD, whole dollars (legacy). Display uses `price_minor` + `Pricing.currency`. */
   price_usd_month: number;
+  /** Price in `Pricing.currency`, integer minor units (cents / paise). */
+  price_minor: number;
   extra_message_pack_size: number;
   extra_message_pack_usd: number;
+  /** One pack's price in `Pricing.currency`, minor units. */
+  extra_message_pack_price_minor: number;
   limits: PlanLimits;
   features: PlanFeatures;
   channels: string[] | null;
@@ -43,8 +48,16 @@ export interface Plan {
 
 export interface Pricing {
   plans: Plan[];
+  /** The currency every `*_minor` field is in. */
   currency: string;
+  /** Why: `query` (switcher) | `geo` (country header) | `default`. Display only. */
+  currency_source: "query" | "geo" | "default";
+  available_currencies: string[];
+  /** "excl. taxes" | "excl. VAT" | "excl. GST" */
+  tax_note: string;
   contact_only: boolean;
 }
 
-export const getPlans = () => api<Pricing>("/v1/billing/plans");
+/** No currency = let the server detect it; `?currency=` is the manual switcher. */
+export const getPlans = (currency?: string | null) =>
+  api<Pricing>(`/v1/billing/plans${currency ? `?currency=${encodeURIComponent(currency)}` : ""}`);

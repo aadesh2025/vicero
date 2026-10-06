@@ -2142,3 +2142,4 @@ marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/
 - **B1 (backend):** USD/EUR/INR price lists in minor units, `app/core/geo.py` display-only country
   detection, `GET /v1/billing/plans?currency=`, ledger migration 0030 (`currency`, `amount_minor`),
   admin grant/packs/mark-paid take a currency, per-currency totals endpoint. ADR-106.
+- **B2 (frontend):** `formatMoney` (single minor-unit formatter), currency switcher on /pricing and /billing/upgrade (remembered in guarded localStorage), admin Change-plan / Add-packs / Mark-paid currency selects with previews from the API price table, per-currency Billing totals.

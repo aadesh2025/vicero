@@ -1,20 +1,65 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Check, Minus, TriangleAlert } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { getPlans, type Plan } from "@/lib/api/billing";
+import { getPlans, type Plan, type Pricing } from "@/lib/api/billing";
 import { ContactUsButtons } from "@/components/plan/contact-us";
-import { usd } from "@/lib/utils";
+import { CurrencySwitcher } from "@/components/plan/currency-switcher";
+import { formatMoney, isCurrency, type Currency } from "@/lib/money";
+
+const STORAGE_KEY = "vicero.pricing.currency";
+
+// localStorage can be blocked or throw (private windows, site-data settings): the page must work
+// without it, so every access is guarded and a failure just means "no remembered choice".
+function readStoredCurrency(): Currency | null {
+  try {
+    const v = window.localStorage.getItem(STORAGE_KEY);
+    return isCurrency(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeCurrency(currency: Currency) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, currency);
+  } catch {
+    /* blocked: the choice simply is not remembered */
+  }
+}
 
 /** The three paid plans from `GET /v1/billing/plans` (docs/22 §3) — no number here is
  *  hardcoded, all of it is rendered straight from the pricing table's own numbers. Used on the
  *  public /pricing page and the in-app /billing/upgrade landing target (docs/22 §10.1). */
 export function PricingCards() {
-  const { data, isLoading, isError } = useQuery({ queryKey: ["billing-plans"], queryFn: getPlans, staleTime: Infinity });
+  // `null` = no explicit choice: the server detects the currency from the visitor's country.
+  // The remembered choice is read after mount so server and first client render match.
+  const [selected, setSelected] = useState<Currency | null>(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading localStorage must wait for mount
+    setSelected(readStoredCurrency());
+    setReady(true);
+  }, []);
 
-  if (isLoading) {
+  const { data, isError, isPlaceholderData } = useQuery({
+    queryKey: ["billing-plans", selected],
+    queryFn: () => getPlans(selected),
+    enabled: ready,
+    staleTime: Infinity,
+    // Keep the previous list on screen while a new currency loads: no skeleton flash, no jump.
+    placeholderData: keepPreviousData,
+  });
+
+  function choose(currency: Currency) {
+    setSelected(currency);
+    storeCurrency(currency);
+  }
+
+  if (!data && !isError) {
     return (
       <div className="grid gap-5 sm:grid-cols-3" aria-busy="true">
         {[0, 1, 2].map((i) => (
@@ -24,7 +69,7 @@ export function PricingCards() {
     );
   }
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <div className="flex items-start gap-3 rounded-xl border border-error/30 bg-error-soft p-5 text-sm">
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-error-text" />
@@ -38,9 +83,16 @@ export function PricingCards() {
 
   return (
     <>
-      <div className="grid gap-5 sm:grid-cols-3">
+      <CurrencySwitcher
+        currency={data.currency}
+        source={data.currency_source}
+        options={data.available_currencies}
+        onChange={choose}
+        loading={isPlaceholderData}
+      />
+      <div className={`grid gap-5 transition-opacity sm:grid-cols-3 ${isPlaceholderData ? "opacity-60" : ""}`} aria-busy={isPlaceholderData}>
         {data.plans.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} />
+          <PlanCard key={plan.id} plan={plan} pricing={data} />
         ))}
       </div>
       {/* contact_only is true (docs/22 §1, §16): plans are admin-granted, there is no
@@ -69,7 +121,7 @@ function formatBytes(n: number): string {
   return `${n} B`;
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, pricing }: { plan: Plan; pricing: Pricing }) {
   const rows = [
     limitRow("Workspaces", plan.limits.workspaces),
     limitRow("AI agents", plan.limits.agents),
@@ -102,11 +154,12 @@ function PlanCard({ plan }: { plan: Plan }) {
         {featured && <Badge variant="accent">Most popular</Badge>}
       </div>
       <p className="mt-2">
-        <span className="font-display text-3xl font-extrabold text-text">{usd(plan.price_usd_month)}</span>
-        <span className="text-sm text-muted"> / month per workspace</span>
+        <span className="font-display text-3xl font-extrabold text-text">{formatMoney(plan.price_minor, pricing.currency)}</span>
+        <span className="text-sm text-muted"> / month per workspace, {pricing.tax_note}</span>
       </p>
       <p className="mt-1 text-xs text-faint">
-        Extra messages: {usd(plan.extra_message_pack_usd)} per {plan.extra_message_pack_size.toLocaleString()}
+        Extra messages: {formatMoney(plan.extra_message_pack_price_minor, pricing.currency)} per{" "}
+        {plan.extra_message_pack_size.toLocaleString()}
       </p>
 
       <ul className="mt-5 space-y-2 text-sm">

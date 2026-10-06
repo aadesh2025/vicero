@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { GRANTABLE_PLANS, PAID_PLANS, grantPlan, type AdminOrg } from "@/lib/api/admin";
-import { getPlans } from "@/lib/api/billing";
+import { CurrencySelect, useAdminPricing } from "@/components/admin/currency-select";
+import { formatMoney } from "@/lib/money";
 
 type ExpiryMode = "30" | "90" | "custom" | "none";
 
@@ -33,7 +34,8 @@ export function ChangePlanDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const { data: pricing } = useQuery({ queryKey: ["billing-plans"], queryFn: getPlans, staleTime: Infinity });
+  const [currency, setCurrency] = useState("USD");
+  const { data: pricing } = useAdminPricing(currency);
   // Captured once via the lazy initializer rather than calling Date.now() during render
   // (react-hooks/purity) — this only labels a preview, so it never needs to be live-ticking.
   const [now] = useState(() => Date.now());
@@ -62,11 +64,13 @@ export function ChangePlanDialog({
         payment_received: PAID_PLANS.includes(plan as (typeof PAID_PLANS)[number]) ? paymentReceived : false,
         method: paymentReceived ? method : null,
         reference: paymentReceived ? reference.trim() || null : null,
+        currency,
       });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["admin-orgs"] });
       await qc.invalidateQueries({ queryKey: ["admin-orgs-billing"] });
+      await qc.invalidateQueries({ queryKey: ["admin-billing-totals"] });
       await qc.invalidateQueries({ queryKey: ["admin-org", org.id] });
       onOpenChange(false);
     },
@@ -103,6 +107,7 @@ export function ChangePlanDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       setPlan(org.plan);
+      setCurrency("USD");
       setExpiryMode("30");
       setCustomDate("");
       setPaymentReceived(true);
@@ -148,6 +153,17 @@ export function ChangePlanDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {isPaid && (
+            <div className="space-y-1.5">
+              <CurrencySelect id="cp-currency" value={currency} onChange={setCurrency} disabled={submit.isPending} />
+              {nextPlanInfo && (
+                <p className="text-xs text-muted">
+                  Cycle amount: {formatMoney(nextPlanInfo.price_minor, currency)} / month ({pricing?.tax_note})
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="cp-expiry">Expiry</Label>

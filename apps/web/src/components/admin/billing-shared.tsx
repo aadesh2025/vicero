@@ -50,7 +50,3 @@ export function orgStatusLabel(org: AdminOrg): { text: string; tone: "success" |
   }
   return { text: "active", tone: "success" };
 }
-
-export function centsToUsd(cents: number): number {
-  return cents / 100;
-}

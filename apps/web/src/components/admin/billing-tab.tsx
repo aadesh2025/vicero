@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GRANTABLE_PLANS, listAdminOrgs, listBillingCycles, type OrgStatusFilter } from "@/lib/api/admin";
+import { GRANTABLE_PLANS, getBillingTotals, listAdminOrgs, type OrgStatusFilter } from "@/lib/api/admin";
 import { OrgBillingTable } from "@/components/admin/org-billing-table";
-import { centsToUsd } from "@/components/admin/billing-shared";
-import { cn, usd } from "@/lib/utils";
+import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 const CHIPS: { value: OrgStatusFilter; label: string }[] = [
   { value: "payment_pending", label: "Payment pending" },
@@ -19,32 +19,28 @@ const CHIPS: { value: OrgStatusFilter; label: string }[] = [
   { value: "expired", label: "Expired" },
 ];
 
-/** Header strip: the month at a glance (docs/22 §9.1) — computed client-side from the billing
- *  cycles the ledger endpoint already returns, scoped to cycles whose period started this
- *  calendar month, rather than a new backend aggregate (the admin API is frozen this phase). */
+/** Header strip: the month at a glance (docs/22 §9.1). One segment per currency from
+ *  `GET /v1/admin/billing/totals` — amounts in different currencies are never added together. */
 function MonthSummary() {
-  const { data: cycles } = useQuery({ queryKey: ["admin-billing-cycles", "all"], queryFn: () => listBillingCycles() });
+  const { data: totals } = useQuery({ queryKey: ["admin-billing-totals"], queryFn: getBillingTotals });
 
-  const summary = useMemo(() => {
-    const now = new Date();
-    const thisMonth = (cycles ?? []).filter((c) => {
-      const d = new Date(c.period_start);
-      return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth();
-    });
-    const collected = thisMonth.filter((c) => c.payment_state === "paid").reduce((s, c) => s + c.amount_usd_cents, 0);
-    const pending = thisMonth.filter((c) => c.payment_state === "pending").reduce((s, c) => s + c.amount_usd_cents, 0);
-    const overdue = thisMonth.filter((c) => c.payment_state === "overdue").length;
-    return { collected, pending, overdue };
-  }, [cycles]);
+  if (!totals || totals.length === 0) {
+    return <p className="text-sm font-medium text-muted">No billing cycles this month.</p>;
+  }
 
   return (
-    <p className="text-sm font-medium text-muted">
-      <span className="font-bold text-success-text">{usd(centsToUsd(summary.collected))} collected</span> ·{" "}
-      <span className="font-bold text-warn-text">{usd(centsToUsd(summary.pending))} pending</span> ·{" "}
-      <span className={cn("font-bold", summary.overdue > 0 ? "text-error-text" : "text-muted")}>
-        {summary.overdue} overdue
-      </span>
-    </p>
+    <div className="space-y-1">
+      {totals.map((t) => (
+        <p key={t.currency} className="text-sm font-medium text-muted">
+          <span className="font-bold text-text">{t.currency}</span> ·{" "}
+          <span className="font-bold text-success-text">{formatMoney(t.collected_minor, t.currency)} collected</span> ·{" "}
+          <span className="font-bold text-warn-text">{formatMoney(t.pending_minor, t.currency)} pending</span> ·{" "}
+          <span className={cn("font-bold", t.overdue_count > 0 ? "text-error-text" : "text-muted")}>
+            {t.overdue_count} overdue
+          </span>
+        </p>
+      ))}
+    </div>
   );
 }
 

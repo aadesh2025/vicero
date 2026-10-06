@@ -5,8 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listPacks, markPackInvoiced } from "@/lib/api/admin";
-import { centsToUsd } from "@/components/admin/billing-shared";
-import { usd } from "@/lib/utils";
+import { formatMoney } from "@/lib/money";
 
 /** Packs sold but not yet invoiced — the monthly reconciliation view (docs/22 §8.2, §9.7). */
 export function PacksTab() {
@@ -55,7 +54,7 @@ export function PacksTab() {
                 <div className="text-sm font-medium text-text">{p.organization_name ?? p.organization_id}</div>
                 <div className="text-xs text-faint">
                   {p.extra_messages?.toLocaleString() ?? "—"} messages ·{" "}
-                  {p.amount_usd_cents !== null ? usd(centsToUsd(p.amount_usd_cents)) : "—"} ·{" "}
+                  {p.amount_minor !== null ? formatMoney(p.amount_minor, p.currency) : "—"} ·{" "}
                   {new Date(p.created_at).toLocaleDateString()}
                   {p.note ? ` · ${p.note}` : ""}
                 </div>

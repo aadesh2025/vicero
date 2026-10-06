@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAdminOrg, listAdminOrgs } from "@/lib/api/admin";
 import { formatBytes, UsageMeter } from "@/components/admin/usage-meter";
-import { PaymentBadge, PlanBadge, centsToUsd } from "@/components/admin/billing-shared";
-import { usd } from "@/lib/utils";
+import { PaymentBadge, PlanBadge } from "@/components/admin/billing-shared";
+import { formatMoney } from "@/lib/money";
 
 /** The dispute view — "I already paid for August" gets answered here (docs/22 §9.4).
  *
@@ -114,7 +114,7 @@ export function OrgDetailDrawer({
                         </div>
                         <div className="mt-1 text-muted">
                           {g.actor_email ?? "system"}
-                          {g.amount_usd_cents ? ` · ${usd(centsToUsd(g.amount_usd_cents))}` : ""}
+                          {g.amount_minor ? ` · ${formatMoney(g.amount_minor, g.currency)}` : ""}
                           {g.expires_at ? ` · expires ${new Date(g.expires_at).toLocaleDateString()}` : ""}
                         </div>
                         {g.note && <div className="mt-1 text-faint">{g.note}</div>}
@@ -137,7 +137,7 @@ export function OrgDetailDrawer({
                             {new Date(c.period_start).toLocaleDateString()} – {new Date(c.period_end).toLocaleDateString()}
                           </div>
                           <div className="text-muted">
-                            {usd(centsToUsd(c.amount_usd_cents))}
+                            {formatMoney(c.amount_minor, c.currency)}
                             {c.method ? ` · ${c.method}` : ""}
                             {c.reference ? ` · ${c.reference}` : ""}
                           </div>

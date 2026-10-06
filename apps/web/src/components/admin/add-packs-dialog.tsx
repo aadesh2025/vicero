@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,8 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { addPacks, type AdminOrg } from "@/lib/api/admin";
-import { getPlans } from "@/lib/api/billing";
-import { usd } from "@/lib/utils";
+import { CurrencySelect, useAdminPricing } from "@/components/admin/currency-select";
+import { formatMoney } from "@/lib/money";
 
 /** Quantity in packs, never a message count — the server computes messages and price from the
  *  org's *current* plan (docs/22 §8.2 rule 6), so the frontend only ever reads the rate to show
@@ -25,7 +25,8 @@ export function AddPacksDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
-  const { data: pricing } = useQuery({ queryKey: ["billing-plans"], queryFn: getPlans, staleTime: Infinity });
+  const [currency, setCurrency] = useState("USD");
+  const { data: pricing } = useAdminPricing(currency);
   const plan = pricing?.plans.find((p) => p.id === org.plan);
 
   const [packs, setPacks] = useState(1);
@@ -33,7 +34,7 @@ export function AddPacksDialog({
   const [error, setError] = useState<string | null>(null);
 
   const submit = useMutation({
-    mutationFn: () => addPacks(org.id, packs, note.trim()),
+    mutationFn: () => addPacks(org.id, packs, note.trim(), currency),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["admin-orgs"] });
       await qc.invalidateQueries({ queryKey: ["admin-orgs-billing"] });
@@ -46,6 +47,7 @@ export function AddPacksDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       setPacks(1);
+      setCurrency("USD");
       setNote("");
       setError(null);
     }
@@ -53,7 +55,7 @@ export function AddPacksDialog({
   }
 
   const messages = plan ? packs * plan.extra_message_pack_size : 0;
-  const cost = plan ? packs * plan.extra_message_pack_usd : 0;
+  const cost = plan ? packs * plan.extra_message_pack_price_minor : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -86,10 +88,12 @@ export function AddPacksDialog({
               />
             </div>
 
+            <CurrencySelect id="packs-currency" value={currency} onChange={setCurrency} disabled={submit.isPending} />
+
             <p className="rounded-md border border-border bg-surface-2/40 p-2.5 text-sm text-text">
               {packs} pack{packs === 1 ? "" : "s"} × {plan.extra_message_pack_size.toLocaleString()} ={" "}
-              {messages.toLocaleString()} messages · invoice {usd(cost)} ({plan.name} rate: {usd(plan.extra_message_pack_usd)} /{" "}
-              {plan.extra_message_pack_size.toLocaleString()})
+              {messages.toLocaleString()} messages · invoice {formatMoney(cost, currency)} ({plan.name} rate: {formatMoney(plan.extra_message_pack_price_minor, currency)} /{" "}
+              {plan.extra_message_pack_size.toLocaleString()}, {pricing?.tax_note})
             </p>
             <p className="text-xs text-warn-text">Packs do not carry over to the next period.</p>
 

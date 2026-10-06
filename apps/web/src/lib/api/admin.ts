@@ -54,7 +54,10 @@ export interface PlanGrant {
   to_plan: string | null;
   expires_at: string | null;
   extra_messages: number | null;
+  /** Legacy mirror, USD only. Display uses `amount_minor` + `currency`. */
   amount_usd_cents: number | null;
+  currency: string;
+  amount_minor: number | null;
   note: string | null;
   actor_email: string | null;
   invoiced: boolean;
@@ -68,7 +71,10 @@ export interface BillingCycle {
   plan: string;
   period_start: string;
   period_end: string;
-  amount_usd_cents: number;
+  amount_usd_cents: number | null;
+  currency: string;
+  /** Minor units of `currency` — never sum across currencies. */
+  amount_minor: number;
   /** The raw stored value. */
   status: "pending" | "paid" | "waived";
   /** The computed value — adds `overdue` when a pending cycle's period_end has passed. */
@@ -91,6 +97,8 @@ export interface Pack {
   organization_name: string | null;
   extra_messages: number | null;
   amount_usd_cents: number | null;
+  currency: string;
+  amount_minor: number | null;
   note: string | null;
   invoiced: boolean;
   created_at: string;
@@ -197,6 +205,8 @@ export interface GrantPlanInput {
   payment_received?: boolean;
   method?: string | null;
   reference?: string | null;
+  /** USD | EUR | INR. The server prices from the plan table; no amount is ever sent. */
+  currency?: string;
 }
 
 export const grantPlan = (orgId: string, data: GrantPlanInput) =>
@@ -205,8 +215,8 @@ export const grantPlan = (orgId: string, data: GrantPlanInput) =>
 export const revokePlan = (orgId: string, note: string) =>
   api<AdminOrg>(`/v1/admin/orgs/${orgId}/plan`, { method: "DELETE", body: { note } });
 
-export const addPacks = (orgId: string, packs: number, note: string) =>
-  api<AdminOrg>(`/v1/admin/orgs/${orgId}/messages`, { method: "POST", body: { packs, note } });
+export const addPacks = (orgId: string, packs: number, note: string, currency = "USD") =>
+  api<AdminOrg>(`/v1/admin/orgs/${orgId}/messages`, { method: "POST", body: { packs, note, currency } });
 
 export function listBillingCycles(status?: BillingCycle["payment_state"]) {
   const suffix = status ? `?status=${status}` : "";
@@ -217,11 +227,24 @@ export interface MarkCyclePaidInput {
   method: string;
   reference?: string | null;
   note?: string | null;
+  /** Only when the client paid in another currency: re-prices a pending cycle. */
+  currency?: string | null;
   renew: boolean;
 }
 
 export const markCyclePaid = (cycleId: string, data: MarkCyclePaidInput) =>
   api<BillingCycle>(`/v1/admin/billing/cycles/${cycleId}/paid`, { method: "POST", body: data });
+
+/** This month's ledger, one row per currency — amounts in minor units, never combined. */
+export interface CurrencyTotals {
+  currency: string;
+  collected_minor: number;
+  pending_minor: number;
+  overdue_minor: number;
+  overdue_count: number;
+}
+
+export const getBillingTotals = () => api<CurrencyTotals[]>("/v1/admin/billing/totals");
 
 export const waiveCycle = (cycleId: string, note: string) =>
   api<BillingCycle>(`/v1/admin/billing/cycles/${cycleId}/waive`, { method: "POST", body: { note } });

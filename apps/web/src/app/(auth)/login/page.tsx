@@ -62,7 +62,7 @@ function LoginForm() {
 
   return (
     <div>
-      <AnimatedLogoTile className="mb-7 hidden lg:block" />
+      <AnimatedLogoTile className="mb-4 hidden lg:block" />
       <AuthHeading
         title="Welcome back."
         sub="Your assistants kept every conversation going while you were away. Sign in to pick them up."
@@ -71,7 +71,7 @@ function LoginForm() {
       <OAuthButtons onError={setError} />
       <OrDivider label="or with email" />
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3.5" noValidate={false}>
+      <form onSubmit={onSubmit} className="flex flex-col gap-2.5" noValidate={false}>
         <AuthField
           id="email"
           label="Work email"
@@ -92,7 +92,7 @@ function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
         />
         <div className="-mt-1 flex justify-end">
-          <Link href="/forgot-password" className="text-[13px] font-semibold text-accent-2 hover:text-text dark:text-accent">
+          <Link href="/forgot-password" className="text-xs font-semibold text-accent-2 hover:text-text dark:text-accent">
             Forgot password?
           </Link>
         </div>
@@ -103,14 +103,14 @@ function LoginForm() {
           type="button"
           disabled={busy}
           onClick={onMagicLink}
-          className="flex h-12 items-center justify-center gap-2 rounded-[14px] border border-dashed border-border-strong text-sm font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
+          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong text-[13px] font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
         >
           <Mail className="size-[18px]" strokeWidth={1.8} />
           Email me a sign-in link instead
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted">
+      <p className="mt-5 text-center text-[13px] text-muted">
         New to Vicero?{" "}
         <Link href="/signup" className="font-semibold text-accent-2 hover:text-text dark:text-accent">
           Start your free trial

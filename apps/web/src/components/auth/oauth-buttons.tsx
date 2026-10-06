@@ -56,7 +56,7 @@ export function OAuthButtons({ onError }: { onError: (message: string) => void }
           key={p.id}
           type="button"
           variant="outline"
-          className="h-[50px] gap-2.5 rounded-[14px] border-border-strong bg-surface text-[15px] font-semibold hover:bg-surface-3 [&_svg]:size-[18px]"
+          className="h-11 gap-2 rounded-xl border-border-strong bg-surface text-sm font-semibold hover:bg-surface-3 [&_svg]:size-4"
           disabled={busy !== null}
           onClick={() => start(p.id)}
           aria-label={`Continue with ${p.label}`}
@@ -71,7 +71,7 @@ export function OAuthButtons({ onError }: { onError: (message: string) => void }
 
 export function OrDivider({ label = "or" }: { label?: string }) {
   return (
-    <div className="my-[22px] flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.08em] text-faint" role="separator">
+    <div className="my-4 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.08em] text-faint" role="separator">
       <span className="h-px flex-1 bg-border" />
       {label}
       <span className="h-px flex-1 bg-border" />

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-[14px] border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">
+    <p role="alert" className="rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-sm text-error-text">
       {message}
     </p>
   );
@@ -16,7 +16,7 @@ export function FormError({ message }: { message: string | null }) {
 
 export function FormNotice({ children }: { children: React.ReactNode }) {
   return (
-    <p role="status" className="rounded-[14px] border border-success/30 bg-success/10 px-3 py-2 text-sm text-text">
+    <p role="status" className="rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm text-text">
       {children}
     </p>
   );
@@ -28,7 +28,7 @@ export function SubmitButton({ busy, children }: { busy: boolean; children: Reac
     <button
       type="submit"
       disabled={busy}
-      className="flex h-[54px] w-full items-center justify-center gap-3 rounded-[14px] bg-text text-base font-bold text-bg transition-colors hover:bg-text/90 disabled:pointer-events-none disabled:opacity-60"
+      className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-xl bg-text text-[15px] font-bold text-bg transition-colors hover:bg-text/90 disabled:pointer-events-none disabled:opacity-60"
     >
       {busy && <Loader2 className="size-4 animate-spin" />}
       {children}
@@ -49,18 +49,18 @@ export function AuthField({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-[14px] border border-border-strong bg-surface py-1 pl-4 pr-1.5 transition-shadow focus-within:border-accent-strong focus-within:ring-4 focus-within:ring-accent/15",
+        "flex items-center gap-2 rounded-xl border border-border-strong bg-surface py-0.5 pl-3.5 pr-1 transition-shadow focus-within:border-accent-strong focus-within:ring-4 focus-within:ring-accent/15",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5">
-        <label htmlFor={id} className="text-xs font-semibold text-muted">
+      <div className="flex min-w-0 flex-1 flex-col py-1.5">
+        <label htmlFor={id} className="text-[11px] font-semibold text-muted">
           {label}
         </label>
         <input
           id={id}
           {...input}
-          className="h-[26px] w-full border-0 bg-transparent p-0 text-base text-text placeholder:text-faint focus-visible:outline-none read-only:text-muted"
+          className="h-6 w-full border-0 bg-transparent p-0 text-[15px] text-text placeholder:text-faint focus-visible:outline-none read-only:text-muted"
         />
       </div>
       {trailing}
@@ -71,9 +71,9 @@ export function AuthField({
 /** Heading + subline shared by every auth page. */
 export function AuthHeading({ title, sub }: { title: string; sub?: string }) {
   return (
-    <div className="mb-7">
-      <h1 className="font-display text-[30px] font-extrabold leading-[1.1] tracking-[-0.02em] text-text lg:text-[38px]">{title}</h1>
-      {sub && <p className="mt-2.5 text-base leading-[1.55] text-muted">{sub}</p>}
+    <div className="mb-5">
+      <h1 className="font-display text-[26px] font-extrabold leading-[1.1] tracking-[-0.02em] text-text lg:text-[30px]">{title}</h1>
+      {sub && <p className="mt-2 text-sm leading-[1.5] text-muted">{sub}</p>}
     </div>
   );
 }

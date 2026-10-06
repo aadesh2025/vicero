@@ -20,9 +20,9 @@ export function PasswordInput(props: Props) {
           onClick={() => setShown((v) => !v)}
           aria-label={shown ? "Hide password" : "Show password"}
           aria-pressed={shown}
-          className="flex size-11 shrink-0 items-center justify-center rounded-[10px] text-faint transition-colors hover:text-text"
+          className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-faint transition-colors hover:text-text"
         >
-          <Icon className="size-5" strokeWidth={1.8} />
+          <Icon className="size-[18px]" strokeWidth={1.8} />
         </button>
       }
     />

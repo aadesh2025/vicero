@@ -58,13 +58,13 @@ export default function SignupPage() {
 
   return (
     <div>
-      <AnimatedLogoTile className="mb-7 hidden lg:block" />
+      <AnimatedLogoTile className="mb-4 hidden lg:block" />
       <AuthHeading title="Start your free trial." sub="10 days, 500 messages, no card needed." />
 
       <OAuthButtons onError={setError} />
       <OrDivider label="or with email" />
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+      <form onSubmit={onSubmit} className="flex flex-col gap-2.5">
         <AuthField id="name" label="Full name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
         <AuthField
           id="email"
@@ -99,14 +99,14 @@ export default function SignupPage() {
           type="button"
           disabled={busy}
           onClick={onMagicLink}
-          className="flex h-12 items-center justify-center gap-2 rounded-[14px] border border-dashed border-border-strong text-sm font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
+          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong text-[13px] font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
         >
           <Mail className="size-[18px]" strokeWidth={1.8} />
           Sign up with an email link instead
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted">
+      <p className="mt-5 text-center text-[13px] text-muted">
         Already have an account?{" "}
         <Link href="/login" className="font-semibold text-accent-2 hover:text-text dark:text-accent">
           Sign in

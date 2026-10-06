@@ -13,12 +13,12 @@ const DOT_GRID = {
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen gap-5 bg-bg p-5" style={DOT_GRID}>
-      <div className="flex min-w-0 flex-1 basis-[440px] flex-col px-1 py-3 sm:px-7 sm:py-5">
+      <div className="flex min-w-0 flex-1 basis-[400px] flex-col px-1 py-3 sm:px-7 sm:py-5">
         <Link href="/" aria-label="Vicero home" className="self-start">
           <Logo />
         </Link>
-        <div className="flex flex-1 items-center justify-center py-10">
-          <div className="w-full max-w-[400px]">
+        <div className="flex flex-1 items-center justify-center py-6">
+          <div className="w-full max-w-[360px]">
             <MiniChatCard />
             {children}
           </div>

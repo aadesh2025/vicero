@@ -77,7 +77,8 @@ export function AnimatedLogoMark({ size = 44, className }: { size?: number; clas
 export function AnimatedLogoTile({ className }: { className?: string }) {
   const reduce = useReducedMotion();
   return (
-    <div className={cn("relative size-[84px]", className)}>
+    <div className={cn("relative size-[66px]", className)}>
+      <div className="absolute left-0 top-0 size-[84px] origin-top-left scale-[0.785]">
       <motion.svg
         viewBox="0 0 84 84"
         className="absolute inset-0 size-full"
@@ -90,6 +91,7 @@ export function AnimatedLogoTile({ className }: { className?: string }) {
       </motion.svg>
       <div className="absolute left-3 top-3 flex size-[60px] items-center justify-center rounded-[20px] bg-[#0B0D14] shadow-[0_12px_30px_-10px_rgba(11,13,20,0.5)] ring-1 ring-white/10">
         <AnimatedLogoMark size={44} />
+      </div>
       </div>
     </div>
   );

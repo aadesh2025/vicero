@@ -84,7 +84,7 @@ function LeadToast() {
   const reduce = useReducedMotion();
   return (
     <motion.div
-      className="absolute right-10 top-[270px] z-10"
+      className="absolute right-8 top-[215px] z-10"
       initial={reduce ? false : { opacity: 0, x: 30 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.7, delay: 6.8, ease: [0.2, 0.8, 0.2, 1] }}
@@ -114,7 +114,7 @@ export function AuthShowcase() {
   return (
     <aside
       aria-hidden="true"
-      className={`relative hidden min-h-[calc(100vh-40px)] min-w-0 flex-[999_1_560px] flex-col justify-between gap-5 overflow-hidden rounded-[32px] bg-[#0B0D14] px-10 py-9 text-white lg:flex ${HATCH}`}
+      className={`relative hidden min-h-[calc(100vh-40px)] min-w-0 flex-[999_1_520px] flex-col justify-between gap-5 overflow-hidden rounded-[32px] bg-[#0B0D14] px-8 py-7 text-white lg:flex ${HATCH}`}
     >
       <VectorMark pill="#FFFFFF" triangle="#FFFFFF" className="pointer-events-none absolute -bottom-[190px] -right-[170px] size-[620px] opacity-[0.06]" />
 
@@ -122,7 +122,7 @@ export function AuthShowcase() {
         <div className="inline-flex self-start rounded-full border border-white/15 px-3.5 py-[7px] text-xs font-semibold tracking-[0.06em] text-[#C9CEDB]">
           AI CUSTOMER CONVERSATIONS
         </div>
-        <h2 className="font-display text-[44px] font-extrabold leading-[1.08] tracking-[-0.02em]">
+        <h2 className="font-display text-[36px] font-extrabold leading-[1.08] tracking-[-0.02em]">
           One assistant.
           <br />
           Every channel.
@@ -131,19 +131,19 @@ export function AuthShowcase() {
         </h2>
       </div>
 
-      <div className="relative w-full max-w-[480px] self-center overflow-hidden rounded-[26px] border border-white/10 bg-[#14171F] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-3 border-b border-white/[0.08] px-[18px] py-4">
+      <div className="relative w-full max-w-[460px] self-center overflow-hidden rounded-[26px] border border-white/10 bg-[#14171F] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]">
+        <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3">
           <div className="flex size-[38px] items-center justify-center rounded-xl bg-white">
             <VectorMark className="size-[26px]" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-bold">Vicero Assistant</div>
-            <div className="flex items-center gap-1.5 text-xs text-[#A8AEBD]">
+            <div className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[#A8AEBD]">
               <span className="size-[7px] rounded-full bg-[#4ADE80]" />
               Online · replies instantly
             </div>
           </div>
-          <div className="flex gap-1.5">
+          <div className="hidden gap-1.5 xl:flex">
             {["Web", "WhatsApp", "Instagram"].map((c) => (
               <span key={c} className="rounded-full bg-white/[0.08] px-2.5 py-[5px] text-[11px] font-semibold text-[#D5D9E3]">
                 {c}
@@ -152,7 +152,7 @@ export function AuthShowcase() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2.5 px-[18px] py-5 text-sm leading-[1.5]">
+        <div className="flex flex-col gap-2 px-4 py-4 text-[13px] leading-[1.45]">
           <Rise delay={0.6} className={BOT}>{s.bot1}</Rise>
           <Rise delay={1.5} className={USER}>{s.user1}</Rise>
           <Rise delay={2.4} className={BOT}>{s.bot2}</Rise>

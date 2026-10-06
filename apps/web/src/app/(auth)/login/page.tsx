@@ -2,12 +2,12 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
+import { Mail } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { OAuthButtons, OrDivider } from "@/components/auth/oauth-buttons";
-import { FormError, FormNotice, SubmitButton, oauthErrorMessage } from "@/components/auth/form-bits";
+import { AuthField, AuthHeading, FormError, FormNotice, SubmitButton, oauthErrorMessage } from "@/components/auth/form-bits";
+import { PasswordInput } from "@/components/auth/password-input";
+import { AnimatedLogoTile } from "@/components/brand/animated-logo-mark";
 import { login, requestMagicLink } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
@@ -61,40 +61,58 @@ function LoginForm() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">Welcome back</h1>
-      <p className="mt-1 text-sm text-muted">Sign in to your Vicero workspace.</p>
+    <div>
+      <AnimatedLogoTile className="mb-7 hidden lg:block" />
+      <AuthHeading
+        title="Welcome back."
+        sub="Your assistants kept every conversation going while you were away. Sign in to pick them up."
+      />
 
-      <div className="mt-6">
-        <OAuthButtons onError={setError} />
-      </div>
+      <OAuthButtons onError={setError} />
       <OrDivider label="or with email" />
 
-      <form onSubmit={onSubmit} className="space-y-4" noValidate={false}>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link href="/forgot-password" className="text-xs text-accent hover:text-accent">
-              Forgot password?
-            </Link>
-          </div>
-          <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+      <form onSubmit={onSubmit} className="flex flex-col gap-3.5" noValidate={false}>
+        <AuthField
+          id="email"
+          label="Work email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <PasswordInput
+          id="password"
+          label="Password"
+          autoComplete="current-password"
+          placeholder="••••••••••"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <div className="-mt-1 flex justify-end">
+          <Link href="/forgot-password" className="text-[13px] font-semibold text-accent-2 hover:text-text dark:text-accent">
+            Forgot password?
+          </Link>
         </div>
         <FormError message={error} />
         {notice && <FormNotice>{notice}</FormNotice>}
         <SubmitButton busy={busy}>Sign in</SubmitButton>
-        <Button type="button" variant="ghost" className="w-full" disabled={busy} onClick={onMagicLink}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onMagicLink}
+          className="flex h-12 items-center justify-center gap-2 rounded-[14px] border border-dashed border-border-strong text-sm font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
+        >
+          <Mail className="size-[18px]" strokeWidth={1.8} />
           Email me a sign-in link instead
-        </Button>
+        </button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-muted">
-        New here?{" "}
-        <Link href="/signup" className="font-medium text-accent hover:text-accent">
+      <p className="mt-6 text-center text-sm text-muted">
+        New to Vicero?{" "}
+        <Link href="/signup" className="font-semibold text-accent-2 hover:text-text dark:text-accent">
           Start your free trial
         </Link>
       </p>

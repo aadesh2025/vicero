@@ -18,7 +18,7 @@ test("the login page offers every sign-in method and a way to sign up", async ({
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Facebook" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
-  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /email me a sign-in link/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /forgot password/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /start your free trial/i })).toHaveAttribute("href", "/signup");

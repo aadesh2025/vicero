@@ -18,6 +18,26 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-105: Login/signup redesign ("Design A") — split layout, decorative chat showcase
+- **Date:** 2026-10-06
+- **Status:** accepted
+- **Context:** the auth pages were a single centred card. The new design pairs a bright form with
+  an always-dark, animated chat preview (designreference/login-v2). Auth logic must not change.
+- **Decision:** `(auth)/layout.tsx` is a split frame shared by every auth page. The showcase
+  variant (login vs signup script) is chosen by `usePathname()` in a client hook
+  (`auth-variant.ts`) read by the two client components (`AuthShowcase`, `MiniChatCard`), so the
+  layout stays a server component and the pages pass nothing down. The preview is `aria-hidden`
+  and non-focusable; below `lg` a two-bubble `MiniChatCard` replaces it. All motion is Framer
+  Motion and honours `prefers-reduced-motion` (final state, no movement). The password eye toggle
+  is UI-only (`PasswordInput`). `lib/api/auth.ts`, the API and every route are untouched.
+- **Alternatives considered:** passing `variant` from each page (needs a client layout slot or
+  context for no gain); CSS keyframes copied from the design (no reduced-motion hook, harder to
+  sequence).
+- **Consequences:** the mark is the design's hand-traced SVG (`public/brand` only has PNGs) —
+  swap in real paths if a vector logo is supplied. The design's footer lists Terms/Privacy but
+  no such routes exist, so the footer links Help (`/docs`) and Pricing instead. Other auth pages
+  (forgot/reset/magic/verify/oauth) lost their card box and use the same field styling.
+
 ### ADR-103: Admin roster "near limit" warning threshold — 90% of the effective cap
 - **Date:** 2026-09-28
 - **Status:** accepted

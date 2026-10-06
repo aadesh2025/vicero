@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { AuthField, AuthHeading, FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
 import { forgotPassword } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
@@ -29,26 +27,22 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">Reset your password</h1>
-      <p className="mt-1 text-sm text-muted">We&apos;ll email you a link to choose a new one.</p>
+    <div>
+      <AuthHeading title="Reset your password" sub="We'll email you a link to choose a new one." />
       {sent ? (
-        <div className="mt-6">
+        <div>
           {/* Identical for every address: the API never says whether an account exists. */}
           <FormNotice>If that address has an account, a reset link is on its way.</FormNotice>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
+        <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+          <AuthField id="email" label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           <FormError message={error} />
           <SubmitButton busy={busy}>Send reset link</SubmitButton>
         </form>
       )}
-      <p className="mt-5 text-center text-sm text-muted">
-        <Link href="/login" className="font-medium text-accent hover:text-accent">
+      <p className="mt-6 text-center text-sm text-muted">
+        <Link href="/login" className="font-semibold text-accent-2 hover:text-text dark:text-accent">
           Back to sign in
         </Link>
       </p>

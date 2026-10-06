@@ -4,9 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { AuthField, AuthHeading, FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
 import { exchangeOAuthCode, requestOAuthEmail } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { landingPath } from "@/lib/auth-landing";
@@ -59,19 +57,19 @@ function Callback() {
   if (pending) return <NeedEmail pendingToken={pending} />;
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 text-center shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">Signing you in</h1>
+    <div>
+      <AuthHeading title="Signing you in" />
       {error ? (
         <>
-          <p role="alert" className="mt-3 text-sm text-error-text">
+          <p role="alert" className="text-sm text-error-text">
             {error}
           </p>
-          <Link href="/login" className="mt-4 inline-block text-sm font-medium text-accent hover:text-accent">
+          <Link href="/login" className="mt-4 inline-block text-sm font-semibold text-accent-2 hover:text-text dark:text-accent">
             Back to sign in
           </Link>
         </>
       ) : (
-        <p role="status" className="mt-3 flex items-center justify-center gap-2 text-sm text-muted">
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
           <Loader2 className="size-4 animate-spin" /> One moment…
         </p>
       )}
@@ -100,22 +98,18 @@ function NeedEmail({ pendingToken }: { pendingToken: string }) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">One more step</h1>
-      <p className="mt-1 text-sm text-muted">
-        The provider didn&apos;t share a verified email address. Enter the one you want to use and we&apos;ll email
-        you a link to confirm it.
-      </p>
+    <div>
+      <AuthHeading
+        title="One more step"
+        sub="The provider didn't share a verified email address. Enter the one you want to use and we'll email you a link to confirm it."
+      />
       {sent ? (
-        <div className="mt-6">
+        <div>
           <FormNotice>Check your inbox for the confirmation link. It expires in 15 minutes.</FormNotice>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
+        <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+          <AuthField id="email" label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           <FormError message={error} />
           <SubmitButton busy={busy}>Email me the link</SubmitButton>
         </form>

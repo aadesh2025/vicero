@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AuthHeading } from "@/components/auth/form-bits";
 import { ApiError } from "@/lib/api/client";
 import { landingPath } from "@/lib/auth-landing";
 
@@ -58,21 +58,22 @@ function Inner({ title, working, redeem, successMessage, signIn = false }: Redee
   }, [token, redeem, router, signIn, successMessage]);
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 text-center shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">{title}</h1>
+    <div>
+      <AuthHeading title={title} />
       <p
         role={state === "error" ? "alert" : "status"}
-        className="mt-3 flex items-center justify-center gap-2 text-sm text-muted"
+        className="flex items-center gap-2 text-sm text-muted"
       >
         {state === "working" && <Loader2 className="size-4 animate-spin" />}
         {message}
       </p>
       {state !== "working" && (
-        <Button asChild variant="primary" className="mt-5">
-          <Link href={state === "done" ? "/dashboard" : "/login"}>
-            {state === "done" ? "Continue" : "Back to sign in"}
-          </Link>
-        </Button>
+        <Link
+          href={state === "done" ? "/dashboard" : "/login"}
+          className="mt-5 flex h-[54px] items-center justify-center rounded-[14px] bg-text text-base font-bold text-bg transition-colors hover:bg-text/90"
+        >
+          {state === "done" ? "Continue" : "Back to sign in"}
+        </Link>
       )}
     </div>
   );

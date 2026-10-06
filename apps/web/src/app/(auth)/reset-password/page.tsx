@@ -3,9 +3,8 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { AuthHeading, FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { PasswordInput } from "@/components/auth/password-input";
 import { resetPassword } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
@@ -40,29 +39,31 @@ function ResetForm() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">Choose a new password</h1>
+    <div>
+      <AuthHeading title="Choose a new password" />
       {done ? (
-        <div className="mt-6 space-y-4">
+        <div className="space-y-4">
           <FormNotice>Your password is updated. Sign in with it now.</FormNotice>
-          <Link href="/login" className="block text-center text-sm font-medium text-accent hover:text-accent">
+          <Link href="/login" className="block text-center text-sm font-semibold text-accent-2 hover:text-text dark:text-accent">
             Go to sign in
           </Link>
         </div>
       ) : (
-        <form onSubmit={onSubmit} className="mt-6 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="password">New password</Label>
-            <Input
+        <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+          <div>
+            <PasswordInput
               id="password"
-              type="password"
+              label="New password"
               autoComplete="new-password"
               required
               minLength={8}
+              aria-describedby="password-hint"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <p className="text-xs text-faint">At least 8 characters, and nothing easy to guess.</p>
+            <p id="password-hint" className="mt-1.5 px-1 text-xs text-faint">
+              At least 8 characters, and nothing easy to guess.
+            </p>
           </div>
           <FormError message={error} />
           <SubmitButton busy={busy}>Update password</SubmitButton>

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { OAuthButtons, OrDivider } from "@/components/auth/oauth-buttons";
-import { FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { AuthField, AuthHeading, FormError, FormNotice, SubmitButton } from "@/components/auth/form-bits";
+import { PasswordInput } from "@/components/auth/password-input";
+import { AnimatedLogoTile } from "@/components/brand/animated-logo-mark";
 import { requestMagicLink, signup } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 
@@ -57,51 +57,58 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 shadow-pop">
-      <h1 className="font-display text-xl font-semibold text-text">Start your free trial</h1>
-      <p className="mt-1 text-sm text-muted">10 days, 500 messages, no card needed.</p>
+    <div>
+      <AnimatedLogoTile className="mb-7 hidden lg:block" />
+      <AuthHeading title="Start your free trial." sub="10 days, 500 messages, no card needed." />
 
-      <div className="mt-6">
-        <OAuthButtons onError={setError} />
-      </div>
+      <OAuthButtons onError={setError} />
       <OrDivider label="or with email" />
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Full name</Label>
-          <Input id="name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input
+      <form onSubmit={onSubmit} className="flex flex-col gap-3.5">
+        <AuthField id="name" label="Full name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
+        <AuthField
+          id="email"
+          label="Work email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <div>
+          <PasswordInput
             id="password"
-            type="password"
+            label="Password"
             autoComplete="new-password"
+            placeholder="••••••••••"
             required
             minLength={8}
             aria-describedby="password-hint"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <p id="password-hint" className="text-xs text-faint">
+          <p id="password-hint" className="mt-1.5 px-1 text-xs text-faint">
             At least 8 characters, and nothing easy to guess.
           </p>
         </div>
         <FormError message={error} />
         {notice && <FormNotice>{notice}</FormNotice>}
         <SubmitButton busy={busy}>Create account</SubmitButton>
-        <Button type="button" variant="ghost" className="w-full" disabled={busy} onClick={onMagicLink}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onMagicLink}
+          className="flex h-12 items-center justify-center gap-2 rounded-[14px] border border-dashed border-border-strong text-sm font-semibold text-text transition-colors hover:bg-surface-3 disabled:pointer-events-none disabled:opacity-60"
+        >
+          <Mail className="size-[18px]" strokeWidth={1.8} />
           Sign up with an email link instead
-        </Button>
+        </button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-muted">
+      <p className="mt-6 text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-accent hover:text-accent">
+        <Link href="/login" className="font-semibold text-accent-2 hover:text-text dark:text-accent">
           Sign in
         </Link>
       </p>

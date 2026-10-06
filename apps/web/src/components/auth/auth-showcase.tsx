@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, MessageCircle, Zap } from "lucide-react";
 import { BrandArrow, VectorMark } from "@/components/brand/animated-logo-mark";
 import { useAuthVariant, type AuthVariant } from "@/components/auth/auth-variant";
 
@@ -33,8 +33,8 @@ const SCRIPTS: Record<AuthVariant, Script> = {
   },
 };
 
-const BOT = "max-w-[80%] self-start rounded-[18px_18px_18px_6px] bg-[#2563EB] px-3.5 py-2.5 text-white";
-const USER = "max-w-[80%] self-end rounded-[18px_18px_6px_18px] bg-[#262A35] px-3.5 py-2.5 text-[#E6E9F0]";
+const BOT = "max-w-[85%] self-start rounded-[16px_16px_16px_5px] bg-[#2563EB] px-3 py-2 text-white";
+const USER = "max-w-[85%] self-end rounded-[16px_16px_5px_16px] bg-[#262A35] px-3 py-2 text-[#E6E9F0]";
 const HATCH = "bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.035)_0_2px,transparent_2px_12px)]";
 export { HATCH };
 
@@ -80,26 +80,41 @@ function TypingDots() {
   );
 }
 
-function LeadToast() {
+/** A card that pops in at `delay`, then floats. It sits on the panel's edge, half outside it. */
+function FloatCard({
+  className,
+  delay,
+  from,
+  tint,
+  icon,
+  title,
+  sub,
+}: {
+  className: string;
+  delay: number;
+  from: { x?: number; y?: number };
+  tint: string;
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+}) {
   const reduce = useReducedMotion();
   return (
     <motion.div
-      className="absolute right-8 top-[215px] z-10"
-      initial={reduce ? false : { opacity: 0, x: 30 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.7, delay: 6.8, ease: [0.2, 0.8, 0.2, 1] }}
+      className={`absolute z-10 ${className}`}
+      initial={reduce ? false : { opacity: 0, scale: 0.85, ...from }}
+      animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+      transition={{ duration: 0.7, delay, ease: [0.2, 0.8, 0.2, 1] }}
     >
       <motion.div
-        className="flex items-center gap-3 rounded-[18px] bg-white py-3 pl-3 pr-4 text-[#0B0D14] shadow-[0_20px_40px_-12px_rgba(0,0,0,0.6)]"
-        animate={reduce ? undefined : { y: [0, -8, 0] }}
-        transition={{ duration: 5, delay: 7.5, repeat: Infinity, ease: "easeInOut" }}
+        className="flex items-center gap-2.5 rounded-2xl bg-white py-2.5 pl-2.5 pr-3.5 text-[#0B0D14] shadow-[0_18px_36px_-12px_rgba(11,13,20,0.55)] ring-1 ring-black/5"
+        animate={reduce ? undefined : { y: [0, -7, 0] }}
+        transition={{ duration: 5, delay: delay + 0.7, repeat: Infinity, ease: "easeInOut" }}
       >
-        <span className="flex size-9 items-center justify-center rounded-[11px] bg-[#DCFCE7]">
-          <Check className="size-[18px] text-[#15803D]" strokeWidth={2.2} />
-        </span>
+        <span className={`flex size-8 items-center justify-center rounded-[10px] ${tint}`}>{icon}</span>
         <div>
-          <div className="text-[13px] font-bold">New lead captured</div>
-          <div className="text-xs text-[#4B5163]">From Instagram · sent to your inbox</div>
+          <div className="text-xs font-bold">{title}</div>
+          <div className="text-[11px] text-[#4B5163]">{sub}</div>
         </div>
       </motion.div>
     </motion.div>
@@ -107,84 +122,104 @@ function LeadToast() {
 }
 
 /** The always-dark right-hand panel of every auth page: a decorative, scripted chat preview.
- *  Purely presentational — `aria-hidden`, nothing in it is focusable. */
+ *  Purely presentational — `aria-hidden`, nothing in it is focusable. The panel's background is
+ *  clipped to its rounded shape, but the content is not: the floating cards break out of it. */
 export function AuthShowcase() {
   const s = SCRIPTS[useAuthVariant().variant];
 
   return (
-    <aside
-      aria-hidden="true"
-      className={`relative hidden min-h-[calc(100vh-40px)] min-w-0 flex-[999_1_520px] flex-col justify-between gap-5 overflow-hidden rounded-[32px] bg-[#0B0D14] px-8 py-7 text-white lg:flex ${HATCH}`}
-    >
-      <VectorMark pill="#FFFFFF" triangle="#FFFFFF" className="pointer-events-none absolute -bottom-[190px] -right-[170px] size-[620px] opacity-[0.06]" />
-
-      <div className="relative flex max-w-[520px] flex-col gap-3.5">
-        <div className="inline-flex self-start rounded-full border border-white/15 px-3.5 py-[7px] text-xs font-semibold tracking-[0.06em] text-[#C9CEDB]">
-          AI CUSTOMER CONVERSATIONS
+    <aside aria-hidden="true" className="relative hidden min-w-0 flex-1 basis-0 items-center lg:flex">
+      <div className="relative flex w-full flex-col gap-5 rounded-[28px] bg-[#0B0D14] px-7 py-7 text-white">
+        <div className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[28px] ${HATCH}`}>
+          <VectorMark pill="#FFFFFF" triangle="#FFFFFF" className="absolute -bottom-[150px] -right-[130px] size-[420px] opacity-[0.06]" />
         </div>
-        <h2 className="font-display text-[36px] font-extrabold leading-[1.08] tracking-[-0.02em]">
-          One assistant.
-          <br />
-          Every channel.
-          <br />
-          <span className="text-[#60A5FA]">Zero missed leads.</span>
-        </h2>
-      </div>
 
-      <div className="relative w-full max-w-[460px] self-center overflow-hidden rounded-[26px] border border-white/10 bg-[#14171F] shadow-[0_40px_80px_-30px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-3 border-b border-white/[0.08] px-4 py-3">
-          <div className="flex size-[38px] items-center justify-center rounded-xl bg-white">
-            <VectorMark className="size-[26px]" />
+        <div className="relative flex flex-col gap-3">
+          <div className="inline-flex self-start rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold tracking-[0.06em] text-[#C9CEDB]">
+            AI CUSTOMER CONVERSATIONS
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-bold">Vicero Assistant</div>
-            <div className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[#A8AEBD]">
-              <span className="size-[7px] rounded-full bg-[#4ADE80]" />
-              Online · replies instantly
+          <h2 className="font-display text-[30px] font-extrabold leading-[1.1] tracking-[-0.02em]">
+            One assistant. Every channel.
+            <br />
+            <span className="text-[#60A5FA]">Zero missed leads.</span>
+          </h2>
+        </div>
+
+        <div className="relative w-full max-w-[400px] self-center overflow-hidden rounded-[22px] border border-white/10 bg-[#14171F] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)]">
+          <div className="flex items-center gap-2.5 border-b border-white/[0.08] px-3.5 py-2.5">
+            <div className="flex size-8 items-center justify-center rounded-[10px] bg-white">
+              <VectorMark className="size-[22px]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold">Vicero Assistant</div>
+              <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-[#A8AEBD]">
+                <span className="size-1.5 rounded-full bg-[#4ADE80]" />
+                Online · replies instantly
+              </div>
             </div>
           </div>
-          <div className="hidden gap-1.5 xl:flex">
-            {["Web", "WhatsApp", "Instagram"].map((c) => (
-              <span key={c} className="rounded-full bg-white/[0.08] px-2.5 py-[5px] text-[11px] font-semibold text-[#D5D9E3]">
-                {c}
-              </span>
-            ))}
+
+          <div className="flex flex-col gap-1.5 px-3.5 py-3.5 text-[12.5px] leading-[1.45]">
+            <Rise delay={0.6} className={BOT}>{s.bot1}</Rise>
+            <Rise delay={1.5} className={USER}>{s.user1}</Rise>
+            <Rise delay={2.4} className={BOT}>{s.bot2}</Rise>
+            <Rise delay={3.4} className={USER}>{s.user2}</Rise>
+            <TypingDots />
+            <Rise delay={5.6} className={BOT}>{s.bot3}</Rise>
+            <Rise delay={6.3} className="mt-1 flex flex-wrap gap-1.5">
+              {s.chips.map((c) => (
+                <span key={c} className="rounded-full border border-[#60A5FA]/45 px-2.5 py-1 text-[11px] font-semibold text-[#BFD6FF]">
+                  {c}
+                </span>
+              ))}
+            </Rise>
+          </div>
+
+          <div className="mx-3 mb-3 flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#0E1016] py-1 pl-3.5 pr-1">
+            <span className="flex-1 text-[13px] text-[#8E94A3]">Ask Vicero anything…</span>
+            <span className="flex size-8 items-center justify-center rounded-[10px] bg-white">
+              <BrandArrow className="size-4" color="#2563EB" />
+            </span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 px-4 py-4 text-[13px] leading-[1.45]">
-          <Rise delay={0.6} className={BOT}>{s.bot1}</Rise>
-          <Rise delay={1.5} className={USER}>{s.user1}</Rise>
-          <Rise delay={2.4} className={BOT}>{s.bot2}</Rise>
-          <Rise delay={3.4} className={USER}>{s.user2}</Rise>
-          <TypingDots />
-          <Rise delay={5.6} className={BOT}>{s.bot3}</Rise>
-          <Rise delay={6.3} className="mt-1.5 flex flex-wrap gap-2">
-            {s.chips.map((c) => (
-              <span key={c} className="rounded-full border border-[#60A5FA]/45 px-3 py-[7px] text-xs font-semibold text-[#BFD6FF]">
-                {c}
-              </span>
-            ))}
-          </Rise>
+        <div className="relative flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#C9CEDB]">
+          {["Learns from your docs", "One inbox for every channel", "Hands off to humans"].map((t) => (
+            <span key={t} className="flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-[#60A5FA]" />
+              {t}
+            </span>
+          ))}
         </div>
 
-        <div className="mx-3.5 mb-3.5 flex items-center gap-2.5 rounded-2xl border border-white/[0.08] bg-[#0E1016] py-1.5 pl-4 pr-1.5">
-          <span className="flex-1 text-sm text-[#8E94A3]">Ask Vicero anything…</span>
-          <span className="flex size-10 items-center justify-center rounded-xl bg-white">
-            <BrandArrow className="size-[18px]" color="#2563EB" />
-          </span>
-        </div>
-      </div>
-
-      <LeadToast />
-
-      <div className="relative flex flex-wrap gap-x-7 gap-y-2.5 text-sm text-[#C9CEDB]">
-        {["Learns from your docs", "One inbox for every channel", "Hands off to humans"].map((t) => (
-          <span key={t} className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-[#60A5FA]" />
-            {t}
-          </span>
-        ))}
+        {/* Floating cards: each straddles the panel's edge so the animation leaves the box. */}
+        <FloatCard
+          className="-top-6 right-10"
+          delay={6.8}
+          from={{ y: 24 }}
+          tint="bg-[#DCFCE7]"
+          icon={<Check className="size-4 text-[#15803D]" strokeWidth={2.2} />}
+          title="New lead captured"
+          sub="From Instagram · sent to your inbox"
+        />
+        <FloatCard
+          className="-left-14 top-[38%] hidden xl:block"
+          delay={7.6}
+          from={{ x: 30 }}
+          tint="bg-[#DBEAFE]"
+          icon={<MessageCircle className="size-4 text-[#1D4ED8]" strokeWidth={2.2} />}
+          title="WhatsApp reply sent"
+          sub="Answered in 2 seconds"
+        />
+        <FloatCard
+          className="-left-10 bottom-[104px] hidden xl:block"
+          delay={8.4}
+          from={{ x: 30 }}
+          tint="bg-[#FEF3C7]"
+          icon={<Zap className="size-4 text-[#B45309]" strokeWidth={2.2} />}
+          title="Handed to your team"
+          sub="Full history attached"
+        />
       </div>
     </aside>
   );

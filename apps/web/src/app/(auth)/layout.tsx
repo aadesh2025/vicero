@@ -12,13 +12,13 @@ const DOT_GRID = {
  *  right (hidden below `lg`, where a two-bubble card replaces it). */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen gap-5 bg-bg p-5" style={DOT_GRID}>
-      <div className="flex min-w-0 flex-1 basis-[400px] flex-col px-1 py-3 sm:px-7 sm:py-5">
+    <div className="flex min-h-screen gap-8 overflow-x-clip bg-bg p-4 lg:px-8 lg:py-6" style={DOT_GRID}>
+      <div className="flex min-w-0 flex-1 basis-0 flex-col px-1 py-2 sm:px-4">
         <Link href="/" aria-label="Vicero home" className="self-start">
           <Logo />
         </Link>
         <div className="flex flex-1 items-center justify-center py-6">
-          <div className="w-full max-w-[360px]">
+          <div className="w-full max-w-[380px]">
             <MiniChatCard />
             {children}
           </div>

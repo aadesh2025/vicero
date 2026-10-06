@@ -75,12 +75,30 @@ test("on a phone the showcase gives way to the mini chat card", async ({ page })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("reduced motion shows the finished conversation straight away", async ({ browser }) => {
+test("with OS reduced-motion on, the page hydrates cleanly and the demo still plays", async ({ browser }) => {
+  // Regression: branching on useReducedMotion() during render broke hydration (a recoverable
+  // error in the console) and switched the animation off for anyone with "reduce animations" on.
   const context = await browser.newContext({ reducedMotion: "reduce" });
   const page = await context.newPage();
+  const problems: string[] = [];
+  page.on("pageerror", (e) => problems.push(String(e)));
+  page.on("console", (m) => {
+    if (m.type() === "error" && /hydrat/i.test(m.text())) problems.push(m.text());
+  });
   await page.goto("/login");
-  // The last bubble and the toast are scheduled ~6s out; with reduced motion they are already there.
-  await expect(page.getByText("I hand the chat to your team")).toBeVisible({ timeout: 2000 });
-  await expect(page.getByText("New lead captured")).toBeVisible({ timeout: 2000 });
+  // The first bubble is scheduled at 0.6s; it only ever appears if the animation actually runs.
+  await expect(page.getByText("Hi! I'm the assistant on your website")).toBeVisible();
+  await expect(page.getByText("Hi! I'm the assistant on your website")).toHaveCSS("opacity", "1", { timeout: 10_000 });
+  expect(problems).toEqual([]);
   await context.close();
+});
+
+test("the conversation loops: after a full cycle the first bubble plays again", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/login");
+  const first = page.getByText("Hi! I'm the assistant on your website");
+  await expect(first).toHaveCSS("opacity", "1", { timeout: 10_000 });
+  // ~14s per cycle: the run restarts, so the bubble drops back to hidden before fading in again.
+  await expect(first).toHaveCSS("opacity", "0", { timeout: 20_000 });
+  await expect(first).toHaveCSS("opacity", "1", { timeout: 10_000 });
 });

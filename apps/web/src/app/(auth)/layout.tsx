@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
+import { AuthMotion } from "@/components/auth/auth-motion";
 import { AuthShowcase } from "@/components/auth/auth-showcase";
 import { MiniChatCard } from "@/components/auth/mini-chat-card";
 
@@ -12,6 +13,7 @@ const DOT_GRID = {
  *  right (hidden below `lg`, where a two-bubble card replaces it). */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
+    <AuthMotion>
     <div className="flex min-h-screen gap-8 overflow-x-clip bg-bg p-4 lg:px-8 lg:py-6" style={DOT_GRID}>
       <div className="flex min-w-0 flex-1 basis-0 flex-col px-1 py-2 sm:px-4">
         <Link href="/" aria-label="Vicero home" className="self-start">
@@ -34,5 +36,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
       <AuthShowcase />
     </div>
+    </AuthMotion>
   );
 }

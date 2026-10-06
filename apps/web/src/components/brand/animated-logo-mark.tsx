@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 /** Hand-traced vector of the Vicero V (viewBox 0 0 1254 1254), from designreference/login-v2.
@@ -43,28 +43,27 @@ const GLOW_OFF = "drop-shadow(0 0 0 rgba(37,99,235,0))";
 const GLOW_ON = "drop-shadow(0 0 22px rgba(37,99,235,.75))";
 
 /** The mark for a dark tile: the pill flies in from the top-left, the triangle from the
- *  top-right, then the triangle glows on a slow loop. With reduced motion it just sits there. */
+ *  top-right, then the triangle glows on a slow loop. */
 export function AnimatedLogoMark({ size = 44, className }: { size?: number; className?: string }) {
-  const reduce = useReducedMotion();
   return (
     <svg viewBox="0 0 1254 1254" width={size} height={size} role="img" aria-label="Vicero" className={className}>
       <motion.path
         d={PILL_PATH}
         fill="#FFFFFF"
         style={FILL_BOX}
-        initial={reduce ? false : { opacity: 0, x: -140, y: -110, rotate: -18 }}
+        initial={{ opacity: 0, x: -140, y: -110, rotate: -18 }}
         animate={{ opacity: 1, x: 0, y: 0, rotate: 0 }}
         transition={{ duration: 1, ease: EASE }}
       />
       <motion.g
-        animate={reduce ? undefined : { filter: [GLOW_OFF, GLOW_ON, GLOW_OFF] }}
+        animate={{ filter: [GLOW_OFF, GLOW_ON, GLOW_OFF] }}
         transition={{ duration: 3.4, delay: 1.4, repeat: Infinity, ease: "easeInOut" }}
       >
         <motion.path
           d={TRIANGLE_PATH}
           fill="#3B82F6"
           style={FILL_BOX}
-          initial={reduce ? false : { opacity: 0, x: 160, y: -90, rotate: 60, scale: 0.5 }}
+          initial={{ opacity: 0, x: 160, y: -90, rotate: 60, scale: 0.5 }}
           animate={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 1 }}
           transition={{ duration: 1, delay: 0.2, ease: EASE }}
         />
@@ -75,7 +74,6 @@ export function AnimatedLogoMark({ size = 44, className }: { size?: number; clas
 
 /** The login hero: the animated mark on a near-black tile, inside a slowly turning dashed ring. */
 export function AnimatedLogoTile({ className }: { className?: string }) {
-  const reduce = useReducedMotion();
   return (
     <div className={cn("relative size-[66px]", className)}>
       <div className="absolute left-0 top-0 size-[84px] origin-top-left scale-[0.785]">
@@ -83,7 +81,7 @@ export function AnimatedLogoTile({ className }: { className?: string }) {
         viewBox="0 0 84 84"
         className="absolute inset-0 size-full"
         aria-hidden="true"
-        animate={reduce ? undefined : { rotate: 360 }}
+        animate={{ rotate: 360 }}
         transition={{ duration: 24, ease: "linear", repeat: Infinity }}
       >
         <circle cx="42" cy="42" r="40" fill="none" stroke="rgb(var(--border-strong))" strokeWidth="1.5" strokeDasharray="3 6" />

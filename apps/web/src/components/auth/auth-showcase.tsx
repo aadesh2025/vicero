@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Check, MessageCircle, Zap } from "lucide-react";
 import { BrandArrow, VectorMark } from "@/components/brand/animated-logo-mark";
 import { useAuthVariant, type AuthVariant } from "@/components/auth/auth-variant";
@@ -33,18 +34,57 @@ const SCRIPTS: Record<AuthVariant, Script> = {
   },
 };
 
+const LOOP_MS = 14000;
 const BOT = "max-w-[85%] self-start rounded-[16px_16px_16px_5px] bg-[#2563EB] px-3 py-2 text-white";
 const USER = "max-w-[85%] self-end rounded-[16px_16px_5px_16px] bg-[#262A35] px-3 py-2 text-[#E6E9F0]";
 const HATCH = "bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.035)_0_2px,transparent_2px_12px)]";
 export { HATCH };
 
-/** A chat line that fades up after `delay` seconds (shown instantly with reduced motion). */
+
+/** Replays the scripted conversation forever: after `period` ms the run counter bumps (remounting
+ *  keyed children, which restarts their animations) with a short fade-out just before. */
+export function useLoop(period: number) {
+  const [run, setRun] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    const out = setTimeout(() => setLeaving(true), period - 600);
+    const next = setTimeout(() => {
+      setRun((r) => r + 1);
+      setLeaving(false);
+    }, period);
+    return () => {
+      clearTimeout(out);
+      clearTimeout(next);
+    };
+  }, [run, period]);
+  return { run, leaving };
+}
+
+export function Fade({
+  leaving,
+  className,
+  children,
+  ...attrs
+}: {
+  leaving: boolean;
+  className?: string;
+  children: React.ReactNode;
+  "aria-hidden"?: "true";
+  "data-testid"?: string;
+}) {
+  return (
+    <motion.div className={className} animate={{ opacity: leaving ? 0 : 1 }} transition={{ duration: 0.5 }} {...attrs}>
+      {children}
+    </motion.div>
+  );
+}
+
+/** A chat line that fades up after `delay` seconds. */
 export function Rise({ delay, className, children }: { delay: number; className: string; children?: React.ReactNode }) {
-  const reduce = useReducedMotion();
   return (
     <motion.div
       className={className}
-      initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }}
+      initial={{ opacity: 0, y: 14, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.6, delay, ease: "easeOut" }}
     >
@@ -54,8 +94,6 @@ export function Rise({ delay, className, children }: { delay: number; className:
 }
 
 function TypingDots() {
-  const reduce = useReducedMotion();
-  if (reduce) return null;
   return (
     <motion.div
       className="flex gap-[5px] self-start overflow-hidden rounded-[18px_18px_18px_6px] bg-[#2563EB] px-4"
@@ -98,17 +136,16 @@ function FloatCard({
   title: string;
   sub: string;
 }) {
-  const reduce = useReducedMotion();
   return (
     <motion.div
       className={`absolute z-10 ${className}`}
-      initial={reduce ? false : { opacity: 0, scale: 0.85, ...from }}
+      initial={{ opacity: 0, scale: 0.85, ...from }}
       animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
       transition={{ duration: 0.7, delay, ease: [0.2, 0.8, 0.2, 1] }}
     >
       <motion.div
         className="flex items-center gap-2.5 rounded-2xl bg-white py-2.5 pl-2.5 pr-3.5 text-[#0B0D14] shadow-[0_18px_36px_-12px_rgba(11,13,20,0.55)] ring-1 ring-black/5"
-        animate={reduce ? undefined : { y: [0, -7, 0] }}
+        animate={{ y: [0, -7, 0] }}
         transition={{ duration: 5, delay: delay + 0.7, repeat: Infinity, ease: "easeInOut" }}
       >
         <span className={`flex size-8 items-center justify-center rounded-[10px] ${tint}`}>{icon}</span>
@@ -126,6 +163,7 @@ function FloatCard({
  *  clipped to its rounded shape, but the content is not: the floating cards break out of it. */
 export function AuthShowcase() {
   const s = SCRIPTS[useAuthVariant().variant];
+  const { run, leaving } = useLoop(LOOP_MS);
 
   return (
     <aside aria-hidden="true" className="relative hidden min-w-0 flex-1 basis-0 items-center lg:flex">
@@ -145,7 +183,7 @@ export function AuthShowcase() {
           </h2>
         </div>
 
-        <div className="relative w-full max-w-[400px] self-center overflow-hidden rounded-[22px] border border-white/10 bg-[#14171F] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)]">
+        <Fade key={`chat-${run}`} leaving={leaving} className="relative w-full max-w-[400px] self-center overflow-hidden rounded-[22px] border border-white/10 bg-[#14171F] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)]">
           <div className="flex items-center gap-2.5 border-b border-white/[0.08] px-3.5 py-2.5">
             <div className="flex size-8 items-center justify-center rounded-[10px] bg-white">
               <VectorMark className="size-[22px]" />
@@ -181,7 +219,7 @@ export function AuthShowcase() {
               <BrandArrow className="size-4" color="#2563EB" />
             </span>
           </div>
-        </div>
+        </Fade>
 
         <div className="relative flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#C9CEDB]">
           {["Learns from your docs", "One inbox for every channel", "Hands off to humans"].map((t) => (
@@ -193,6 +231,7 @@ export function AuthShowcase() {
         </div>
 
         {/* Floating cards: each straddles the panel's edge so the animation leaves the box. */}
+        <Fade key={`cards-${run}`} leaving={leaving} className="pointer-events-none absolute inset-0 z-10">
         <FloatCard
           className="-top-6 right-10"
           delay={6.8}
@@ -220,6 +259,7 @@ export function AuthShowcase() {
           title="Handed to your team"
           sub="Full history attached"
         />
+        </Fade>
       </div>
     </aside>
   );

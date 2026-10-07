@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearRefreshCookie, forward, REFRESH_COOKIE, setRefreshCookie } from "../_bff";
+import { clearRefreshCookie, forward, REFRESH_COOKIE, rejectCrossSite, setRefreshCookie } from "../_bff";
 
 // Concurrent requests carrying the *same* refresh-cookie value (two tabs, or a reload racing
 // an in-flight retry) share one in-flight rotation instead of each calling the API. Without
@@ -21,9 +21,16 @@ function rotate(refresh: string, request: NextRequest) {
   return promise;
 }
 
+function apiErrorCode(data: unknown): string | undefined {
+  const code = (data as { error?: { code?: unknown } } | null)?.error?.code;
+  return typeof code === "string" ? code : undefined;
+}
+
 // POST /api/auth/refresh → reads the httpOnly refresh cookie, rotates it against the API, and
 // returns a fresh access token. The client never sees or handles the refresh token.
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSite(request);
+  if (crossSite) return crossSite;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refresh) {
     return NextResponse.json({ error: { code: "auth.no_session", message: "No session" } }, { status: 401 });
@@ -40,6 +47,16 @@ export async function POST(request: NextRequest) {
       { status: 503 },
     );
   }
+  if (status === 401 && apiErrorCode(data) === "auth.refresh_rotated") {
+    // Another request rotated this exact token a moment ago, so the browser already holds (or is
+    // about to receive) the new cookie from that winner. This is a lost race, NOT a logout: touch
+    // nothing, and answer 409 (not 401) so the client does not drop its session. Clearing the
+    // cookie here is what logged people out on 2026-10-07.
+    return NextResponse.json(
+      { error: { code: "auth.refresh_rotated", message: "Session was just refreshed elsewhere" } },
+      { status: 409 },
+    );
+  }
   if (status >= 400 || !data || typeof data !== "object") {
     const rejected = status === 401 || status === 400;
     const res = NextResponse.json(
@@ -48,7 +65,7 @@ export async function POST(request: NextRequest) {
       // and must not cost the user their session.
       { status: rejected ? 401 : 503 },
     );
-    if (rejected) clearRefreshCookie(res); // stale/rotated refresh — drop it
+    if (rejected) clearRefreshCookie(res); // definitively dead (expired / revoked / unknown) — drop it
     return res;
   }
   const { access_token, refresh_token } = data as { access_token: string; refresh_token: string };

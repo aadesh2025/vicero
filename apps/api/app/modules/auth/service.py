@@ -12,7 +12,7 @@ import uuid
 from typing import Any
 
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit
@@ -55,6 +55,9 @@ VERIFY_TTL = dt.timedelta(hours=24)
 RESET_TTL = dt.timedelta(hours=2)
 MAGIC_TTL = dt.timedelta(minutes=15)
 REFRESH_TTL = dt.timedelta(days=30)
+# How long after a rotation a late duplicate is still told "just rotated" (keep your cookie) instead of
+# "dead". Must outlast a slow commit (observed ~12 s here). A logout inside it reads the same; harmless.
+REFRESH_ROTATION_GRACE = dt.timedelta(seconds=60)
 OAUTH_PENDING_TTL = dt.timedelta(minutes=15)
 
 # Per-email throttles for endpoints that send mail or accept credentials. The per-IP limits are
@@ -85,21 +88,12 @@ def _user_out(user: User) -> schemas.UserOut:
 
 
 async def _issue_tokens(
-    session: AsyncSession,
-    user: User,
-    user_agent: str | None,
-    ip: str | None,
-    *,
-    family_id: uuid.UUID | None = None,
+    session: AsyncSession, user: User, user_agent: str | None, ip: str | None
 ) -> schemas.TokenPair:
     refresh = generate_opaque_token()
     row = Session(
         user_id=user.id,
         refresh_token_hash=hash_token(refresh),
-        # A fresh login/signup starts a new family (its own id, once flushed below); a
-        # rotation (refresh()) passes the parent's family_id so reuse detection can burn
-        # the whole lineage, not just the one row that got replayed.
-        session_family_id=family_id or uuid.uuid4(),
         user_agent=user_agent,
         ip=ip,
         expires_at=_now() + REFRESH_TTL,
@@ -267,35 +261,59 @@ async def login(
 async def refresh(
     session: AsyncSession, refresh_token: str, user_agent: str | None, ip: str | None
 ) -> schemas.TokenPair:
-    # FOR UPDATE: a second request racing on the same (stale) token blocks here until the
-    # first one commits its rotation, instead of both reading "not yet revoked" and both
-    # succeeding — the lost-update race that let one rotation fork into two live sessions
-    # (see the live incident write-up in docs/PROGRESS.md 2026-10-07).
-    stmt = select(Session).where(Session.refresh_token_hash == hash_token(refresh_token)).with_for_update()
-    current = (await session.execute(stmt)).scalar_one_or_none()
-    if current is None:
+    now = _now()
+    token_hash = hash_token(refresh_token)
+    # Claim the token with ONE atomic statement. Reading the row and then writing `revoked_at` let two
+    # simultaneous refreshes both see "not revoked" and both succeed, and this host's slow commits
+    # stretched that window to ~10 s (live incident 2026-10-07). With UPDATE ... RETURNING a second
+    # caller blocks on the row lock until the first commits, re-checks `revoked_at IS NULL`, matches
+    # nothing, and gets a clean 401. Exactly one caller can ever claim a token.
+    claimed_user_id = (
+        await session.execute(
+            update(Session)
+            .where(
+                Session.refresh_token_hash == token_hash,
+                Session.revoked_at.is_(None),
+                Session.expires_at > now,
+            )
+            .values(revoked_at=now)  # rotate: the old refresh token is now dead
+            .returning(Session.user_id)
+        )
+    ).scalar_one_or_none()
+    if claimed_user_id is None:
+        # Tell "another request just rotated this exact token" (the browser already holds, or is about
+        # to hold, the new one: the caller must KEEP its cookie) from a token that is truly dead
+        # (expired, revoked long ago, unknown: the caller may drop its cookie).
+        prior = (
+            await session.execute(
+                select(Session.id, Session.user_id, Session.revoked_at).where(
+                    Session.refresh_token_hash == token_hash
+                )
+            )
+        ).one_or_none()
+        if prior is not None and prior.revoked_at is not None:
+            if now - prior.revoked_at <= REFRESH_ROTATION_GRACE:
+                raise AppError(
+                    "auth.refresh_rotated",
+                    "This refresh token was just rotated by another request.",
+                    401,
+                )
+            # A token that was rotated away (or logged out) long ago is being presented again: a stale
+            # client at best, a stolen token at worst. It gets nothing (its session is already revoked,
+            # and no new tokens are issued); leave a security trail. Ids only, never the token or its hash.
+            log.warning(
+                "refresh_token_reuse",
+                user_id=str(prior.user_id),
+                session_id=str(prior.id),
+                revoked_seconds_ago=int((now - prior.revoked_at).total_seconds()),
+                ip=ip,
+            )
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
 
-    if current.revoked_at is not None:
-        # This exact token was already rotated away. Either an attacker replayed a stolen
-        # token, or we just lost a race against our own earlier rotation — either way, the
-        # safe move is to treat the whole lineage as compromised, not just this one row.
-        await _revoke_family(session, current.session_family_id)
-        raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
-    if current.expires_at <= _now():
-        raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
-
-    current.revoked_at = _now()  # rotate: the old refresh token is now dead
-    user = await session.get(User, current.user_id)
+    user = await session.get(User, claimed_user_id)
     if user is None or not user.is_active:
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
-    return await _issue_tokens(session, user, user_agent, ip, family_id=current.session_family_id)
-
-
-async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
-    stmt = select(Session).where(Session.session_family_id == family_id, Session.revoked_at.is_(None))
-    for sibling in (await session.execute(stmt)).scalars().all():
-        sibling.revoked_at = _now()
+    return await _issue_tokens(session, user, user_agent, ip)
 
 
 async def logout(session: AsyncSession, user: User, refresh_token: str | None) -> None:

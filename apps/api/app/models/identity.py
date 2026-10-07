@@ -104,11 +104,6 @@ class Session(Base, UUIDPrimaryKey):
 
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     refresh_token_hash: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    #: Every session born from the same login shares this id: the first one's own id, carried
-    #: forward on each rotation. Reusing a refresh token that's already been rotated away
-    #: revokes every session in its family, not just itself — a stolen token can't be replayed
-    #: to quietly ride alongside the legitimate rotated one (docs/SECURITY.md §1).
-    session_family_id: Mapped[uuid.UUID] = mapped_column(_UUID, nullable=False, index=True)
     user_agent: Mapped[str | None] = mapped_column(String(512))
     ip: Mapped[str | None] = mapped_column(String(64))
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)

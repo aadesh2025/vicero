@@ -18,42 +18,42 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
-### ADR-109: Refresh-token single-flight at the BFF + reuse-detection-with-family-revoke at the API
+### ADR-109: Refresh rotation is one atomic claim; a lost race is a distinct 401 the client treats as "keep your session"
 - **Date:** 2026-10-07
-- **Status:** accepted
-- **Context:** Live incident (production, 2026-10-07): two near-simultaneous `POST
-  /v1/auth/refresh` calls on the same not-yet-rotated refresh-cookie value (two tabs / a reload
-  racing an in-flight retry) both read `revoked_at IS NULL` before either committed, both
-  rotated, and both succeeded — forking one session into two live siblings. A third, slower
-  caller then replayed the now-stale pre-rotation token and got a deterministic 401; the web
-  BFF's refresh route unconditionally clears the httpOnly cookie on any 401, so if that response
-  landed after a sibling's success had already written a good cookie, the clear wiped out a
-  perfectly valid session — the user was logged out with a live session still sitting in the DB.
-  `sessions` had 5 active rows for 2 users, 3 created in the triggering hour. See the chat log
-  this session was built from for the full log/timing evidence.
-- **Decision:** Two layers, not one:
-  1. **BFF (`apps/web/.../api/auth/refresh/route.ts`):** an in-process, per-token in-flight
-     `Map` so concurrent callers sharing the same cookie value await one rotation and get the
-     same result, instead of each hitting the API. This is the layer that actually prevents the
-     race for this deployment (one `web` container).
-  2. **API (`service.refresh`):** `SELECT ... FOR UPDATE` on the session row (serializes any
-     race the BFF layer doesn't catch) + reuse detection — replaying a token whose row is
-     already `revoked_at IS NOT NULL` revokes every session sharing its new `session_family_id`
-     column (migration `0031_session_family`), not just the one row. This is real defense
-     against a stolen/replayed token, independent of the race.
-  3. Fixed a second, unrelated bug found while reading this path: the BFF's `/api/auth/logout`
-     never forwarded the browser's `Authorization` header, so `/v1/auth/logout` (Bearer-only)
-     always 401'd there and the failure was silently swallowed — logout cleared cookies
-     client-side but never actually revoked the server-side session. Also added "log out all
-     devices" (UI for the API's existing revoke-all, previously unreachable from the web app).
-- **Alternatives considered:** Family-revoke alone, with no BFF dedup — rejected: two
-  legitimate tabs racing on an ordinary page load would then nuke their own just-created
-  session as a false-positive "reuse", which is a worse version of the bug being fixed. Locking
-  alone, no family-revoke — rejected: doesn't address actual token theft, just this race.
-- **Consequences:** The BFF's dedup lock is per-Node-process; if `web` is ever scaled to more
-  than one replica it stops coalescing across replicas and the API's FOR-UPDATE + family-revoke
-  becomes the only defense (correct, but reintroduces the false-positive risk for genuine
-  cross-tab races at that point — would need a shared lock, e.g. Redis, if that happens).
+- **Status:** accepted (supersedes the first draft of this ADR, which used `FOR UPDATE` plus
+  family-revoke-on-reuse and migration `0031_session_family`; the operator ruled family-revoke out for now)
+- **Context:** Live incident (production, 2026-10-07): three simultaneous `POST /v1/auth/refresh` calls
+  on one expired access token. `service.refresh` read the session and then wrote `revoked_at`, so two
+  callers both saw "not revoked" and both succeeded (a forked session); the third got a 401, and the web
+  BFF cleared the httpOnly cookie on any 401, wiping the winner's fresh cookie. The user was logged out
+  with live sessions still in the DB. The window was ~10 s wide because commits on the temporary host
+  take 70-290 ms each (disk synced-write latency measured in this session), not because refresh is slow:
+  six unrelated endpoints stalled together at 10:39:53.
+- **Decision:**
+  1. **API:** the token is claimed with one `UPDATE sessions SET revoked_at = now WHERE refresh_token_hash
+     = :h AND revoked_at IS NULL AND expires_at > now RETURNING user_id`. A second caller blocks on the row
+     lock until the first commits, then matches nothing, so exactly one caller can ever succeed.
+     Losers get 401 `auth.refresh_rotated` if the token was revoked within `REFRESH_ROTATION_GRACE` (60 s,
+     longer than a slow commit), else 401 `auth.invalid_token`. Test: 12 concurrent refreshes on real
+     committing connections give exactly one 200; the same test fails on the old code (12 of 12 succeeded).
+  2. **BFF** (`api/auth/refresh/route.ts`): clears the cookie only on a definitive rejection. `auth.refresh_rotated`
+     returns **409** and touches no cookie, a 5xx or an unreachable API returns 503 and touches no cookie.
+     The in-process per-token single-flight map stays as a cheap first layer.
+  3. **Client** (`lib/api/client.ts`, `refresh-lock.ts`): one refresh at a time per browser across tabs
+     (Web Locks, with a localStorage-lease + BroadcastChannel fallback). A tab that waited re-reads the shared
+     access-token cookie and reuses the winner's result instead of spending the refresh token again. On a 409
+     it waits briefly, reuses the winner's token if it appears, retries once, and never clears the session.
+  4. **CSRF:** `rejectCrossSite()` (Sec-Fetch-Site / Origin vs the public host) guards the two routes that act on the
+     refresh cookie, `refresh` and `logout`.
+  5. **Logout:** the BFF now forwards the caller's `Authorization` header (it used to 401 silently, so logout never
+     revoked the server-side session), and Settings -> Profile has "Log out all devices".
+- **Not done, on purpose:** revoking a whole token family on reuse. A late duplicate from the same browser is
+  a race, not a theft, and burning the family would log out the legitimate session (the bug being fixed).
+  It can come back as a deliberate security feature with its own design and migration.
+- **Consequences:** a logout inside the 60 s grace reads as `auth.refresh_rotated` to a stale holder of that token,
+  so it keeps its cookie up to a minute before a definitive 401 clears it (harmless: the token is dead either way).
+  The slow-commit root cause is the host's disk; `synchronous_commit=off` would hide it but trades the last
+  ~0.5 s of writes on a crash, so it is left for the operator to decide.
 
 ### ADR-108: Off-server backups — rclone crypt to a private Google Drive folder, daily, 14 days
 - **Date:** 2026-10-07

@@ -1,4 +1,4 @@
-import { type APIRequestContext, type BrowserContext, expect } from "@playwright/test";
+import { type APIRequestContext, type BrowserContext, type Page, expect } from "@playwright/test";
 
 export const API = process.env.E2E_API_URL ?? "http://localhost:8000";
 export const WEB = process.env.E2E_WEB_URL ?? "http://localhost:3001";
@@ -84,4 +84,13 @@ export async function createPublishedAgent(
   expect(pub.ok(), `publish failed: ${pub.status()} ${await pub.text()}`).toBeTruthy();
 
   return { id: agent.id, publicKey: agent.public_key };
+}
+
+/** Open the first conversation row in the inbox.
+ *
+ * Matches the ROW (its accessible name starts with the visitor id, "anon-…"), not `/Conversation/i`:
+ * the inbox's "Conversations" tab is also a button and comes first, so the old selector clicked the tab,
+ * no conversation opened, and the reply box / Take over / Run macro never appeared. */
+export async function openFirstConversation(page: Page) {
+  await page.getByRole("button", { name: /^(anon|visitor)/i }).first().click();
 }

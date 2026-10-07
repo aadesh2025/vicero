@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearRefreshCookie, forward, REFRESH_COOKIE } from "../_bff";
+import { clearRefreshCookie, forward, REFRESH_COOKIE, rejectCrossSite } from "../_bff";
 
 // POST /api/auth/logout → revokes the session at the API and clears the httpOnly refresh cookie.
 // Body `{ all: true }` revokes every session for the account instead of just this device's
@@ -7,6 +7,8 @@ import { clearRefreshCookie, forward, REFRESH_COOKIE } from "../_bff";
 // way this needs the caller's own Bearer token forwarded — `/v1/auth/logout` is authenticated,
 // the httpOnly cookie alone was never enough (`clientHeaders` in `_bff.ts` carries it through).
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSite(request);
+  if (crossSite) return crossSite;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
   let all = false;
   try {

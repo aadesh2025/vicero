@@ -35,6 +35,16 @@ celery_app.conf.update(
             "task": "disposable.refresh",
             "schedule": 7 * 86400.0,
         },
+        "automation-runs-pull": {
+            # Backup for n8n's signed push: fills gaps from n8n's execution list (registered workflows only).
+            "task": "automations.pull",
+            "schedule": 300.0,
+        },
+        "automation-runs-retention": {
+            # Runs older than 30 days are deleted (docs/26).
+            "task": "automations.retention",
+            "schedule": 86400.0,
+        },
         "trial-lifecycle-sweep": {
             # Free-trial emails (3 days / 1 day left, ended, 80% / 100% of messages). Idempotent:
             # each is claimed atomically per workspace, so running more often is harmless.

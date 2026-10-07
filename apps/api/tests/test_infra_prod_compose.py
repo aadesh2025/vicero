@@ -271,3 +271,34 @@ def test_the_dockerfile_creates_the_upload_dir_before_dropping_privileges() -> N
     user_at = dockerfile.find("USER appuser")
     assert mkdir_at != -1, "the image never creates /app/var/uploads"
     assert mkdir_at < chown_at < user_at, "the upload dir must be created and chowned before USER"
+
+
+# ── n8n (docs/26, ADR-111): private, pinned, capped, and fail-closed ──────────────────────────────────
+def test_n8n_is_private_pinned_and_capped(compose: dict[str, Any]) -> None:
+    n8n = _services(compose)["n8n"]
+    assert "ports" not in n8n, "n8n must never publish a host port: only Caddy (editor) and the compose network"
+    image = str(n8n["image"])
+    assert image.startswith("n8nio/n8n:") and "latest" not in image and "next" not in image, image
+    assert str(n8n["deploy"]["resources"]["limits"]["memory"]).endswith(":-768m}")
+    assert n8n["restart"] == "unless-stopped"
+    env = n8n["environment"]
+    # its own database and role in the existing Postgres, never the Vicero one
+    assert env["DB_POSTGRESDB_DATABASE"] == "n8n" and env["DB_POSTGRESDB_USER"] == "n8n"
+    required = ("N8N_DB_PASSWORD", "N8N_ENCRYPTION_KEY", "AUTOMATION_REPORT_SECRET", "N8N_WEBHOOK_SIGNING_SECRET")
+    for must_be_set in required:
+        assert f"${{{must_be_set}:?" in " ".join(str(v) for v in env.values()), f"{must_be_set} must be required"
+    assert env["N8N_DIAGNOSTICS_ENABLED"] == "false" and env["GENERIC_TIMEZONE"] == "Asia/Kolkata"
+    assert env["EXECUTIONS_DATA_PRUNE"] == "true" and int(env["EXECUTIONS_DATA_MAX_AGE"]) <= 168
+    assert int(env["EXECUTIONS_TIMEOUT"]) > 0
+
+
+def test_caddy_requires_the_editor_gate_and_serves_no_public_webhooks() -> None:
+    caddyfile = (COMPOSE.parent / "caddy" / "Caddyfile").read_text(encoding="utf-8")
+    block = caddyfile[caddyfile.index("{$N8N_DOMAIN}") :]
+    assert "basic_auth" in block and "{$N8N_EDITOR_GATE_HASH}" in block
+    for path in ("/webhook/*", "/webhook-test/*", "/form/*"):
+        assert path in block.split("handle @workflow_endpoints")[0]
+    assert "respond \"Not found\" 404" in block
+    env = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]["caddy"]["environment"]
+    for name in ("N8N_DOMAIN", "N8N_EDITOR_GATE_USER", "N8N_EDITOR_GATE_HASH"):
+        assert f"${{{name}:?" in str(env[name]), f"{name} must be required so the stack cannot start ungated"

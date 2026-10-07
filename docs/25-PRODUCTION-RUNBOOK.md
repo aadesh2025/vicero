@@ -152,3 +152,44 @@ Host vicero
     ServerAliveInterval 30
     ConnectTimeout 15
 ```
+
+## 11. n8n and the Automations feature (ADR-111, docs/26)
+
+n8n runs privately on the same host: image pinned (`N8N_VERSION`, default `2.43.1`), 768m, its own `n8n` database and role
+in the existing Postgres, **no published port**. Clients never see or log into it; they see only the Automations page.
+Staff reach the editor at `https://viceroai-n8n.duckdns.org` behind a second password (Caddy `basic_auth`) plus n8n's own
+owner login. `/webhook*`, `/webhook-test*`, forms and MCP are answered `404` publicly; Vicero calls n8n at
+`http://n8n:5678` on the compose network.
+
+**First-time setup (once)**
+
+1. `ssh vicero /opt/vicero/ops/n8n-setup.sh` (type the editor password at the hidden prompt, or add `--random-gate`: the
+   password goes to `/root/n8n-editor-gate.txt`, root only; read it once and delete the file). It creates the secrets in
+   `.env` (names only are printed), the `n8n` role/database (the role cannot connect to the Vicero database) and the gate.
+2. **Save `N8N_ENCRYPTION_KEY` in your password manager** (`grep '^N8N_ENCRYPTION_KEY=' /opt/vicero/.env`, once).
+   Losing it makes every credential saved in n8n unreadable.
+3. `/opt/vicero/deploy.sh`. `docker compose up` refuses to run until step 1 is done, so a half-configured n8n cannot take
+   the stack down. Back up first (the script does).
+4. Open the editor, pass the gate, create the **owner** account (you type its password), then
+   Settings → n8n API → create a key and run `/opt/vicero/set-env.sh N8N_API_KEY`.
+5. Check from outside: only 22/80/443 answer (`nmap -Pn -p 22,80,443,5432,5678,6379,11434 87.232.72.3`).
+
+**Reboot / health:** `status.sh` also reports the n8n container, the editor (`401` without the gate) and the public
+`/webhook/x` (`404`).
+
+**Memory is tight (3.7 GB host).** `status.sh` prints `ALERT WARNING` under 600 MB available and `ALERT CRITICAL` under
+300 MB, and any OOM-killed container. In this order, one step at a time, asking before each:
+1. lower Celery worker concurrency (`--concurrency=2` in `docker-compose.ghcr.yml`);
+2. lower `N8N_MEM_LIMIT` (e.g. `640m`);
+3. stop Ollama if embeddings are not needed right now;
+4. move to a bigger plan (docs/24).
+Nothing else is changed without asking.
+
+**Logs and retention:** n8n keeps about 7 days of executions; Vicero keeps its own run log for 30 days and deletes older
+rows daily. A failed run's text is replaced by a short plain-language message before it is stored.
+
+**Known limits**
+* Stock Caddy cannot rate-limit logins (needs the `caddy-ratelimit` module and a custom image); the gate password stands
+  in front of the editor instead.
+* n8n's Sustainable Use License limits how n8n may be offered to third parties. Clients never use n8n themselves and see no
+  n8n branding; review the license before selling "n8n" as a feature (ADR-111).

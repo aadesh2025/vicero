@@ -526,3 +526,29 @@ async def require_channel_allowed(session: AsyncSession, org: Organization, kind
         raise plan_limit(
             "channels", f"{_plan_title(org.plan)} plan does not include the {kind} channel. Upgrade to unlock it."
         )
+
+
+async def require_automation_slot(session: AsyncSession, org: Organization) -> None:
+    """A new automation request needs a free slot: live automations plus requests still in the queue count."""
+    from app.models import Automation, AutomationRequest
+
+    live = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(Automation).where(Automation.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    queued = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(AutomationRequest)
+                .where(
+                    AutomationRequest.organization_id == org.id,
+                    AutomationRequest.status.in_(("requested", "building")),
+                )
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "automations", "automations", live + queued)

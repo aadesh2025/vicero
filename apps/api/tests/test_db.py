@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "canned_responses", "contacts", "crm_contacts", "conversations", "conversation_flags",
     "messages",
     "tools", "tool_runs", "channels", "handoffs", "macros",
+    "automation_requests", "automations", "automation_runs",
     "api_keys", "webhook_endpoints", "webhook_deliveries",
     "audit_logs", "usage_records", "quotas", "subscriptions",
     "feature_flags", "help_articles", "campaigns", "widget_configs",

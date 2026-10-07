@@ -22,7 +22,6 @@ const ALLOW: Record<string, string> = {
   "src/components/auth/oauth-buttons.tsx": "Google/Facebook OAuth brand marks",
   "src/components/builder/tabs/channels-tab.tsx": "the client's own widget colours (docs/20 §10.20), not app UI",
   "src/lib/api/agent-mapping.ts": "default value for the widget's client-owned primaryColor",
-  "src/app/(app)/automations/page.tsx": "n8n's own brand colour on its connection card, like the OAuth marks",
   "src/components/auth/auth-showcase.tsx": "the auth chat preview is fixed-colour art, identical in both themes by design (login-v2)",
   "src/components/auth/mini-chat-card.tsx": "the mobile twin of the auth chat preview — same fixed colours",
   "src/components/brand/animated-logo-mark.tsx": "the Vicero logo's own colours, not themeable",

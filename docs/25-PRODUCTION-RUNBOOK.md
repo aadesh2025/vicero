@@ -57,6 +57,14 @@ Pick the digests `deploy.sh` printed under "previous images" (or any `sha-…` t
 ssh vicero "/opt/vicero/rollback.sh api=sha256:<old> web=sha256:<old>"
 ```
 
+`deploy.sh` records the digests of the containers that are *running* (not just the local `:master` tag) in `/opt/vicero/.deploy-history` before it pulls, so "previous images" is always the real previous version.
+
+**Release log** (rollback target = the version before each release):
+
+| Deployed | Release | Rollback target (api / web) |
+|---|---|---|
+| 2026-10-07 | refresh-token race fix (`bfd7e85`) | `sha256:758ff685239af3f8eecb9ed6d16429e2f7e5f6803ef87e6a78c636948d6da626` / `sha256:ba316fb359bd8339b8bf45e549a84ec80c977017f5ad3f493afcefe87b7a1071` |
+
 The pin lasts until the next `deploy.sh`, which returns to the moving `:master` tag. **The database only
 moves forward** (never `alembic downgrade`). If a migration was the problem, restore from a backup (§5)
 rather than downgrading.

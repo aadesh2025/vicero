@@ -13,7 +13,7 @@ HISTORY="$ROOT/.deploy-history"
 main() {
   echo "[deploy] previous images (keep these for rollback.sh):"
   local PREV_API PREV_WEB NEW_API NEW_WEB
-  PREV_API="$(digest_of "$API_REF")"; PREV_WEB="$(digest_of "$WEB_REF")"
+  PREV_API="$(running_digest vicero-prod-api-1 "$API_REF")"; PREV_WEB="$(running_digest vicero-prod-web-1 "$WEB_REF")"
   echo "  api: $PREV_API"; echo "  web: $PREV_WEB"
   echo "$(date -u +%FT%TZ) before-deploy api=$PREV_API web=$PREV_WEB" >> "$HISTORY"
 
@@ -25,7 +25,7 @@ main() {
   echo "[deploy] pulling images (retrying, the network drops packets)"
   local i
   for i in 1 2 3 4; do
-    dc pull migrate api worker beat web >/tmp/vicero-pull.log 2>&1 && break
+    dc pull --policy always migrate api worker beat web >/tmp/vicero-pull.log 2>&1 && break
     echo "  pull attempt $i failed, retrying"; sleep 5
     if [ "$i" = 4 ]; then tail -5 /tmp/vicero-pull.log; echo "[deploy] FAIL: could not pull images"; return 1; fi
   done
@@ -44,6 +44,9 @@ main() {
   NEW_API="$(digest_of "$API_REF")"; NEW_WEB="$(digest_of "$WEB_REF")"
   echo "$(date -u +%FT%TZ) after-deploy api=$NEW_API web=$NEW_WEB" >> "$HISTORY"
   echo "[deploy] now running: api=$NEW_API web=$NEW_WEB"
+  if [ "$NEW_API" = "$PREV_API" ] && [ "$NEW_WEB" = "$PREV_WEB" ]; then
+    echo "[deploy] NOTE: image digests are unchanged — nothing new was released (run the Release workflow first?)"
+  fi
 
   if wait_healthy 600; then
     echo "[deploy] PASS"

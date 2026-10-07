@@ -15,6 +15,16 @@ env_get() { grep -E "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2-; }
 # Image digest currently behind a reference, or "none" (used for the rollback trail).
 digest_of() { docker image inspect --format '{{index .RepoDigests 0}}' "$1" 2>/dev/null || echo "none"; }
 
+# Digest of the image a RUNNING container was started from (the true "previous version"), falling back to the
+# local tag's digest when the container is absent. The tag can move on without the container (a manual pull),
+# so reading the tag alone can record the wrong rollback target.
+running_digest() { # <container> <fallback-ref>
+  local id
+  id="$(docker inspect --format '{{.Image}}' "$1" 2>/dev/null || true)"
+  if [ -n "$id" ]; then docker image inspect --format '{{index .RepoDigests 0}}' "$id" 2>/dev/null && return 0; fi
+  digest_of "$2"
+}
+
 # Wait until api + web report healthy, caddy runs, and both HTTPS endpoints answer. PASS/FAIL, exit 0/1.
 wait_healthy() {
   local timeout="${1:-600}" api_domain domain start=$SECONDS

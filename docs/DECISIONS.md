@@ -18,6 +18,22 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-111: n8n is hosted privately behind Vicero; clients see only the Automations page
+- **Date:** 2026-10-08
+- **Status:** accepted
+- **Context:** Clients need automations (bookings, sheets, messages) but must not log into or even know about n8n. One n8n
+  serves every org, so isolation has to live in Vicero. n8n's Sustainable Use License restricts offering n8n itself to others.
+- **Decision:** n8n runs in the prod compose (pinned 2.43.1, 768m, own Postgres database and role, no public port). Caddy serves
+  only the staff editor (second password) and refuses `/webhook*`. Vicero owns the tenant model (`automation_requests`,
+  `automations`, `automation_runs`, migration 0031): runs arrive by signed push (`/internal/automations/runs`) with a pull job as
+  backup; the org of a report is verified against the registry, never trusted from the payload. Plan limits live in `plans.py`
+  (Pro 5 / 2,000 runs, Business 20 / 10,000). Agent tool calls to n8n require an Active registered automation of the same org and agent.
+- **Alternatives considered:** exposing n8n to clients (rejected: leaks the product, no tenant isolation, license risk); per-client
+  n8n instances (rejected: memory on a 3.7 GB host); sending per-org secrets to n8n on every call (rejected: stored in n8n
+  execution data); rate-limiting the editor login in Caddy (needs a plugin and a custom image, so a second password is used).
+- **Consequences:** staff build and register workflows by hand. The most-requested capabilities may later become native Vicero
+  features, which also removes the license question. Clients must never be given n8n branding or links.
+
 ### ADR-110: n8n callback binding and tool ownership (R2) — a per-call token, a locked target, one org per webhook path
 - **Date:** 2026-10-07
 - **Status:** accepted

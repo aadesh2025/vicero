@@ -25,12 +25,13 @@ import { relativeTime } from "@/lib/utils";
 
 // Public URL of the staff-only n8n editor, baked in at build time. Shown to platform staff ONLY: a client never
 // sees n8n, and the host itself sits behind a second password.
-const N8N_URL = (process.env.NEXT_PUBLIC_N8N_URL || "").replace(/\/$/, "");
+const n8nUrl = () => (process.env.NEXT_PUBLIC_N8N_URL || "").replace(/\/$/, "");
 
 export default function AutomationsPage() {
   const activeOrgId = useSession((s) => s.activeOrgId);
   const isStaff = useSession((s) => Boolean(s.user?.is_staff));
   const [asking, setAsking] = useState(false);
+  const N8N_URL = n8nUrl();
 
   const usage = useQuery({
     queryKey: ["automation-usage", activeOrgId],

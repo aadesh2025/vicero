@@ -4,6 +4,7 @@
 #
 #   /opt/vicero/ops/n8n-setup.sh [n8n-host]          default host: viceroai-n8n.duckdns.org
 #   /opt/vicero/ops/n8n-setup.sh --reset-gate        choose a new editor (basic-auth) password
+#   /opt/vicero/ops/n8n-setup.sh --random-gate       unattended: random editor password into /root/n8n-editor-gate.txt
 #
 # What it does
 #   1. Appends random secrets to ../.env when they are absent:
@@ -17,10 +18,13 @@ set -euo pipefail
 
 PG_CONTAINER="${PG_CONTAINER:-vicero-prod-postgres-1}"
 RESET_GATE=0
+RANDOM_GATE=0
+GATE_FILE="${GATE_FILE:-/root/n8n-editor-gate.txt}"
 N8N_HOST="viceroai-n8n.duckdns.org"
 for arg in "$@"; do
   case "$arg" in
     --reset-gate) RESET_GATE=1 ;;
+    --random-gate) RANDOM_GATE=1 ;;
     *) N8N_HOST="$arg" ;;
   esac
 done
@@ -68,9 +72,16 @@ if has_var N8N_EDITOR_GATE_HASH && [ "$RESET_GATE" = 0 ]; then
   echo "[n8n-setup] editor gate: kept (use --reset-gate to change the password)"
 else
   echo "[n8n-setup] editor gate (a second password in front of the n8n login)"
-  read -r -p "  editor user name: " gate_user
-  read -r -s -p "  password (hidden): " gate_pw1; echo
-  read -r -s -p "  again: " gate_pw2; echo
+  if [ "$RANDOM_GATE" = 1 ]; then
+    # Unattended: a random password goes to a root-only file (never printed); read it once, then delete the file.
+    gate_user="ops"; gate_pw1="$(random_hex 16)"; gate_pw2="$gate_pw1"
+    (umask 077; printf 'user: %s\npassword: %s\n' "$gate_user" "$gate_pw1" > "$GATE_FILE")
+    echo "  random editor password written to $GATE_FILE (root only, not shown here)"
+  else
+    read -r -p "  editor user name: " gate_user
+    read -r -s -p "  password (hidden): " gate_pw1; echo
+    read -r -s -p "  again: " gate_pw2; echo
+  fi
   [ -n "$gate_user" ] && [ -n "$gate_pw1" ] && [ "$gate_pw1" = "$gate_pw2" ] || { echo "empty or not matching; nothing changed"; exit 1; }
   # Hashed by Caddy itself. The plaintext is visible to root in the process list for a moment, and nowhere else.
   gate_hash="$(docker run --rm caddy:2 caddy hash-password --plaintext "$gate_pw1")"

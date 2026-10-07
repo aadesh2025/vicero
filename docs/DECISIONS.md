@@ -18,6 +18,25 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-110: n8n callback binding and tool ownership (R2) — a per-call token, a locked target, one org per webhook path
+- **Date:** 2026-10-07
+- **Status:** accepted
+- **Context:** One n8n serves every org and every callback is signed with one shared secret. The old callback
+  resolved any `run_id` for anyone holding that secret (no org, status or age check), and `PATCH /v1/tools/{id}`
+  let an org rewrite an n8n tool's `config.webhook_url` to anything, bypassing the visibility and signature checks
+  at bind time and making Vicero send its signed request to an arbitrary host. No production n8n tool existed
+  when this was fixed (checked on the server: 0 tools), so nothing had to be migrated.
+- **Decision:** (1) Vicero sends `callback_token = HMAC(secret, "cb.<run_id>.<org_id>")` with each async call; the
+  workflow must echo it. The callback is accepted only if the token matches that run and org, the run is an n8n
+  run, still `pending`, under 10 minutes old, output under 64 KB. Every rejection is one generic 404 plus a
+  `n8n_callback_rejected` log (reason, run id; never the token). (2) An n8n tool's target is locked after bind
+  (only `mode` may change). (3) Calls go to `N8N_BASE_URL` + the stored `/webhook/<path>`; the stored host is
+  ignored. (4) A webhook path may be bound by one org only (bind refuses; execution refuses legacy duplicates).
+  (5) `execute_tool_call` re-checks tool org and agent against the turn and logs `tool_ownership_violation`.
+- **Consequences:** Async workflows must echo `callback_token` (documented in infra/n8n/README.md). The stronger
+  rule "bound only to a registered, Active automation of the same org and agent" needs the `automations` table
+  and lands in R3, which will replace (4) with a registry lookup.
+
 ### ADR-109: Refresh rotation is one atomic claim; a lost race is a distinct 401 the client treats as "keep your session"
 - **Date:** 2026-10-07
 - **Status:** accepted (supersedes the first draft of this ADR, which used `FOR UPDATE` plus

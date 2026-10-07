@@ -16,7 +16,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.integrations.n8n_client import get_client
+from app.integrations.n8n_client import callback_token, get_client
 from app.tools.base import ToolContext, ToolResult
 
 # The tool schema advertises a single `args` property, but a workflow's real inputs are
@@ -89,6 +89,8 @@ async def execute_n8n_tool(config: dict[str, Any], args: dict[str, Any], ctx: To
     }
     if mode == "async":
         payload["callback_url"] = f"{settings.api_base_url.rstrip('/')}/v1/tools/n8n/callback"
+        # The workflow must echo this back; it only works for THIS run in THIS org (R2 callback binding).
+        payload["callback_token"] = callback_token(ctx.run_id, ctx.org_id)
 
     client = get_client()
     try:

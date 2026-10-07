@@ -277,7 +277,10 @@ async def test_n8n_callback_resolves_pending_run(client: AsyncClient, monkeypatc
     monkeypatch.setattr(settings, "n8n_require_signature_check", False)
     from app.modules.conversations import service as chat_service
 
-    def handler(_r: httpx.Request) -> httpx.Response:
+    sent: dict[str, object] = {}
+
+    def handler(r: httpx.Request) -> httpx.Response:
+        sent.update(json.loads(r.content))  # what Vicero told the workflow, incl. its per-call callback_token
         return httpx.Response(200, json={})
 
     monkeypatch.setattr(n8n_tool, "get_client", lambda **_k: N8nClient("http://n8n", "k", transport=_mock(handler)))
@@ -304,7 +307,9 @@ async def test_n8n_callback_resolves_pending_run(client: AsyncClient, monkeypatc
     run_id = resp.json()["tool_runs"][0]["output"]["run_id"]
 
     # n8n calls back later with a signed payload → resolves the pending run.
-    body = json.dumps({"run_id": run_id, "output": {"done": True}, "status": "success"}).encode()
+    body = json.dumps(
+        {"run_id": run_id, "callback_token": sent["callback_token"], "output": {"done": True}, "status": "success"}
+    ).encode()
     ts, sig = sign(body)
     cb = await client.post(
         "/v1/tools/n8n/callback",

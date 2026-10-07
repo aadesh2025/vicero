@@ -78,6 +78,8 @@ class BindN8nRequest(BaseModel):
 
 class N8nCallbackRequest(BaseModel):
     run_id: uuid.UUID
+    # Echo of the `callback_token` Vicero sent with the call (R2): proves this callback is for this run.
+    callback_token: str = Field(min_length=16, max_length=128)
     output: dict[str, Any] = Field(default_factory=dict)
     status: str = Field(default="success", pattern="^(success|error)$")
     error: str | None = None

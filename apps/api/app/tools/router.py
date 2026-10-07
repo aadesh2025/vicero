@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
@@ -44,8 +45,13 @@ async def n8n_callback(
     timestamp = request.headers.get("X-Vicero-Timestamp")
     if not verify_callback(signature, timestamp, body):
         raise AppError("n8n.bad_signature", "Invalid callback signature.", 401)
-    data = schemas.N8nCallbackRequest.model_validate_json(body)
-    ok = await service.resolve_n8n_callback(session, data.run_id, data.output, data.status, data.error)
+    try:
+        data = schemas.N8nCallbackRequest.model_validate_json(body)
+    except ValidationError as exc:
+        # Includes a missing `callback_token`: say which fields are wrong, never echo the body back.
+        fields = sorted({".".join(str(p) for p in e["loc"]) for e in exc.errors()})
+        raise AppError("n8n.bad_callback", f"Invalid callback body (fields: {', '.join(fields)}).", 422) from exc
+    ok = await service.resolve_n8n_callback(session, data)
     return {"ok": ok}
 
 

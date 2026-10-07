@@ -61,7 +61,9 @@ and again after editing any bound workflow in the n8n UI.
 - **Sync** workflows must end in a **Respond to Webhook** node returning JSON — that JSON is fed
   straight back to the model.
 - **Async** workflows do their work, then `POST` back to `callback_url` with a signed body
-  `{ "run_id", "output", "status" }` to resolve the pending tool run.
+  `{ "run_id", "callback_token", "output", "status" }` to resolve the pending tool run. `callback_token` is in
+  the payload Vicero sent: **echo it unchanged**. It is valid only for that run (ADR-110); a callback without it,
+  with a token from another run, repeated, or later than 10 minutes after the call is refused with 404.
 
 ## Import
 

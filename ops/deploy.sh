@@ -13,7 +13,7 @@ HISTORY="$ROOT/.deploy-history"
 main() {
   echo "[deploy] previous images (keep these for rollback.sh):"
   local PREV_API PREV_WEB NEW_API NEW_WEB
-  PREV_API="$(digest_of "$API_REF")"; PREV_WEB="$(digest_of "$WEB_REF")"
+  PREV_API="$(running_digest vicero-prod-api-1 "$API_REF")"; PREV_WEB="$(running_digest vicero-prod-web-1 "$WEB_REF")"
   echo "  api: $PREV_API"; echo "  web: $PREV_WEB"
   echo "$(date -u +%FT%TZ) before-deploy api=$PREV_API web=$PREV_WEB" >> "$HISTORY"
 

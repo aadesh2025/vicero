@@ -1,0 +1,23 @@
+# Pull-not-build override for the temporary 4 GB host (ADR-107). Always run with --no-build:
+#   docker compose --env-file ../.env -f docker-compose.prod.yml -f docker-compose.ghcr.yml <cmd>
+# Images are built by the Release workflow and pushed to GHCR. API_IMAGE / WEB_IMAGE let
+# ops/rollback.sh pin a tag or digest for one invocation; unset, the moving :master tag is used.
+x-api-image: &api-image
+  image: ${API_IMAGE:-ghcr.io/aadesh2025/vicero-api:master}
+  pull_policy: missing
+
+services:
+  migrate:
+    <<: *api-image
+  api:
+    <<: *api-image
+    # OAuth state/exchange live in process memory (app/modules/auth/oauth.py) -> must be 1 worker.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+  worker:
+    <<: *api-image
+    command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+  beat:
+    <<: *api-image
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/aadesh2025/vicero-web:master}
+    pull_policy: missing

@@ -6,6 +6,74 @@ Format each entry as below. Newest at the top.
 ---
 
 ## Template
+### ADR-000: <title>
+- **Date:** YYYY-MM-DD
+- **Status:** proposed | accepted | superseded by ADR-XXX
+- **Context:** what forced the decision.
+- **Decision:** what was chosen.
+- **Alternatives considered:** options + why rejected.
+- **Consequences:** trade-offs, follow-ups.
+
+---
+
+## Build decisions
+
+### ADR-108: Off-server backups — rclone crypt to a private Google Drive folder, daily, 14 days
+- **Date:** 2026-10-07
+- **Status:** accepted
+- **Context:** The `backup` service (ADR-082) writes to a Docker volume on the same box, so a lost
+  disk or server loses the backups with it. Dumps contain user data, so they must not sit in Drive in
+  the clear.
+- **Decision:** `rclone` with a `gdrive` remote (scope `drive.file`: rclone sees only files it created)
+  wrapped by a `gdrivecrypt` crypt remote (`gdrive:vicero-backups`, file and directory names encrypted).
+  `/usr/local/bin/vicero-offsite-backup.sh`, run by `/etc/cron.d/vicero-offsite` at 03:30 UTC: run
+  `backup.sh`, `rclone copy` files newer than 36h, `rclone delete --min-age 14d`. Log:
+  `/var/log/vicero-offsite.log`. Both crypt passwords (password and salt) were generated on the server,
+  read once by the operator into a password manager, and the plain file was `shred`ed. They are not
+  recoverable from the repo or the box.
+- **Verified:** upload and download roundtrip; the newest dump was downloaded from Drive, decrypted,
+  and restored into a throwaway database with 0 errors and the same table and user counts as live.
+- **Consequences:** `rclone.conf` (mode 600) holds the Drive refresh token and the obscured (reversible)
+  crypt passwords, so root on the box can read them. Losing the password manager entry makes the Drive
+  copies unreadable. Apt ships rclone 1.60, which cannot take the base64 token blob that newer clients
+  print: authorize with a matching client version or upgrade the server's rclone first.
+
+### ADR-107: Temporary production host (Cloud on Fire, 4 vCPU / 3.7 GB) — pull images, never build
+- **Date:** 2026-10-07
+- **Status:** accepted (temporary: 1-2 months, then a proper cloud; supersedes the host choice in ADR-104
+  for now, not its architecture)
+- **Context:** The Hetzner plan (docs/24) was not used. A 3.7 GB box cannot build the API or web images
+  (`docker build` would exhaust RAM), and the network to some hosts loses about 10% of packets.
+- **Decision:**
+  1. **Pull, don't build.** The Release workflow builds and pushes `ghcr.io/aadesh2025/vicero-api:master`
+     and `vicero-web:master` (public). Its cache lines were removed and its trigger branch is `master`.
+     The server runs `infra/docker-compose.prod.yml` plus an override, `infra/docker-compose.ghcr.yml`
+     (server-local, not in the repo), that sets `image:` and `pull_policy: missing` on migrate, api,
+     worker, beat and web. Always `up -d --no-build`.
+  2. **Compose invocation:** `docker compose --env-file ../.env -f docker-compose.prod.yml -f
+     docker-compose.ghcr.yml`. `--env-file` is required for `${VAR}` interpolation (see the compose header).
+  3. **Memory ceilings** for 3.7 GB set through `.env`: postgres 1g, api 1g, worker 1g, ollama 768m, web 512m,
+     beat 192m, caddy 128m, redis 256m, migrate 768m, backup 256m. Worker `--concurrency=2`.
+  4. **API runs `--workers 1`** (override). OAuth `state` and the one-time exchange code live in
+     per-process dicts (`app/modules/auth/oauth.py`); with 2 workers about half of all Google logins
+     fail with `auth.oauth_invalid_state`. The real fix is storing both in Redis.
+  5. Domains are DuckDNS (`viceroai.duckdns.org`, `viceroai-api.duckdns.org`), TLS from Let's Encrypt via
+     Caddy. n8n is not deployed. `EMAIL_BACKEND=console` until SMTP is set up.
+  6. Only Caddy publishes ports (80, 443); ufw allows 22, 80, 443. Docker bypasses ufw for published
+     ports, so 5432, 6379 and 11434 must stay unpublished.
+  7. Platform staff access has no script: `UPDATE users SET is_staff = true WHERE email = '…'` in one
+     transaction, after a backup (docs/PROGRESS.md notes granting staff needs DB access).
+  8. **Self-service ops, no laptop needed.** The server is managed over SSH with scripts kept in the repo
+     (`ops/deploy.sh`, `rollback.sh`, `status.sh`, `set-env.sh`, shared `lib.sh`), linked into `/opt/vicero/`.
+     The compose override is committed as `infra/docker-compose.ghcr.yml` and takes `API_IMAGE` / `WEB_IMAGE`
+     so `rollback.sh` can pin a tag or digest. `/opt/vicero` is a read-only HTTPS clone; no GitHub token is
+     stored on the server. The full procedure is `docs/25-PRODUCTION-RUNBOOK.md`.
+- **Consequences:** Moving to a real domain means rebuilding the web image with the new
+  `NEXT_PUBLIC_API_BASE_URL` and updating CORS and OAuth redirect URIs. After a reboot the stack takes
+  about 5 minutes to become healthy (cold cache, everything starting at once), and a `502` in that window
+  is normal. Open: SMTP, OAuth state in Redis, rotate the Groq key and the Google client secret that were
+  pasted into a chat.
+
 ### ADR-106: Multi-currency price lists (USD / EUR / INR) with display-only geo detection (migration 0030)
 - **Date:** 2026-10-06
 - **Status:** accepted
@@ -29,18 +97,6 @@ Format each entry as below. Newest at the top.
   represented in the old shape). Adding a currency = one entry per price dict, `SUPPORTED_CURRENCIES`
   and the migration CHECK.
 
-### ADR-000: <title>
-- **Date:** YYYY-MM-DD
-- **Status:** proposed | accepted | superseded by ADR-XXX
-- **Context:** what forced the decision.
-- **Decision:** what was chosen.
-- **Alternatives considered:** options + why rejected.
-- **Consequences:** trade-offs, follow-ups.
-
----
-
-## Build decisions
-
 ### ADR-105: Login/signup redesign ("Design A") — split layout, decorative chat showcase
 - **Date:** 2026-10-06
 - **Status:** accepted
@@ -60,6 +116,85 @@ Format each entry as below. Newest at the top.
   swap in real paths if a vector logo is supplied. The design's footer lists Terms/Privacy but
   no such routes exist, so the footer links Help (`/docs`) and Pricing instead. Other auth pages
   (forgot/reset/magic/verify/oauth) lost their card box and use the same field styling.
+
+### ADR-104: Production moves to a paid Hetzner x86 VPS; Oracle Always Free abandoned
+- **Date:** 2026-10-02
+- **Status:** accepted — supersedes ADR-096 (vendor and CPU architecture only; ADR-096's
+  single-box self-hosted-Postgres topology is preserved unchanged)
+- **Context:** ADR-096 put the app and Postgres together on one Oracle Always Free
+  `VM.Standard.A1.Flex` (2 OCPU / 12 GB, Arm, ap-hyderabad-1). **The instance could never be
+  created.** A retry loop in OCI Cloud Shell made ~35 launch attempts across two days
+  (2026-10-01/02), every one returning `Out of host capacity`, interleaved with
+  `TooManyRequests` rate limiting. Oracle free ARM capacity exhaustion is widely reported to
+  persist for days-to-weeks with no signal distinguishing "free tomorrow" from "free never".
+  Two `E2.1.Micro` boxes (1 OCPU / 1 GB) were created as a stopgap, proved Postgres + n8n run,
+  and were terminated — 1 GB cannot host a 3.5-6 GB steady state. docs/19 s1 had already
+  pre-authorised this exit ("do not lose a month over free").
+- **Decision:** deploy to **Hetzner Cloud, x86 (CX line), Falkenstein `fsn1`, Ubuntu 22.04**.
+  Recommended box **CX33** (4 vCPU / 8 GB / 80 GB, approx EUR 6.99-8.99 incl. the EUR 0.50 IPv4
+  surcharge, approx INR 755-971/month); **CX23** (2 vCPU / 4 GB / 40 GB, approx INR 485-647) is
+  an accepted budget start **only** with the concessions in docs/24 s5. Full plan, sizing,
+  memory-limit overrides and go-live checklist: **`docs/24-HETZNER-PAID-VPS-PLAN.md`**.
+  **Owner decision, same day: CX23**, against a hard INR 500/month ceiling (docs/24 s2.4.1). The
+  CX33 recommendation stands on engineering grounds and is deferred, not withdrawn; the upgrade
+  trigger is commercial — the first paying client funds it. Multi-provider splitting was
+  considered and rejected the same day (see Alternatives).
+  **Load-bearing consequence of CX23: images are built in CI and pulled, never built on the box.**
+  `.github/workflows/release.yml` already pushes `vicero-api` and `vicero-web` to GHCR (verified),
+  so `NEXT_PUBLIC_API_BASE_URL` must be set as a build arg **in the workflow** — setting it on the
+  server does nothing, because Next.js inlines it at build time (docs/16 s5).
+- **Alternatives considered:**
+  - *Keep waiting for Oracle* — rejected: two days of evidence, no bounded wait, and nothing in
+    the product can progress meanwhile. The retry script is kept running as a free fallback
+    (docs/24 s11), but nothing blocks on it.
+  - *Hetzner Arm (CAX line)* — rejected: on Hetzner, Arm costs **more** than x86 at identical
+    specs (CAX21 EUR 7.99 vs CX33 EUR 6.49), and x86 deletes the entire unverified Arm risk
+    category in docs/19 s2 and docs/16 s9 (no aarch64 wheel compilation, no unverified
+    `docker compose build`). Arm was only ever chosen because it was Oracle's free shape.
+  - *Hetzner Singapore (`sin`)* — rejected for now: the cheap CX and CAX lines **do not exist**
+    outside Germany/Finland; `sin` carries only the CPX/CCX lines at roughly double the price,
+    to buy a latency win that per docs/24 s3.2 barely moves the streamed-chat path (the US LLM
+    hop partly cancels the user hop) and only helps dashboard/widget round trips.
+  - *Two small boxes instead of one* — rejected: `api` and `worker` share the `uploads` volume by
+    construction (PROD-1 / ADR-068); splitting them across hosts requires object storage first.
+  - *Multi-provider split across free tiers* (owner asked, 2026-10-02) — **rejected on evidence,
+    component by component.** Redis is Celery's broker and polls continuously, which exhausts
+    Upstash-class free command quotas almost immediately. Managed-Postgres free tiers were already
+    rejected by ADR-096 for this exact workload (500 MB against `vector(768)` + HNSW at roughly
+    6-8 KB/chunk, plus idle-pausing). Embeddings **cannot** leave Ollama — `build_embedding_provider`
+    routes `openai` and `gemini` to Ollama because no adapter exists (docs/16 s8), so that container
+    is pinned to the box by the code itself. The API cannot sit on a scale-to-zero free tier: cold
+    starts break a chat product, and it shares the `uploads` volume with `worker`. The **one**
+    component that genuinely could move is the Next.js frontend, and both routes carry a new
+    problem rather than a saving: Vercel's Hobby tier is non-commercial (a licensing risk for a
+    paid SaaS), and Cloudflare Pages needs an unproven runtime migration for the cookie-setting BFF
+    routes. **Building the web image in existing CI and pulling it achieves the same memory saving
+    with no new vendor, no ToS question and no migration** — so that was done instead.
+  - *Azure free tier* — already rejected in docs/19 s13; free VMs are 1-4 GB and expire at 12
+    months.
+- **Consequences:**
+  - **Costs money** (approx INR 485-971/month) where Oracle was free. Accepted explicitly by the
+    owner 2026-10-02 at a stated ceiling of about INR 500/month, with the honest caveat recorded
+    in docs/24 s2.4 that INR 500 buys the 4 GB box, not the 8 GB one docs/15 s3.1 calls
+    comfortable.
+  - **Leaves India.** Hetzner has no Indian region. 🔶 Adds an estimated 110-120 ms to every
+    non-LLM request from Chennai (dashboard, widget first paint, API calls); the streamed chat
+    path is roughly unchanged because the US model hop partly cancels it. **All latency figures
+    are reasoned, not measured — docs/24 s12 rates them low confidence and s3.2 asks for a real
+    measurement on day one.**
+  - **Removes Oracle's idle-reclaim risk entirely** (docs/19 s7). A paid VPS is not reclaimed for
+    being quiet — this deletes a whole "wake up to no server" category.
+  - **Disk drops from 200 GB to 40-80 GB.** Because backups land on the same disk (docs/16 s7),
+    `BACKUP_RETENTION_DAYS` must drop to 3 on a 40 GB box and the off-box copy moves from "the
+    same day you go live" to **before** go-live (docs/24 s6.2).
+  - docs/19 s1, s2, s3, s8 and s10 are **dead**; its s4, s5, s6, s11 and s12 remain live. docs/16
+    is unaffected except its s1 (Oracle provisioning). Full delta: docs/24 s8.
+  - **Nothing in `infra/docker-compose.prod.yml` changes** beyond `infra/.env` memory-limit
+    overrides and the worker `--concurrency` value. The compose file is vendor-neutral.
+  - **New measurement recorded** (docs/24 s4.3): n8n crash-loops with a V8 heap OOM at a 300 MB
+    ceiling and is stable at 600 MB using 292 MiB. docs/15 s3 never costed n8n at all; this
+    closes that gap and is what makes n8n infeasible on a 4 GB box.
+
 
 ### ADR-103: Admin roster "near limit" warning threshold — 90% of the effective cap
 - **Date:** 2026-09-28
@@ -321,7 +456,7 @@ Format each entry as below. Newest at the top.
 
 ### ADR-096: Production database is the bundled Postgres on the Oracle VM again — supersedes ADR-086's hosting decision
 - **Date:** 2026-09-25
-- **Status:** accepted (owner instruction, 2026-09-25). **Supersedes ADR-086 for database hosting only.** ADR-086's auth decision (a) — Vicero keeps its own auth, Supabase Auth is not adopted — is unchanged.
+- **Status:** superseded by ADR-104 (vendor/arch only; its single-box topology stands)
 - **Context:** ADR-086 chose Supabase-managed Postgres with the application containers on Oracle's free tier. Re-examined
   before the first deploy, four things weigh against it for this stack:
   - **Size cap.** Supabase's free tier is 500 MB of database. `chunks.embedding` is `vector(768)` plus an HNSW index, roughly

@@ -30,3 +30,7 @@ playwright-report/
 # Claude Code local state (permissions, locks) -- but the project skills under .claude/skills are tracked
 .claude/*
 !.claude/skills/
+
+# Local-only artefacts: dev DB dumps and stray pytest output
+.backups/
+apps/api/pytest_full_*.txt

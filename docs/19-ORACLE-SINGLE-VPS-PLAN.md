@@ -1,5 +1,18 @@
 # docs/19 — Oracle free VPS, single-box production plan (app + database together)
 
+> **SUPERSEDED 2026-10-02 — read `docs/24-HETZNER-PAID-VPS-PLAN.md` first.** ADR-104 replaces
+> ADR-096's *vendor and CPU architecture*: the Oracle Always Free A1.Flex instance could never be
+> created (~35 `Out of host capacity` failures over two days), so production moves to a paid
+> Hetzner **x86** VPS in Falkenstein. **ADR-096's actual architecture decision — app and
+> self-hosted Postgres together on one box — is unchanged and still correct.**
+>
+> Dead here: **s1** (box size), **s2** (Arm compatibility — irrelevant on x86), **s3** (12 GB
+> memory limits), **s8** (go-live checklist), **s10** (risks), and **s7** (idle-reclaim — a paid
+> VPS is not reclaimed). Still live and still required reading: **s4** (self-hosted Postgres),
+> **s5** (what is missing from the prod compose), **s6** (backups), **s11** (what breaks silently
+> — the highest-value table in these docs), **s12** (models and embeddings), **s13** (Azure).
+> Full section-by-section delta: docs/24 s8.
+
 > **Status: PLAN, NOT YET EXECUTED.** Written 2026-09-25 on the owner's instruction to run the SaaS
 > and Postgres on the same Oracle Always Free VM.
 >

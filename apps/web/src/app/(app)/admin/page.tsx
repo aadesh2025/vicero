@@ -7,6 +7,7 @@ import { Activity, Bot, Building2, CircleDollarSign, Database, MessagesSquare, S
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { AutomationsTable } from "@/components/admin/automations-table";
+import { ClientAutomations } from "@/components/admin/client-automations";
 import { BillingTab } from "@/components/admin/billing-tab";
 import { PaymentsTab } from "@/components/admin/payments-tab";
 import { PacksTab } from "@/components/admin/packs-tab";
@@ -56,6 +57,7 @@ export default function AdminPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="billing">Billing &amp; Plans</TabsTrigger>
+          <TabsTrigger value="automations">Client automations</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6">
@@ -103,6 +105,10 @@ export default function AdminPage() {
               <PacksTab />
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        <TabsContent value="automations" className="mt-6">
+          <ClientAutomations />
         </TabsContent>
       </Tabs>
     </div>

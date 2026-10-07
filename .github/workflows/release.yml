@@ -30,6 +30,7 @@ jobs:
             context: apps/web
             build_args: |
               NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000' }}
+              NEXT_PUBLIC_N8N_URL=${{ vars.NEXT_PUBLIC_N8N_URL || 'https://viceroai-n8n.duckdns.org' }}
     steps:
       - uses: actions/checkout@v4
 

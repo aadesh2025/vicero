@@ -24,6 +24,7 @@ export const STATUS_TONE: Record<string, Tone> = {
   // in progress
   open: "info",
   in_progress: "info",
+  building: "info",
   running: "info",
   processing: "info",
   syncing: "info",
@@ -31,6 +32,7 @@ export const STATUS_TONE: Record<string, Tone> = {
   // needs attention soon
   handoff: "warn",
   pending: "warn",
+  requested: "warn",
   draft: "warn",
   paused: "warn",
   trial_ending: "warn",
@@ -39,6 +41,7 @@ export const STATUS_TONE: Record<string, Tone> = {
   // failed / blocked
   unanswered: "error",
   failed: "error",
+  rejected: "error",
   error: "error",
   disconnected_error: "error",
   plan_limit_block: "error",

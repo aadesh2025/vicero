@@ -15,7 +15,6 @@ from sqlalchemy import select
 
 from app.core.logging import configure_logging, get_logger
 from app.db.session import SessionFactory
-from app.llm.catalog import DEFAULT_CHAT_MODEL
 from app.models import (
     Agent,
     AgentVersion,
@@ -77,6 +76,10 @@ async def seed() -> None:
         )
         session.add(agent)
         await session.flush()
+
+        # Imported here, not at module top: a top-level `app.db -> app.llm` edge joins llm to the accepted
+        # core/db/models package cycle (tests/test_architecture.py), and seeding is the only user.
+        from app.llm.catalog import DEFAULT_CHAT_MODEL
 
         version = AgentVersion(
             agent_id=agent.id,

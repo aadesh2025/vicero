@@ -28,6 +28,36 @@ export function clearRefreshCookie(res: NextResponse) {
   res.cookies.set(REFRESH_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
 }
 
+/** CSRF guard for routes that act on the httpOnly refresh cookie (`refresh`, `logout`).
+ *
+ * SameSite=Lax already keeps the cookie off cross-site fetch/XHR and form POSTs; this refuses the
+ * request outright as a second layer, so a sibling site, a mis-set cookie attribute or an old browser
+ * cannot turn "the cookie rode along" into "the action ran". A browser always sends `Sec-Fetch-Site`
+ * and, on POST, `Origin`; a non-browser caller (curl, a health check) sends neither and is let through,
+ * because CSRF is a browser-only attack. Returns the 403 to send, or null to carry on. */
+export function rejectCrossSite(request: Request): NextResponse | null {
+  const refuse = () =>
+    NextResponse.json(
+      { error: { code: "auth.cross_site", message: "Cross-site request refused" } },
+      { status: 403 },
+    );
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") return refuse();
+  const origin = request.headers.get("origin");
+  if (origin) {
+    // Behind Caddy the public host arrives as Host (and X-Forwarded-Host); compare against it.
+    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    let originHost: string;
+    try {
+      originHost = new URL(origin).host; // the literal "null" Origin (sandboxed iframes) throws here
+    } catch {
+      return refuse();
+    }
+    if (!host || originHost !== host) return refuse();
+  }
+  return null;
+}
+
 /** Headers that tell the API who the visitor really is.
  *
  * This server calls the API itself, so without help the API sees only this server's address and
@@ -44,6 +74,12 @@ export function clientHeaders(request?: Request): Record<string, string> {
   if (xff) out["X-Forwarded-For"] = xff;
   const ua = request?.headers.get("user-agent");
   if (ua) out["User-Agent"] = ua;
+  // Routes that call an API endpoint requiring `get_current_user` (logout, today) need the
+  // browser's own Bearer token passed through — the API only ever trusts this header, never
+  // the httpOnly cookie. Signup/login/magic/oauth calls have no Authorization header to begin
+  // with, so this is a no-op for them.
+  const auth = request?.headers.get("authorization");
+  if (auth) out["Authorization"] = auth;
   return out;
 }
 

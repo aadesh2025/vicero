@@ -1,6 +1,29 @@
 {
   "components": {
     "schemas": {
+      "AddPacksIn": {
+        "properties": {
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "packs": {
+            "title": "Packs",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "packs",
+          "note"
+        ],
+        "title": "AddPacksIn",
+        "type": "object"
+      },
       "AgentBucket": {
         "description": "One agent's slice of the org's traffic.\n\nNamed for agents-as-bots. Not to be confused with `AgentPerformanceBucket`, which is one\nhuman teammate's inbox workload — the two words collide in this product and the\nendpoints (`/by-agent` vs `/agents`) are deliberately spelled differently because of it.",
         "properties": {
@@ -1094,6 +1117,136 @@
           "workflows"
         ],
         "title": "AutomationsOverviewOut",
+        "type": "object"
+      },
+      "BillingCycleOut": {
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "amount_usd_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Usd Cents"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "organization_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Name"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          },
+          "payment_state": {
+            "title": "Payment State",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date-time",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date-time",
+            "title": "Period Start",
+            "type": "string"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "plan",
+          "period_start",
+          "period_end",
+          "amount_minor",
+          "status",
+          "payment_state",
+          "created_at"
+        ],
+        "title": "BillingCycleOut",
         "type": "object"
       },
       "BindN8nRequest": {
@@ -3260,6 +3413,40 @@
         "title": "CrmContactOut",
         "type": "object"
       },
+      "CurrencyTotalsOut": {
+        "description": "This calendar month's ledger for ONE currency. Amounts are minor units of `currency`; a\nrow exists per currency present, and no field ever combines two currencies.",
+        "properties": {
+          "collected_minor": {
+            "title": "Collected Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "overdue_count": {
+            "title": "Overdue Count",
+            "type": "integer"
+          },
+          "overdue_minor": {
+            "title": "Overdue Minor",
+            "type": "integer"
+          },
+          "pending_minor": {
+            "title": "Pending Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "collected_minor",
+          "pending_minor",
+          "overdue_minor",
+          "overdue_count"
+        ],
+        "title": "CurrencyTotalsOut",
+        "type": "object"
+      },
       "DayPoint": {
         "description": "One calendar day of activity.\n\nDistinct from `UsageBucket` because a chart and a usage table want different things.\n`UsageBucket` is sparse — it only has rows for days that saw traffic — which is correct\nfor a table and wrong for a time series: plotting sparse points by array index spaces\nJul 30, Aug 2 and Aug 6 evenly and draws a straight line through a month of silence.\nEvery day in the range gets a point here, zeros included.\n\n`conversations` counts conversations *started* that day, which is what \"conversations\nper day\" means to an operator. The chart previously plotted assistant message count,\nsince that was the only per-day number the API had.",
         "properties": {
@@ -3465,6 +3652,86 @@
         "title": "EdgeRef",
         "type": "object"
       },
+      "EntitlementsOut": {
+        "description": "`GET /v1/me/entitlements` (docs/22 §8.1) — what this org may do right now, plus usage.\n\nFor rendering only, never for a security decision: every limit here is re-enforced\nserver-side at the point of mutation, so a client that lies about this response still gets\na 402. Deliberately carries **no payment information** — `payment_state`/`billing_cycles`\nare staff-only (docs/22 §5.1 rule 1); this answers \"what can I do\", not \"have I paid\".",
+        "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "contact_url": {
+            "default": "/billing",
+            "title": "Contact Url",
+            "type": "string"
+          },
+          "days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Left"
+          },
+          "features": {
+            "$ref": "#/components/schemas/PlanFeaturesOut"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/PlanLimitsOut"
+          },
+          "messages": {
+            "$ref": "#/components/schemas/MessagesOut"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "plan_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Expires At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageCountsOut"
+          }
+        },
+        "required": [
+          "plan",
+          "status",
+          "plan_expires_at",
+          "days_left",
+          "limits",
+          "usage",
+          "messages",
+          "features",
+          "channels"
+        ],
+        "title": "EntitlementsOut",
+        "type": "object"
+      },
       "ExpectedToolCall": {
         "description": "One assertion: was a call to `name` observed. `arguments=None` matches on name alone;\na dict requires every key/value in it to be present in the actual call's arguments\n(subset match, not exact-equality — an assertion author names what matters).",
         "properties": {
@@ -3563,6 +3830,68 @@
           "email"
         ],
         "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
+      "GrantPlanIn": {
+        "properties": {
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "payment_received": {
+            "default": false,
+            "title": "Payment Received",
+            "type": "boolean"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "plan",
+          "note"
+        ],
+        "title": "GrantPlanIn",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -4642,6 +4971,57 @@
         "title": "MagicLinkVerifyRequest",
         "type": "object"
       },
+      "MarkCyclePaidIn": {
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "renew": {
+            "default": false,
+            "title": "Renew",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "MarkCyclePaidIn",
+        "type": "object"
+      },
       "MeResponse": {
         "properties": {
           "memberships": {
@@ -4898,6 +5278,67 @@
           "message"
         ],
         "title": "MessageResponse",
+        "type": "object"
+      },
+      "MessagesOut": {
+        "description": "The message counter in detail — the one limit customers hit often enough to want to see\nthe breakdown, not just a single number (docs/22 §6, §7).",
+        "properties": {
+          "effective_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Limit"
+          },
+          "extra": {
+            "title": "Extra",
+            "type": "integer"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "plan_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Limit"
+          },
+          "unanswered": {
+            "title": "Unanswered",
+            "type": "integer"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used",
+          "plan_limit",
+          "extra",
+          "effective_limit",
+          "period_end",
+          "unanswered"
+        ],
+        "title": "MessagesOut",
         "type": "object"
       },
       "ModelOut": {
@@ -5287,6 +5728,189 @@
         "title": "OAuthExchangeRequest",
         "type": "object"
       },
+      "OrgAdminDetailOut": {
+        "description": "`OrgAdminOut` plus the billing history (docs/22 §8.2).",
+        "properties": {
+          "agents": {
+            "title": "Agents",
+            "type": "integer"
+          },
+          "agents_with_unpublished_changes": {
+            "default": 0,
+            "title": "Agents With Unpublished Changes",
+            "type": "integer"
+          },
+          "billing_cycles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BillingCycleOut"
+            },
+            "title": "Billing Cycles",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "member_list": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OrgMemberOut"
+            },
+            "title": "Member List",
+            "type": "array"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "messages_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages Limit"
+          },
+          "messages_used": {
+            "title": "Messages Used",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Email"
+          },
+          "payment_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment State"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "plan_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Expires At"
+          },
+          "plan_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Note"
+          },
+          "plan_source": {
+            "title": "Plan Source",
+            "type": "string"
+          },
+          "recent_grants": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlanGrantOut"
+            },
+            "title": "Recent Grants",
+            "type": "array"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "storage_bytes_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Bytes Limit"
+          },
+          "storage_bytes_used": {
+            "default": 0,
+            "title": "Storage Bytes Used",
+            "type": "integer"
+          },
+          "unanswered_messages": {
+            "default": 0,
+            "title": "Unanswered Messages",
+            "type": "integer"
+          },
+          "workflows_awaiting_review": {
+            "default": 0,
+            "title": "Workflows Awaiting Review",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "members",
+          "agents",
+          "created_at",
+          "deleted",
+          "plan",
+          "status",
+          "plan_source",
+          "messages_used"
+        ],
+        "title": "OrgAdminDetailOut",
+        "type": "object"
+      },
       "OrgAdminOut": {
         "properties": {
           "agents": {
@@ -5324,8 +5948,76 @@
             "title": "Members",
             "type": "integer"
           },
+          "messages_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages Limit"
+          },
+          "messages_used": {
+            "title": "Messages Used",
+            "type": "integer"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "owner_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Email"
+          },
+          "payment_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment State"
+          },
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "plan_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Expires At"
+          },
+          "plan_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Note"
+          },
+          "plan_source": {
+            "title": "Plan Source",
             "type": "string"
           },
           "slug": {
@@ -5339,6 +6031,31 @@
             ],
             "title": "Slug"
           },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "storage_bytes_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Bytes Limit"
+          },
+          "storage_bytes_used": {
+            "default": 0,
+            "title": "Storage Bytes Used",
+            "type": "integer"
+          },
+          "unanswered_messages": {
+            "default": 0,
+            "title": "Unanswered Messages",
+            "type": "integer"
+          },
           "workflows_awaiting_review": {
             "default": 0,
             "title": "Workflows Awaiting Review",
@@ -5351,7 +6068,11 @@
           "members",
           "agents",
           "created_at",
-          "deleted"
+          "deleted",
+          "plan",
+          "status",
+          "plan_source",
+          "messages_used"
         ],
         "title": "OrgAdminOut",
         "type": "object"
@@ -5551,6 +6272,485 @@
         "title": "Overview",
         "type": "object"
       },
+      "PackInvoicedIn": {
+        "properties": {
+          "invoiced": {
+            "title": "Invoiced",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "invoiced"
+        ],
+        "title": "PackInvoicedIn",
+        "type": "object"
+      },
+      "PackOut": {
+        "description": "One `pack_added` grant, for the admin panel's Uninvoiced packs reconciliation view.",
+        "properties": {
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "amount_usd_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Usd Cents"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "extra_messages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Messages"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoiced": {
+            "title": "Invoiced",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "organization_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Name"
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "invoiced",
+          "created_at"
+        ],
+        "title": "PackOut",
+        "type": "object"
+      },
+      "PlanFeaturesOut": {
+        "description": "On/off capabilities, derived from the counts above (docs/22 §4.1).",
+        "properties": {
+          "analytics_advanced": {
+            "title": "Analytics Advanced",
+            "type": "boolean"
+          },
+          "analytics_export": {
+            "title": "Analytics Export",
+            "type": "boolean"
+          },
+          "api_write": {
+            "title": "Api Write",
+            "type": "boolean"
+          },
+          "n8n": {
+            "title": "N8N",
+            "type": "boolean"
+          },
+          "remove_branding": {
+            "title": "Remove Branding",
+            "type": "boolean"
+          },
+          "tool_calling": {
+            "title": "Tool Calling",
+            "type": "boolean"
+          },
+          "webhooks": {
+            "title": "Webhooks",
+            "type": "boolean"
+          },
+          "workflows": {
+            "title": "Workflows",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "workflows",
+          "n8n",
+          "tool_calling",
+          "webhooks",
+          "api_write",
+          "analytics_advanced",
+          "analytics_export",
+          "remove_branding"
+        ],
+        "title": "PlanFeaturesOut",
+        "type": "object"
+      },
+      "PlanGrantOut": {
+        "description": "One row of billing evidence — `plan_grants` (docs/22 §5).",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Email"
+          },
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "amount_usd_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Usd Cents"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "extra_messages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Messages"
+          },
+          "from_plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Plan"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invoiced": {
+            "default": false,
+            "title": "Invoiced",
+            "type": "boolean"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "to_plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Plan"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "created_at"
+        ],
+        "title": "PlanGrantOut",
+        "type": "object"
+      },
+      "PlanLimitsOut": {
+        "description": "Caps for one plan. `None` means unlimited; `0` means the feature is not included.",
+        "properties": {
+          "agents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agents"
+          },
+          "documents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documents"
+          },
+          "knowledge_bases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Bases"
+          },
+          "messages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Messages"
+          },
+          "storage_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Bytes"
+          },
+          "team_members": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Members"
+          },
+          "tools": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tools"
+          },
+          "webhooks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhooks"
+          },
+          "workflows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflows"
+          },
+          "workspaces": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspaces"
+          }
+        },
+        "required": [
+          "workspaces",
+          "agents",
+          "messages",
+          "knowledge_bases",
+          "documents",
+          "storage_bytes",
+          "workflows",
+          "tools",
+          "webhooks",
+          "team_members"
+        ],
+        "title": "PlanLimitsOut",
+        "type": "object"
+      },
+      "PlanOut": {
+        "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "extra_message_pack_price_minor": {
+            "title": "Extra Message Pack Price Minor",
+            "type": "integer"
+          },
+          "extra_message_pack_size": {
+            "title": "Extra Message Pack Size",
+            "type": "integer"
+          },
+          "extra_message_pack_usd": {
+            "title": "Extra Message Pack Usd",
+            "type": "integer"
+          },
+          "features": {
+            "$ref": "#/components/schemas/PlanFeaturesOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/PlanLimitsOut"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price_minor": {
+            "title": "Price Minor",
+            "type": "integer"
+          },
+          "price_usd_month": {
+            "title": "Price Usd Month",
+            "type": "integer"
+          },
+          "support": {
+            "title": "Support",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "price_usd_month",
+          "price_minor",
+          "extra_message_pack_size",
+          "extra_message_pack_usd",
+          "extra_message_pack_price_minor",
+          "limits",
+          "features",
+          "channels",
+          "support"
+        ],
+        "title": "PlanOut",
+        "type": "object"
+      },
       "PlanStatusOut": {
         "description": "The org's plan as the dashboard needs it (docs/18 §8). Limits come from `core.plans`.",
         "properties": {
@@ -5640,7 +6840,11 @@
             "enum": [
               "trial",
               "trial_expired",
-              "legacy"
+              "legacy",
+              "starter",
+              "pro",
+              "business",
+              "plan_expired"
             ],
             "title": "Status",
             "type": "string"
@@ -5798,6 +7002,55 @@
           "message"
         ],
         "title": "PlaygroundRequest",
+        "type": "object"
+      },
+      "PricingOut": {
+        "description": "The pricing page's entire data source.\n\n`contact_only` is true while plans are granted by staff rather than bought self-serve\n(docs/22 §1) — the page renders \"Contact us\", not \"Buy\". It flips when docs/23 ships.",
+        "properties": {
+          "available_currencies": {
+            "default": [
+              "USD",
+              "EUR",
+              "INR"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Currencies",
+            "type": "array"
+          },
+          "contact_only": {
+            "default": true,
+            "title": "Contact Only",
+            "type": "boolean"
+          },
+          "currency": {
+            "default": "USD",
+            "title": "Currency",
+            "type": "string"
+          },
+          "currency_source": {
+            "default": "default",
+            "title": "Currency Source",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOut"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "tax_note": {
+            "default": "excl. taxes",
+            "title": "Tax Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plans"
+        ],
+        "title": "PricingOut",
         "type": "object"
       },
       "ProviderInfo": {
@@ -6292,6 +7545,19 @@
         "title": "ResumeWorkflowRequest",
         "type": "object"
       },
+      "RevokePlanIn": {
+        "properties": {
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "RevokePlanIn",
+        "type": "object"
+      },
       "RollbackRequest": {
         "properties": {
           "version": {
@@ -6670,6 +7936,98 @@
           "latency_ms"
         ],
         "title": "TestToolResponse",
+        "type": "object"
+      },
+      "TimeseriesPoint": {
+        "description": "One bucket of the dashboard \"Activity\" bar chart (docs/20 §9.3.2, ADR-101).\n\n`bucket_start` is the *local* calendar date the bucket starts on (the Monday of a week,\nthe 1st of a month) — local to the `tz` the request was made with, not UTC, so a bar\nlabelled \"Sep 28\" really is everything the caller's midnight-to-midnight Sep 28 contained.",
+        "properties": {
+          "bucket_start": {
+            "format": "date",
+            "title": "Bucket Start",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "bucket_start",
+          "value"
+        ],
+        "title": "TimeseriesPoint",
+        "type": "object"
+      },
+      "TimeseriesResponse": {
+        "description": "`GET /v1/analytics/timeseries` (ADR-101): one metric, zero-filled, bucketed by the\ncaller's timezone, plus the same-length prior period's total for the header's delta pill.",
+        "properties": {
+          "granularity": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Granularity",
+            "type": "string"
+          },
+          "metric": {
+            "enum": [
+              "conversations",
+              "messages",
+              "tokens",
+              "cost"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TimeseriesPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "previous_period_total": {
+            "title": "Previous Period Total",
+            "type": "number"
+          }
+        },
+        "required": [
+          "granularity",
+          "metric",
+          "points",
+          "previous_period_total"
+        ],
+        "title": "TimeseriesResponse",
+        "type": "object"
+      },
+      "TodaySnapshot": {
+        "description": "Conversations in a caller-supplied window, split into exactly three buckets\n(docs/20-UI-REDESIGN-DUAL-THEME.md's dashboard \"Today\" gauge; ADR-100).\n\nThe window is the *caller's* local day, not the server's: the frontend computes\n`start`/`end` from the browser's own midnight-to-now (or an org timezone, once one is\nstored) and sends them as UTC instants, so this endpoint never has to guess a timezone.\n\nA conversation lands in exactly one bucket:\n- `resolved_by_ai` — no `Handoff` row at all; the bot handled it start to finish.\n- `handed_to_human` — a `Handoff` row exists and a human has engaged (`assigned_to` is\n  set, or its status is `resolved`).\n- `unanswered` — a `Handoff` row exists but no human has picked it up yet.\n\n`conversations == resolved_by_ai + handed_to_human + unanswered`, always.",
+        "properties": {
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "handed_to_human": {
+            "title": "Handed To Human",
+            "type": "integer"
+          },
+          "resolved_by_ai": {
+            "title": "Resolved By Ai",
+            "type": "integer"
+          },
+          "unanswered": {
+            "title": "Unanswered",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conversations",
+          "resolved_by_ai",
+          "handed_to_human",
+          "unanswered"
+        ],
+        "title": "TodaySnapshot",
         "type": "object"
       },
       "TokenPair": {
@@ -7934,6 +9292,60 @@
         "title": "UsageBucket",
         "type": "object"
       },
+      "UsageCountsOut": {
+        "description": "Live counts for this org, same shape as `PlanLimitsOut` so the two compare directly —\nbut never `None`: a live count is always a number, unlike a cap.",
+        "properties": {
+          "agents": {
+            "title": "Agents",
+            "type": "integer"
+          },
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "knowledge_bases": {
+            "title": "Knowledge Bases",
+            "type": "integer"
+          },
+          "messages": {
+            "title": "Messages",
+            "type": "integer"
+          },
+          "storage_bytes": {
+            "title": "Storage Bytes",
+            "type": "integer"
+          },
+          "team_members": {
+            "title": "Team Members",
+            "type": "integer"
+          },
+          "tools": {
+            "title": "Tools",
+            "type": "integer"
+          },
+          "webhooks": {
+            "title": "Webhooks",
+            "type": "integer"
+          },
+          "workflows": {
+            "title": "Workflows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agents",
+          "messages",
+          "knowledge_bases",
+          "documents",
+          "storage_bytes",
+          "workflows",
+          "tools",
+          "webhooks",
+          "team_members"
+        ],
+        "title": "UsageCountsOut",
+        "type": "object"
+      },
       "UserAdminOut": {
         "properties": {
           "created_at": {
@@ -8292,6 +9704,19 @@
           }
         },
         "title": "Visitor",
+        "type": "object"
+      },
+      "WaiveCycleIn": {
+        "properties": {
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "WaiveCycleIn",
         "type": "object"
       },
       "WebhookDeliveryOut": {
@@ -9369,6 +10794,326 @@
         ]
       }
     },
+    "/v1/admin/billing/cycles": {
+      "get": {
+        "description": "The payment ledger. `?status=overdue` is the collections list.",
+        "operationId": "list_billing_cycles_v1_admin_billing_cycles_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BillingCycleOut"
+                  },
+                  "title": "Response List Billing Cycles V1 Admin Billing Cycles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Billing Cycles",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/billing/cycles/{cycle_id}/paid": {
+      "post": {
+        "description": "Record a payment. `renew: true` also extends the plan 30 days and opens the next cycle.",
+        "operationId": "mark_cycle_paid_v1_admin_billing_cycles__cycle_id__paid_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkCyclePaidIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCycleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Cycle Paid",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/billing/cycles/{cycle_id}/waive": {
+      "post": {
+        "description": "Comps, demos and your own workspaces — keeps them out of the overdue list.",
+        "operationId": "waive_cycle_v1_admin_billing_cycles__cycle_id__waive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cycle_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cycle Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaiveCycleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BillingCycleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Waive Cycle",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/billing/packs": {
+      "get": {
+        "description": "Packs sold but not yet invoiced — the monthly reconciliation view.",
+        "operationId": "list_packs_v1_admin_billing_packs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "invoiced",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Invoiced",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PackOut"
+                  },
+                  "title": "Response List Packs V1 Admin Billing Packs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Packs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/billing/packs/{pack_id}": {
+      "patch": {
+        "description": "The one mutable field on an append-only table: whether you have billed this pack yet.",
+        "operationId": "mark_pack_invoiced_v1_admin_billing_packs__pack_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pack_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pack Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackInvoicedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Mark Pack Invoiced",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/billing/totals": {
+      "get": {
+        "description": "This month's collected / pending / overdue, one row per currency - never one combined sum.",
+        "operationId": "billing_totals_v1_admin_billing_totals_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CurrencyTotalsOut"
+                  },
+                  "title": "Response Billing Totals V1 Admin Billing Totals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Billing Totals",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/v1/admin/feature-flags": {
       "get": {
         "operationId": "list_flags_v1_admin_feature_flags_get",
@@ -9511,7 +11256,7 @@
     },
     "/v1/admin/orgs": {
       "get": {
-        "description": "Live organizations. `?include_deleted=true` for the audit view.",
+        "description": "Live organizations. `?include_deleted=true` for the audit view.\n\n`?q=` searches name and owner email. `?status=` is the panel's filter chips:\n`at_limit` (sell a pack) · `near_limit` (warn them first) · `expiring` (chase the renewal)\n· `expired` · `payment_pending` · `overdue` (the collections list).",
         "operationId": "list_orgs_v1_admin_orgs_get",
         "parameters": [
           {
@@ -9522,6 +11267,54 @@
               "default": false,
               "title": "Include Deleted",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "plan",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           }
         ],
@@ -9557,6 +11350,230 @@
           }
         ],
         "summary": "List Orgs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/orgs/{org_id}": {
+      "get": {
+        "description": "One workspace with its grant history and payment ledger — the dispute view.",
+        "operationId": "get_org_v1_admin_orgs__org_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgAdminDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Org",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/orgs/{org_id}/messages": {
+      "post": {
+        "description": "Sell extra conversations. The price comes from the org's plan, never from the request.",
+        "operationId": "add_packs_v1_admin_orgs__org_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPacksIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgAdminOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Packs",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/orgs/{org_id}/plan": {
+      "delete": {
+        "description": "Expire the plan. Keeps every agent, document and conversation — read-only, not deleted.",
+        "operationId": "revoke_plan_v1_admin_orgs__org_id__plan_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokePlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgAdminOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Plan",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "description": "Put a workspace on a plan. Live on the client's next request — no restart, no cache.",
+        "operationId": "grant_plan_v1_admin_orgs__org_id__plan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantPlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgAdminOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Grant Plan",
         "tags": [
           "admin"
         ]
@@ -12691,6 +14708,261 @@
         ]
       }
     },
+    "/v1/analytics/timeseries": {
+      "get": {
+        "description": "Dashboard \"Activity\" bar chart (docs/20 §9.3.2, ADR-101). The frontend sends the\nbrowser's own IANA zone (this app has no stored org timezone yet, same gap ADR-100\nflagged) so a bar labelled \"Sep 28\" buckets by *that* midnight, not UTC's.",
+        "operationId": "timeseries_v1_analytics_timeseries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "metric",
+            "required": true,
+            "schema": {
+              "pattern": "^(conversations|messages|tokens|cost)$",
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "granularity",
+            "required": true,
+            "schema": {
+              "pattern": "^(day|week|month)$",
+              "title": "Granularity",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA zone, e.g. `America/New_York`.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "default": "UTC",
+              "description": "IANA zone, e.g. `America/New_York`.",
+              "title": "Tz",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agent Id"
+            }
+          },
+          {
+            "description": "Filter to one channel, e.g. `instagram`.",
+            "in": "query",
+            "name": "channel",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one channel, e.g. `instagram`.",
+              "title": "Channel"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeseriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Timeseries",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/v1/analytics/today": {
+      "get": {
+        "description": "Dashboard \"Today\" gauge (docs/20, ADR-100): resolved/handed-off/unanswered counts for\na caller-supplied window. Not date-only, because \"today\" means the *caller's* local day —\nthe frontend sends its own midnight-to-now as UTC instants rather than this route guessing\na timezone. Capped at 48h so a malformed range can't turn into a full-table scan.",
+        "operationId": "today_v1_analytics_today_get",
+        "parameters": [
+          {
+            "description": "Start of the caller's 'today', as a UTC instant.",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "Start of the caller's 'today', as a UTC instant.",
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "End of the caller's 'today' (usually now), as a UTC instant.",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "End of the caller's 'today' (usually now), as a UTC instant.",
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodaySnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Today",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/v1/analytics/top-questions": {
       "get": {
         "operationId": "top_questions_v1_analytics_top_questions_get",
@@ -14343,6 +16615,56 @@
         "summary": "Resend Verification",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/v1/billing/plans": {
+      "get": {
+        "description": "The pricing table, rendered from `app.core.plans.PLANS`, in USD, EUR or INR.\n\nThe marketing page must call this rather than hardcoding numbers, so a plan change is one\nedit in `plans.py` and never a stale price on a public page.\n\nThe currency is **display only** (see `app.core.geo`): `?currency=` wins, then a country\nheader (only when `TRUST_GEO_HEADERS`), then USD. An unsupported `?currency=` is ignored.\nBecause the body varies by country, the response is `Cache-Control: private` and lists the\ngeo headers in `Vary`, so a shared cache can never hand the INR list to a German visitor.",
+        "operationId": "list_plans_v1_billing_plans_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Plans",
+        "tags": [
+          "billing"
         ]
       }
     },
@@ -21053,6 +23375,78 @@
         "summary": "Test Mcp Server Connection",
         "tags": [
           "mcp"
+        ]
+      }
+    },
+    "/v1/me/entitlements": {
+      "get": {
+        "description": "What the caller's active org (`X-Org-Id`) may do right now, plus its current usage.\n\nFor rendering, not security — every limit is re-enforced server-side at the point of\nmutation (docs/22 §8.1). Carries no payment information; that is staff-only (docs/22 §5.1).",
+        "operationId": "get_entitlements_v1_me_entitlements_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntitlementsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Entitlements",
+        "tags": [
+          "billing"
         ]
       }
     },

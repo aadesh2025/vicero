@@ -205,12 +205,14 @@ export function ActivityBars({
                 >
                   <div
                     className={
-                      "flex h-[20px] items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[10px] font-extrabold leading-none text-white " +
+                      "flex h-[20px] items-center justify-center gap-0.5 whitespace-nowrap rounded-full px-1.5 text-[10px] font-extrabold leading-none " +
+                      // The -soft / -text pairs are the tokens built to pass AA in BOTH themes; white on the
+                      // main colours was 3.29:1 in light and worse in dark (axe: color-contrast).
                       (selectedDelta.tone === "up"
-                        ? "bg-success"
+                        ? "bg-success-soft text-success-text"
                         : selectedDelta.tone === "down"
-                          ? "bg-error"
-                          : "bg-accent")
+                          ? "bg-error-soft text-error-text"
+                          : "bg-accent-soft text-accent")
                     }
                   >
                     {selectedDelta.tone === "up" && <ArrowUp className="size-2.5 shrink-0" />}

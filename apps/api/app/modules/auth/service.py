@@ -12,7 +12,7 @@ import uuid
 from typing import Any
 
 from jose import JWTError, jwt
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit
@@ -55,6 +55,9 @@ VERIFY_TTL = dt.timedelta(hours=24)
 RESET_TTL = dt.timedelta(hours=2)
 MAGIC_TTL = dt.timedelta(minutes=15)
 REFRESH_TTL = dt.timedelta(days=30)
+# How long after a rotation a late duplicate is still told "just rotated" (keep your cookie) instead of
+# "dead". Must outlast a slow commit (observed ~12 s here). A logout inside it reads the same; harmless.
+REFRESH_ROTATION_GRACE = dt.timedelta(seconds=60)
 OAUTH_PENDING_TTL = dt.timedelta(minutes=15)
 
 # Per-email throttles for endpoints that send mail or accept credentials. The per-IP limits are
@@ -258,17 +261,56 @@ async def login(
 async def refresh(
     session: AsyncSession, refresh_token: str, user_agent: str | None, ip: str | None
 ) -> schemas.TokenPair:
-    stmt = select(Session).where(
-        Session.refresh_token_hash == hash_token(refresh_token),
-        Session.revoked_at.is_(None),
-        Session.expires_at > _now(),
-    )
-    current = (await session.execute(stmt)).scalar_one_or_none()
-    if current is None:
+    now = _now()
+    token_hash = hash_token(refresh_token)
+    # Claim the token with ONE atomic statement. Reading the row and then writing `revoked_at` let two
+    # simultaneous refreshes both see "not revoked" and both succeed, and this host's slow commits
+    # stretched that window to ~10 s (live incident 2026-10-07). With UPDATE ... RETURNING a second
+    # caller blocks on the row lock until the first commits, re-checks `revoked_at IS NULL`, matches
+    # nothing, and gets a clean 401. Exactly one caller can ever claim a token.
+    claimed_user_id = (
+        await session.execute(
+            update(Session)
+            .where(
+                Session.refresh_token_hash == token_hash,
+                Session.revoked_at.is_(None),
+                Session.expires_at > now,
+            )
+            .values(revoked_at=now)  # rotate: the old refresh token is now dead
+            .returning(Session.user_id)
+        )
+    ).scalar_one_or_none()
+    if claimed_user_id is None:
+        # Tell "another request just rotated this exact token" (the browser already holds, or is about
+        # to hold, the new one: the caller must KEEP its cookie) from a token that is truly dead
+        # (expired, revoked long ago, unknown: the caller may drop its cookie).
+        prior = (
+            await session.execute(
+                select(Session.id, Session.user_id, Session.revoked_at).where(
+                    Session.refresh_token_hash == token_hash
+                )
+            )
+        ).one_or_none()
+        if prior is not None and prior.revoked_at is not None:
+            if now - prior.revoked_at <= REFRESH_ROTATION_GRACE:
+                raise AppError(
+                    "auth.refresh_rotated",
+                    "This refresh token was just rotated by another request.",
+                    401,
+                )
+            # A token that was rotated away (or logged out) long ago is being presented again: a stale
+            # client at best, a stolen token at worst. It gets nothing (its session is already revoked,
+            # and no new tokens are issued); leave a security trail. Ids only, never the token or its hash.
+            log.warning(
+                "refresh_token_reuse",
+                user_id=str(prior.user_id),
+                session_id=str(prior.id),
+                revoked_seconds_ago=int((now - prior.revoked_at).total_seconds()),
+                ip=ip,
+            )
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
 
-    current.revoked_at = _now()  # rotate: the old refresh token is now dead
-    user = await session.get(User, current.user_id)
+    user = await session.get(User, claimed_user_id)
     if user is None or not user.is_active:
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
     return await _issue_tokens(session, user, user_agent, ip)

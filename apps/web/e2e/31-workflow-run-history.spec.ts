@@ -38,15 +38,27 @@ test("reopening a past completed run shows its step overlay without a live poll"
     headers: auth(account),
   });
 
-  // Run it directly through the API (eager execution completes it synchronously) — this run
-  // already happened and finished BEFORE the canvas is ever opened, proving the overlay is
-  // read from persisted WorkflowStep rows, not a live poll that happened to still be running.
+  // Run it directly through the API and wait for it to FINISH before the canvas is ever opened,
+  // proving the overlay is read from persisted WorkflowStep rows, not a live poll that happened to
+  // still be running. The run endpoint answers "running" at once and the worker completes it a moment
+  // later (it is only synchronous with CELERY_TASK_ALWAYS_EAGER, which CI does not set), so poll the
+  // run list rather than assume the POST's own status.
   const run = await request.post(`${API}/v1/workflows/${workflow.id}/run`, {
     headers: auth(account),
     data: {},
   });
-  const runBody = await run.json();
-  expect(runBody.status).toBe("completed");
+  expect(run.ok(), await run.text()).toBeTruthy();
+  await expect
+    .poll(
+      async () => {
+        const runs = await (
+          await request.get(`${API}/v1/workflows/${workflow.id}/runs`, { headers: auth(account) })
+        ).json();
+        return runs[0]?.status;
+      },
+      { timeout: 30_000, message: "the workflow run should finish" },
+    )
+    .toBe("completed");
 
   await authenticateBrowser(context, account);
   await page.goto(`/agents/${agent.id}?tab=workflows`);

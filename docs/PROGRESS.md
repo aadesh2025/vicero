@@ -2138,6 +2138,31 @@ Check the Model tab against this list before publishing.
 Full visual flow builder (ship minimal first), voice/telephony, native mobile apps, bot
 marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/Helm.
 
+## Refresh-token race / "logged out on revisit" (2026-10-07)
+- **Root cause, found live on production:** concurrent `POST /v1/auth/refresh` calls sharing
+  the same not-yet-rotated cookie both rotated and both succeeded (no locking), forking one
+  session into two; a slower third caller then replayed the stale token, got a 401, and the
+  BFF's unconditional cookie-clear-on-401 could wipe out a sibling's just-written valid cookie.
+  Not a config/deploy issue — the Sep-29 persistence fix (`72ae3dc`) was confirmed live and
+  correct; `SECRET_KEY`, `CORS_ORIGINS`, `WEB_BASE_URL`, `OAUTH_REDIRECT_BASE` all checked out.
+- **Fix (final, ADR-109):** the API claims a refresh token with one atomic `UPDATE ... WHERE revoked_at IS NULL
+  RETURNING` (exactly one concurrent caller wins; losers get 401 `auth.refresh_rotated`), the BFF clears the
+  cookie only on a definitive rejection (409 for a lost race, 503 for outages), and the client refreshes once per
+  browser across tabs (Web Locks + fallback). Family-revoke and migration 0031 were dropped. Cross-site requests
+  to `refresh` / `logout` are refused. The ~10 s latency was the host's disk (synced writes 70-290 ms), see ADR-109.
+- **Also fixed while in this code:** `/api/auth/logout` never forwarded the caller's Bearer
+  token, so `/v1/auth/logout` 401'd silently and never actually revoked the server-side
+  session — logout only ever cleared cookies. Added "Log out all devices" to Settings →
+  Profile (the API's revoke-all was already there; the web app couldn't reach it).
+- Tests: `tests/test_refresh_race.py` (12 concurrent refreshes -> exactly one 200; rotated vs dead codes),
+  `test_refresh_reuse_does_not_revoke_the_new_token`, `test_logout_all_devices_revokes_every_session` (backend);
+  BFF cookie handling + cross-site rejection, two-tab single-flight with and without Web Locks (frontend).
+- **CI repaired in the same change:** Ruff RUF100 (migration 0030), a hidden `test_no_new_package_import_cycle`
+  failure (`app.db.seed` imported `app.llm` at module top), and 9 Playwright specs that had drifted from the UI
+  (inbox selector matched the new Conversations tab, read-only invite email, `/billing/upgrade` heading, n8n
+  signature check needs `N8N_REQUIRE_SIGNATURE_CHECK=false` in keyless CI, workflow run is async, a chart badge with
+  3.29:1 contrast).
+
 ## Billing B - multi-currency pricing (2026-10-06)
 - **B1 (backend):** USD/EUR/INR price lists in minor units, `app/core/geo.py` display-only country
   detection, `GET /v1/billing/plans?currency=`, ledger migration 0030 (`currency`, `amount_minor`),

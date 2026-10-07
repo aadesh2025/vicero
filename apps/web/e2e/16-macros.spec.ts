@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { API, auth, authenticateBrowser, createAccount, type Account } from "./helpers";
+import { API, auth, authenticateBrowser, createAccount, type Account, openFirstConversation } from "./helpers";
 
 async function takenOverConversation(request: APIRequestContext, account: Account) {
   const agent = await (
@@ -45,7 +45,7 @@ test("a macro is built in settings and runs every action from the inbox", async 
 
   // ── Run it ───────────────────────────────────────────────────────────────────
   await page.goto("/inbox");
-  await page.getByRole("button", { name: /anon|visitor|Conversation/i }).first().click();
+  await openFirstConversation(page);
 
   await page.getByRole("button", { name: "Run macro" }).click();
   await page.getByRole("menuitem", { name: "Refund and close" }).click();
@@ -88,7 +88,7 @@ test("the Run macro control is hidden until the org has one", async ({ page, con
   await authenticateBrowser(context, account);
 
   await page.goto("/inbox");
-  await page.getByRole("button", { name: /anon|visitor|Conversation/i }).first().click();
+  await openFirstConversation(page);
 
   await expect(page.getByRole("button", { name: /Take over|Hand back/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Run macro" })).toHaveCount(0);

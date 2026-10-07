@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Monitor, Smartphone } from "lucide-react";
+import { Loader2, LogOut, Monitor, Smartphone } from "lucide-react";
 import { Section } from "@/components/settings/section";
 import { Field } from "@/components/builder/field";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { listSessions, revokeSession } from "@/lib/api/auth";
+import { listSessions, logout, revokeSession } from "@/lib/api/auth";
 import { useSession } from "@/lib/store/session";
 import { initials, relativeTime } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ export function describeDevice(ua: string | null): { label: string; mobile: bool
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   const qc = useQueryClient();
   const user = useSession((s) => s.user);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -55,6 +57,11 @@ export default function ProfilePage() {
       setRevoking(null);
       await qc.invalidateQueries({ queryKey: ["auth-sessions"] });
     },
+  });
+
+  const logoutAll = useMutation({
+    mutationFn: () => logout({ all: true }),
+    onSuccess: () => router.replace("/login"),
   });
 
   const rows = sessions ?? [];
@@ -96,6 +103,24 @@ export default function ProfilePage() {
       <Section
         title="Active sessions"
         description="Devices with a live sign-in to your account."
+        action={
+          rows.length > 1 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-error-text hover:text-error-text"
+              disabled={logoutAll.isPending}
+              onClick={() => logoutAll.mutate()}
+            >
+              {logoutAll.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <LogOut className="size-3.5" />
+              )}
+              Log out all devices
+            </Button>
+          )
+        }
         noPad
       >
         {isLoading ? (

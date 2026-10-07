@@ -1,6 +1,7 @@
 "use client";
 
 import { API_BASE } from "./config";
+import { withRefreshLock } from "./refresh-lock";
 import { clearAuth, getAccessToken, getActiveOrgId, setAccessToken } from "./tokens";
 
 export class ApiError extends Error {
@@ -41,25 +42,48 @@ async function toError(res: Response): Promise<ApiError> {
 
 let refreshing: Promise<boolean> | null = null;
 
-async function tryRefresh(): Promise<boolean> {
-  // Refresh through the same-origin BFF; the httpOnly refresh cookie rides along automatically.
+/** How long to wait, after losing a rotation race, for the winner's new access token to show up. */
+const ROTATED_RETRY_MS = 400;
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Refresh through the same-origin BFF; the httpOnly refresh cookie rides along automatically. */
+async function callRefresh(): Promise<boolean | "rotated"> {
+  const res = await fetch(`/api/auth/refresh`, { method: "POST" });
+  if (res.ok) {
+    const data = await res.json();
+    setAccessToken(data.access_token);
+    return true;
+  }
+  // 409: another request rotated this token a moment ago. That is a lost race, not a logout, and the
+  // BFF deliberately left the cookie alone.
+  if (res.status === 409) return "rotated";
+  // Only give up the session when the refresh token is genuinely rejected. A 502 or a restarting API
+  // is transient: dropping the tokens there turns a blip into a logout.
+  if (res.status === 401) clearAuth();
+  return false;
+}
+
+async function refreshOnce(sentToken: string | null): Promise<boolean> {
+  // Tabs share the access-token cookie. If it is no longer the token that was just rejected, another
+  // tab already refreshed while we waited for the lock: reuse its result instead of spending the
+  // refresh token a second time.
+  if (getAccessToken() !== sentToken) return true;
+  const first = await callRefresh();
+  if (first !== "rotated") return first;
+  await sleep(ROTATED_RETRY_MS);
+  if (getAccessToken() !== sentToken) return true;
+  const second = await callRefresh();
+  return second === true;
+}
+
+/** Refresh the session once, however many callers ask and in however many tabs: calls in this tab share
+ * one promise, and tabs take turns through the lock in `refresh-lock.ts`. `sentToken` is the access
+ * token the rejected request carried. */
+export function tryRefresh(sentToken: string | null = getAccessToken()): Promise<boolean> {
   if (!refreshing) {
-    refreshing = (async () => {
-      try {
-        const res = await fetch(`/api/auth/refresh`, { method: "POST" });
-        if (!res.ok) {
-          // Only give up the session when the refresh token is genuinely rejected. A 502 or a
-          // restarting API is transient — dropping the tokens there turns a blip into a logout.
-          if (res.status === 401) clearAuth();
-          return false;
-        }
-        const data = await res.json();
-        setAccessToken(data.access_token);
-        return true;
-      } finally {
-        refreshing = null;
-      }
-    })();
+    refreshing = withRefreshLock(() => refreshOnce(sentToken)).finally(() => {
+      refreshing = null;
+    });
   }
   return refreshing;
 }
@@ -84,9 +108,10 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
     signal,
   };
 
+  const sentToken = getAccessToken();
   let res = await fetch(`${API_BASE}${path}`, init);
   if (res.status === 401) {
-    if (await tryRefresh()) {
+    if (await tryRefresh(sentToken)) {
       init.headers = buildHeaders(orgScoped);
       res = await fetch(`${API_BASE}${path}`, init);
     }
@@ -106,9 +131,10 @@ export async function apiForm<T>(path: string, form: FormData): Promise<T> {
   // Note: no Content-Type — the browser sets the multipart boundary itself.
 
   const send = () => fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  const sentToken = getAccessToken();
   let res = await send();
   if (res.status === 401) {
-    if (await tryRefresh()) {
+    if (await tryRefresh(sentToken)) {
       const token2 = getAccessToken();
       if (token2) headers.Authorization = `Bearer ${token2}`;
       res = await send();

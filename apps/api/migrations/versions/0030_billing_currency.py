@@ -33,7 +33,7 @@ def upgrade() -> None:
             table, sa.Column("currency", sa.String(3), nullable=False, server_default="USD")
         )
         op.add_column(table, sa.Column("amount_minor", sa.BigInteger(), nullable=True))
-        op.execute(f"UPDATE {table} SET amount_minor = amount_usd_cents")  # noqa: S608 - fixed names
+        op.execute(f"UPDATE {table} SET amount_minor = amount_usd_cents")
         op.create_check_constraint(f"ck_{table}_currency", table, _CHECK)
     # Every cycle has an amount: backfilled above, and written on every new row.
     op.alter_column("billing_cycles", "amount_minor", nullable=False)

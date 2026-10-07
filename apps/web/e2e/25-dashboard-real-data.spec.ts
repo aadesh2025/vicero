@@ -50,8 +50,12 @@ test("a brand-new org sees real empty states, not mock agents or conversations",
   await authenticateBrowser(context, emptyAccount);
   await page.goto("/dashboard");
 
-  // Both panels explain themselves rather than rendering a blank list.
-  await expect(page.getByText("No agents yet")).toBeVisible();
+  // Both panels explain themselves rather than rendering a blank list. "No agents yet" also appears in the
+  // analytics "By agent" breakdown, so scope the agent assertions to the "Your agents" panel.
+  const agentsPanel = page
+    .getByRole("heading", { name: "Your agents" })
+    .locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]");
+  await expect(agentsPanel.getByText("No agents yet")).toBeVisible();
   await expect(page.getByRole("link", { name: /Create your first agent/ })).toBeVisible();
   await expect(page.getByText("No conversations yet")).toBeVisible();
 
@@ -63,7 +67,7 @@ test("a brand-new org sees real empty states, not mock agents or conversations",
   await expect(page.getByText(/volume pricing/)).toHaveCount(0);
 
   // The panel header counts the real total, which is zero.
-  await expect(page.getByText("0 total")).toBeVisible();
+  await expect(agentsPanel.getByText("0 total")).toBeVisible();
 });
 
 test("the dashboard shows the org's own agent and conversation once they exist", async ({

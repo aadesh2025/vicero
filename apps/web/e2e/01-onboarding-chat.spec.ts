@@ -23,7 +23,8 @@ test("criterion 1: invited signup → create agent → chat", async ({ page, req
   // Brand-new person: no account yet, signs up from the invitation link itself.
   await page.goto(`/invitations/accept?token=${token}`);
   await page.getByLabel(/your name/i).fill("E2E Onboarder");
-  await page.getByLabel(/email/i).fill(email);
+  // The invite pre-fills the invited address and locks it (readonly), so assert it rather than type it.
+  await expect(page.getByLabel(/email/i)).toHaveValue(email);
   await page.getByLabel(/password/i).fill("e2e-Password-123");
   await page.getByRole("button", { name: /create account & join/i }).click();
 

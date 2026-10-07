@@ -55,7 +55,8 @@ test("a running trial shows the usage meter and an upgrade button on every page"
   await expect(page.getByTestId("trial-meter")).toBeVisible();
   await page.getByTestId("trial-meter").getByRole("link", { name: "Upgrade" }).click();
   await expect(page).toHaveURL(/\/billing\/upgrade$/);
-  await expect(page.getByRole("heading", { name: /plans coming soon/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upgrade", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Starter" })).toBeVisible();
 });
 
 test("an ended trial shows the persistent banner and how many visitors went unanswered", async ({ page }) => {

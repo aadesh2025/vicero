@@ -194,6 +194,11 @@ jobs:
       # through the public API, so it needs the test-only escape. The production rule itself
       # is pinned by tests/test_org_creation_gate.py, which turns this back off.
       ALLOW_SELF_SERVE_ORGS: "true"
+      # Binding an n8n workflow normally REFUSES a webhook it cannot verify as signature-checking
+      # (tools.n8n_unverifiable), and it verifies by reading the workflow from n8n over N8N_API_KEY. Keyless
+      # CI runs no n8n, so e2e/05 would always be refused. Production keeps the check on (the default);
+      # tests/test_n8n.py pins the check itself. Test-only escape, same idea as ALLOW_SELF_SERVE_ORGS.
+      N8N_REQUIRE_SIGNATURE_CHECK: "false"
       # Self-serve signup (docs/18) is on in production: every signup would also get a
       # metered trial workspace. The suite bootstraps its own unmetered tenants instead, so it
       # runs the staff-provisioned model; trial UI is covered by e2e/30-trial-ui.spec.ts and the

@@ -1,9 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { clearRefreshCookie, forward, REFRESH_COOKIE, setRefreshCookie } from "../_bff";
+import { clearRefreshCookie, forward, REFRESH_COOKIE, rejectCrossSite, setRefreshCookie } from "../_bff";
+
+// Concurrent requests carrying the *same* refresh-cookie value (two tabs, or a reload racing
+// an in-flight retry) share one in-flight rotation instead of each calling the API. Without
+// this, two callers can both read the token as not-yet-rotated and both succeed, forking the
+// session into two live siblings — then the API's own reuse-detection (a third, slower caller
+// reusing the now-rotated token) burns the whole family, including the sibling that just won
+// the race, which is how a returning visitor ended up logged out on 2026-10-07 (see
+// docs/PROGRESS.md). Per-Node-process only: this deployment runs one `web` container, so it's
+// fully effective here; if that ever changes, the API's FOR-UPDATE lock is the backstop.
+const inFlight = new Map<string, Promise<{ status: number; data: unknown }>>();
+
+function rotate(refresh: string, request: NextRequest) {
+  const existing = inFlight.get(refresh);
+  if (existing) return existing;
+  const promise = forward("/v1/auth/refresh", { refresh_token: refresh }, request).finally(() => {
+    inFlight.delete(refresh);
+  });
+  inFlight.set(refresh, promise);
+  return promise;
+}
+
+function apiErrorCode(data: unknown): string | undefined {
+  const code = (data as { error?: { code?: unknown } } | null)?.error?.code;
+  return typeof code === "string" ? code : undefined;
+}
 
 // POST /api/auth/refresh → reads the httpOnly refresh cookie, rotates it against the API, and
 // returns a fresh access token. The client never sees or handles the refresh token.
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSite(request);
+  if (crossSite) return crossSite;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refresh) {
     return NextResponse.json({ error: { code: "auth.no_session", message: "No session" } }, { status: 401 });
@@ -11,13 +38,23 @@ export async function POST(request: NextRequest) {
   let status: number;
   let data: unknown;
   try {
-    ({ status, data } = await forward("/v1/auth/refresh", { refresh_token: refresh }, request));
+    ({ status, data } = await rotate(refresh, request));
   } catch {
     // The API is unreachable (restarting, network blip). That says nothing about whether the
     // refresh token is still good, so keep the cookie and let the client try again.
     return NextResponse.json(
       { error: { code: "auth.refresh_unavailable", message: "Auth service unavailable" } },
       { status: 503 },
+    );
+  }
+  if (status === 401 && apiErrorCode(data) === "auth.refresh_rotated") {
+    // Another request rotated this exact token a moment ago, so the browser already holds (or is
+    // about to receive) the new cookie from that winner. This is a lost race, NOT a logout: touch
+    // nothing, and answer 409 (not 401) so the client does not drop its session. Clearing the
+    // cookie here is what logged people out on 2026-10-07.
+    return NextResponse.json(
+      { error: { code: "auth.refresh_rotated", message: "Session was just refreshed elsewhere" } },
+      { status: 409 },
     );
   }
   if (status >= 400 || !data || typeof data !== "object") {
@@ -28,7 +65,7 @@ export async function POST(request: NextRequest) {
       // and must not cost the user their session.
       { status: rejected ? 401 : 503 },
     );
-    if (rejected) clearRefreshCookie(res); // stale/rotated refresh — drop it
+    if (rejected) clearRefreshCookie(res); // definitively dead (expired / revoked / unknown) — drop it
     return res;
   }
   const { access_token, refresh_token } = data as { access_token: string; refresh_token: string };

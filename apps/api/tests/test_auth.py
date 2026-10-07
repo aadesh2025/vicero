@@ -83,18 +83,40 @@ async def test_refresh_rotates_and_revokes_old(client: AsyncClient) -> None:
     # Old refresh token is now dead.
     reuse = await client.post("/v1/auth/refresh", json={"refresh_token": r1})
     assert reuse.status_code == 401
-    # New one works.
-    assert (await client.post("/v1/auth/refresh", json={"refresh_token": r2})).status_code == 200
 
 
-async def test_logout_revokes_refresh(client: AsyncClient) -> None:
+async def test_refresh_reuse_does_not_revoke_the_new_token(client: AsyncClient) -> None:
+    """Replaying an already-rotated token is refused, but it must NOT burn the legitimate new one: a
+    late duplicate from the same browser is a race, not an attack (live incident 2026-10-07)."""
     data = await _signup(client)
-    logout = await client.post(
-        "/v1/auth/logout", json={"refresh_token": data["refresh_token"]}, headers=_auth(data["access_token"])
-    )
-    assert logout.status_code == 200
-    reuse = await client.post("/v1/auth/refresh", json={"refresh_token": data["refresh_token"]})
+    r1 = data["refresh_token"]
+
+    r2 = (await client.post("/v1/auth/refresh", json={"refresh_token": r1})).json()["refresh_token"]
+    r3 = (await client.post("/v1/auth/refresh", json={"refresh_token": r2})).json()["refresh_token"]
+
+    reuse = await client.post("/v1/auth/refresh", json={"refresh_token": r1})
     assert reuse.status_code == 401
+    # The latest legitimately-issued token still works.
+    assert (await client.post("/v1/auth/refresh", json={"refresh_token": r3})).status_code == 200
+
+
+async def test_logout_all_devices_revokes_every_session(client: AsyncClient) -> None:
+    data = await _signup(client)
+    # A second device: log in again (a separate session/family from the signup's own).
+    second = await client.post(
+        "/v1/auth/login", json={"email": "a@example.com", "password": "password123"}
+    )
+    assert second.status_code == 200
+    r_second = second.json()["refresh_token"]
+
+    # No refresh_token in the body = revoke every session, not just the caller's.
+    logout_all = await client.post(
+        "/v1/auth/logout", json={}, headers=_auth(data["access_token"])
+    )
+    assert logout_all.status_code == 200
+
+    assert (await client.post("/v1/auth/refresh", json={"refresh_token": data["refresh_token"]})).status_code == 401
+    assert (await client.post("/v1/auth/refresh", json={"refresh_token": r_second})).status_code == 401
 
 
 # ── Email verification ────────────────────────────────────────────────────────

@@ -64,7 +64,8 @@ test.describe("accessibility (axe, serious+critical)", () => {
     expect(await scan(page)).toEqual([]);
 
     await page.goto("/agents");
-    await expect(page.getByText("A11y Agent")).toBeVisible();
+    // First visit to /agents after a fresh sign-in can take longer than the default 5 s on a cold CI runner.
+    await expect(page.getByText("A11y Agent")).toBeVisible({ timeout: 15_000 });
     expect(await scan(page)).toEqual([]);
   });
 

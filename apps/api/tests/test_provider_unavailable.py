@@ -11,7 +11,9 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-pytestmark = pytest.mark.anyio
+# No `pytest.mark.anyio` here: the suite runs under pytest-asyncio (asyncio_mode = auto), and the `client` /
+# `db_session` fixtures are pytest-asyncio fixtures. Marking the test for anyio runs it on a second event
+# loop, so the first DB call died in CI with "Task ... attached to a different loop" (order-dependent).
 
 FALLBACK = "Sorry, I can't answer right now — a teammate will follow up."
 

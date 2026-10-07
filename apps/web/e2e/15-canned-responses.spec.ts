@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { API, auth, authenticateBrowser, createAccount, type Account } from "./helpers";
+import { API, auth, authenticateBrowser, createAccount, type Account, openFirstConversation } from "./helpers";
 
 /** A handed-off widget conversation the operator has taken over, ready to reply in. */
 async function takenOverConversation(request: APIRequestContext, account: Account) {
@@ -49,7 +49,7 @@ test("canned responses are managed in settings and inserted by shortcut in the i
 
   // ── Use it in the inbox ──────────────────────────────────────────────────────
   await page.goto("/inbox");
-  await page.getByRole("button", { name: /Conversation|anon|visitor/i }).first().click();
+  await openFirstConversation(page);
 
   const reply = page.getByLabel("Reply as an operator");
   await expect(reply).toBeVisible();
@@ -84,7 +84,7 @@ test("a slash inside a word does not open the picker", async ({ page, context, r
 
   await authenticateBrowser(context, account);
   await page.goto("/inbox");
-  await page.getByRole("button", { name: /Conversation|anon|visitor/i }).first().click();
+  await openFirstConversation(page);
 
   const reply = page.getByLabel("Reply as an operator");
   // A URL is the everyday case that would misfire a naive "contains /" trigger.

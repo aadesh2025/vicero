@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowUpRight, ExternalLink, Loader2, Plus, Workflow } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { UpgradeNotice } from "@/components/plan/locked";
+import { useFeature } from "@/components/plan/use-plan";
 import { StatusPill } from "@/components/shared/status-pill";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -52,7 +53,10 @@ export default function AutomationsPage() {
     retry: false,
   });
 
-  const included = usage.data ? usage.data.included : true; // never lock on a failed read: the server decides
+  // Included only if the plan says so (the same flag the rest of the app gates on) AND the automations API agrees.
+  // A failed read never locks the page: the server decides.
+  const { allowed: planAllows } = useFeature("n8n");
+  const included = planAllows && (usage.data ? usage.data.included : true);
   const openRequests = (requests.data ?? []).filter((r) => r.status === "requested" || r.status === "building");
   const automations = list.data ?? [];
 
@@ -69,7 +73,7 @@ export default function AutomationsPage() {
         <Button
           variant="primary"
           size="default"
-          disabled={!usage.data?.can_request}
+          disabled={!included || !usage.data?.can_request}
           onClick={() => setAsking(true)}
           title={usage.data && !usage.data.can_request ? "Your plan has no free automation slot" : undefined}
         >
@@ -77,7 +81,7 @@ export default function AutomationsPage() {
         </Button>
       </PageHeader>
 
-      {usage.data && !included && (
+      {!included && (
         <UpgradeNotice title="Automations are part of a paid plan">
           Tell us what you want done automatically and we build it for you. Upgrade your plan to start.
         </UpgradeNotice>

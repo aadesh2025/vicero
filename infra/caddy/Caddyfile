@@ -26,3 +26,39 @@
 	reverse_proxy api:8000
 	# API sets its own strict CSP + security headers (SecurityHeadersMiddleware); don't duplicate.
 }
+
+# ── n8n editor (staff only) ───────────────────────────────────────────────────────
+# Clients never see this. Vicero reaches n8n at http://n8n:5678 on the compose network, so NOTHING that n8n
+# serves for workflows has to be public: /webhook*, /webhook-test*, forms and MCP are refused here with 404.
+# The editor sits behind a second password (basic_auth, below) on top of n8n's own owner login.
+#
+# Rate-limiting the login is not possible in stock Caddy (it needs the third-party caddy-ratelimit module and a
+# custom image). Until then the basic_auth gate is what stands in front of brute force: a bcrypt check per try
+# and nothing reaches n8n until it passes. See docs/25 §11.
+{$N8N_DOMAIN} {
+	encode zstd gzip
+
+	@workflow_endpoints path /webhook /webhook/* /webhook-test /webhook-test/* /webhook-waiting /webhook-waiting/* /form /form/* /form-test /form-test/* /form-waiting /form-waiting/* /mcp /mcp/* /mcp-test /mcp-test/*
+	handle @workflow_endpoints {
+		respond "Not found" 404
+	}
+
+	handle {
+		basic_auth {
+			{$N8N_EDITOR_GATE_USER} {$N8N_EDITOR_GATE_HASH}
+		}
+		reverse_proxy n8n:5678 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+}

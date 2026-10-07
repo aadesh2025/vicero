@@ -199,6 +199,9 @@ jobs:
       # CI runs no n8n, so e2e/05 would always be refused. Production keeps the check on (the default);
       # tests/test_n8n.py pins the check itself. Test-only escape, same idea as ALLOW_SELF_SERVE_ORGS.
       N8N_REQUIRE_SIGNATURE_CHECK: "false"
+      # Same reason: binding an n8n tool needs a registered Active automation, and keyless CI has no staff-built
+      # registry. Production keeps it on (default); tests/test_automations.py pins the rule.
+      N8N_REQUIRE_REGISTERED_AUTOMATION: "false"
       # Self-serve signup (docs/18) is on in production: every signup would also get a
       # metered trial workspace. The suite bootstraps its own unmetered tenants instead, so it
       # runs the staff-provisioned model; trial UI is covered by e2e/30-trial-ui.spec.ts and the

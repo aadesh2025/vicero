@@ -64,6 +64,7 @@ ssh vicero "/opt/vicero/rollback.sh api=sha256:<old> web=sha256:<old>"
 | Deployed | Release | Rollback target (api / web) |
 |---|---|---|
 | 2026-10-07 | refresh-token race fix (`bfd7e85`) | `sha256:758ff685239af3f8eecb9ed6d16429e2f7e5f6803ef87e6a78c636948d6da626` / `sha256:ba316fb359bd8339b8bf45e549a84ec80c977017f5ad3f493afcefe87b7a1071` |
+| 2026-10-08 | Automations + private n8n (R2 security fix, commit-before-response, R3; `bb95b95`) | `sha256:5a038c43a4429fe856917a1926a950465171933e9a829487a102fc11e9c74530` / `sha256:7e443a96f47749c17079618f54efbac2948e7e6ec606ca15ed54a65d73de950a` (the migration `0031_automations` only adds tables: rollback = these images; restore a backup rather than downgrade) |
 
 The pin lasts until the next `deploy.sh`, which returns to the moving `:master` tag. **The database only
 moves forward** (never `alembic downgrade`). If a migration was the problem, restore from a backup (§5)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
+from app.db.session import commit_before_response
 from app.llm import embeddings
 from app.modules.admin.router import router as admin_router
 from app.modules.agent_tests.router import test_run_router as agent_test_run_router
@@ -168,6 +169,8 @@ def create_app() -> FastAPI:
         version=__version__,
         description="AI chatbot & automation platform — backend API.",
         lifespan=lifespan,
+        # Commit before the response goes out, not after (app.db.session.commit_before_response).
+        dependencies=[Depends(commit_before_response, scope="function")],
         # Swagger, ReDoc and the raw schema are dev tools. Served in prod they publish the
         # entire surface — every `/v1/admin/*` route, every request shape — to anyone who
         # asks, which is a free reconnaissance map and nothing a tenant needs: the public

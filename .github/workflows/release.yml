@@ -58,8 +58,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ matrix.build_args }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+
 
   smoke:
     name: Smoke-test the API image (/readyz)

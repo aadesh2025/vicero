@@ -110,6 +110,19 @@ class N8nClient:
             data = resp.json()
         return list(data.get("data", data if isinstance(data, list) else []))
 
+    async def list_executions(self, workflow_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Recent executions of one workflow (no execution data: ids, status and timestamps only)."""
+        if not self.configured:
+            raise AppError("n8n.not_configured", "N8N_API_KEY is not set, so n8n cannot be queried.", 503)
+        async with self._api_client() as client:
+            resp = await client.get(
+                "/api/v1/executions", params={"workflowId": workflow_id, "limit": limit, "includeData": "false"}
+            )
+            if resp.status_code >= 400:
+                raise AppError("n8n.api_error", f"n8n API returned {resp.status_code}", 502)
+            body = resp.json()
+            return list(body.get("data", [])) if isinstance(body, dict) else []
+
     async def get_workflow(self, workflow_id: str) -> dict[str, Any]:
         if not self.configured:
             raise AppError("n8n.unconfigured", "N8N_API_KEY is not set.", 503)

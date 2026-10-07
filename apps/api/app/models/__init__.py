@@ -4,6 +4,7 @@
 from app.models.agent_steps import AgentStep
 from app.models.agent_tests import AgentTest, AgentTestRun
 from app.models.agents import Agent, AgentVersion, ProviderCredential
+from app.models.automations import Automation, AutomationRequest, AutomationRun
 from app.models.campaigns import Campaign
 from app.models.canned_responses import CannedResponse
 from app.models.channels import Channel
@@ -59,6 +60,9 @@ __all__ = [
     "AgentVersion",
     "ApiKey",
     "AuditLog",
+    "Automation",
+    "AutomationRequest",
+    "AutomationRun",
     "BillingCycle",
     "Campaign",
     "CannedResponse",

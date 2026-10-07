@@ -65,6 +65,7 @@ LIMIT_FEATURES = (
     "storage",
     "channels",
     "team_members",
+    "automations",
 )
 
 #: Every value `details.feature` may carry. The frontend's locked states key off this set, so it
@@ -83,6 +84,7 @@ _LIMIT_ATTR = {
     "workflows": "max_workflows",
     "tools": "max_tools",
     "webhooks": "max_webhooks",
+    "automations": "max_automations",
 }
 
 
@@ -100,6 +102,11 @@ class PlanSpec:
     max_tools: int | None
     max_webhooks: int | None
     n8n_enabled: bool
+    #: Client-visible automations (docs/26): how many may exist, and how many runs a month may be recorded.
+    #: 0 = off. Staff build them; the client only reads their status and logs. Unlike the other counts
+    #: this is not a feature flag: the 402 uses `automations` as `details.feature`, via `_LIMIT_ATTR`.
+    max_automations: int | None
+    max_automation_runs: int | None
 
     # ── knowledge ─────────────────────────────────────────────────────────────
     max_knowledge_bases: int | None
@@ -184,6 +191,8 @@ PLANS: dict[str, PlanSpec] = {
         max_tools=0,
         max_webhooks=0,
         n8n_enabled=False,
+        max_automations=0,
+        max_automation_runs=0,
         max_knowledge_bases=1,
         max_documents=10,
         storage_bytes=100 * _MB,
@@ -205,6 +214,8 @@ PLANS: dict[str, PlanSpec] = {
         max_tools=0,
         max_webhooks=0,
         n8n_enabled=False,
+        max_automations=0,
+        max_automation_runs=0,
         max_knowledge_bases=1,
         max_documents=20,
         storage_bytes=500 * _MB,
@@ -229,6 +240,8 @@ PLANS: dict[str, PlanSpec] = {
         max_tools=8,
         max_webhooks=5,
         n8n_enabled=True,
+        max_automations=5,
+        max_automation_runs=2000,
         max_knowledge_bases=5,
         max_documents=100,
         storage_bytes=5 * _GB,
@@ -253,6 +266,8 @@ PLANS: dict[str, PlanSpec] = {
         max_tools=None,
         max_webhooks=None,
         n8n_enabled=True,
+        max_automations=20,
+        max_automation_runs=10000,
         max_knowledge_bases=20,
         max_documents=500,
         storage_bytes=10 * _GB,
@@ -277,6 +292,8 @@ PLANS: dict[str, PlanSpec] = {
         max_tools=None,
         max_webhooks=None,
         n8n_enabled=True,
+        max_automations=None,
+        max_automation_runs=None,
         max_knowledge_bases=None,
         max_documents=None,
         storage_bytes=None,
@@ -302,6 +319,8 @@ _EXPIRED = PlanSpec(
     max_tools=0,
     max_webhooks=0,
     n8n_enabled=False,
+    max_automations=0,
+    max_automation_runs=0,
     max_knowledge_bases=1,
     max_documents=0,
     storage_bytes=0,

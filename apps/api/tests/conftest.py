@@ -43,6 +43,9 @@ settings.embedding_probe_enabled = False
 # And the disposable-email MX heuristic, which is a live DNS lookup on every self-serve signup.
 # `test_disposable.py` turns it on with a stubbed resolver.
 settings.disposable_mx_check_enabled = False
+# And the automation registry rule for n8n tools: the suite binds ad-hoc webhooks. tests/test_automations*.py turn
+# it back on to pin the real rule.
+settings.n8n_require_registered_automation = False
 
 
 @pytest.fixture

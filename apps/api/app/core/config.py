@@ -277,6 +277,15 @@ class Settings(BaseSettings):
     # (or a URL that matches nothing) it cannot be verified and is refused. Turn off only for a
     # deliberately unsigned dev n8n.
     n8n_require_signature_check: bool = True
+    # Client-visible automations (docs/26). `AUTOMATION_REPORT_SECRET` signs the run reports n8n pushes to
+    # POST /internal/automations/runs (HMAC-SHA256 over "<timestamp>.<raw body>"). Unset = that endpoint answers
+    # 503 and nothing is recorded: it never falls back to another secret.
+    automation_report_secret: str | None = None
+    # An n8n tool may be bound to / run a webhook only if it belongs to a registered, Active automation of the
+    # same org (and agent). Off only for keyless CI and dev, where no registry exists.
+    n8n_require_registered_automation: bool = True
+    # Celery beat job that fills gaps in the run log from the n8n API (registered workflows only).
+    automation_pull_enabled: bool = True
 
     # --- Auth / rate limiting ---
     auth_rate_limit: int = 30

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing import automations as automation_rules
 from app.billing import usage
 from app.core import rbac
 from app.core.config import settings
@@ -291,6 +292,13 @@ async def execute_tool_call(
             ctx_agent=str(ctx.agent_id),
         )
         return ToolResult(output={}, status="error", error=f"tool '{call.name}' is not available")
+    if tool.type == "n8n" and settings.n8n_require_registered_automation:
+        blocked = await automation_rules.check_agent_call(
+            session, ctx.org_id, ctx.agent_id, str(tool.config.get("webhook_url", ""))
+        )
+        if blocked is not None:
+            log.warning("n8n_call_blocked", tool_id=str(tool.id), org=str(ctx.org_id), agent=str(ctx.agent_id))
+            return ToolResult(output={}, status="error", error=blocked)
     if tool.type == "n8n" and await _webhook_bound_to_other_org(session, tool.organization_id, tool.config):
         log.warning("n8n_webhook_cross_org", tool_id=str(tool.id), org=str(tool.organization_id))
         return ToolResult(output={}, status="error", error="This automation is not available.")
@@ -508,6 +516,9 @@ async def bind_n8n_workflow(
     if settings.n8n_require_signature_check:
         await _require_signed_workflow(client, fetched, webhook_url)
 
+    if settings.n8n_require_registered_automation:
+        # Only a workflow staff registered as an Active automation of THIS org (and this agent) can be bound.
+        await automation_rules.require_registered_for_bind(session, ctx.org.id, data.agent_id, webhook_url)
     if await _webhook_bound_to_other_org(session, ctx.org.id, {"webhook_url": webhook_url}):
         # Same message as a hidden workflow: do not reveal that another org uses it.
         raise AppError("tools.n8n_forbidden", "This workflow is not available to your organization.", 403)

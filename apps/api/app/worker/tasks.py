@@ -263,3 +263,37 @@ async def _run_trial_sweep() -> dict[str, int]:
 def trial_sweep_task() -> dict[str, int]:
     """Hourly (Celery beat): send each free-trial lifecycle email that is due, once (docs/18 §8)."""
     return _run(_run_trial_sweep())
+
+
+async def _run_automation_pull() -> int:
+    from app.integrations.n8n_client import get_client
+    from app.modules.automations import service as automations_service
+
+    client = get_client()
+    if not settings.automation_pull_enabled or not client.configured:
+        return 0
+    async with SessionFactory() as session:
+        added = await automations_service.sync_from_n8n(session, client)
+        await session.commit()
+        return added
+
+
+@celery_app.task(name="automations.pull")  # type: ignore[untyped-decorator]
+def pull_automation_runs_task() -> int:
+    """Periodic (Celery beat, every 5 min): fill gaps in the run log from n8n. Registered workflows only."""
+    return _run(_run_automation_pull())
+
+
+async def _run_automation_retention() -> int:
+    from app.modules.automations import service as automations_service
+
+    async with SessionFactory() as session:
+        removed = await automations_service.purge_old_runs(session)
+        await session.commit()
+        return removed
+
+
+@celery_app.task(name="automations.retention")  # type: ignore[untyped-decorator]
+def purge_automation_runs_task() -> int:
+    """Daily (Celery beat): delete automation runs older than 30 days. Vicero keeps its own log; n8n prunes at ~7."""
+    return _run(_run_automation_retention())

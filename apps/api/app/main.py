@@ -28,6 +28,9 @@ from app.modules.analytics.router import router as analytics_router
 from app.modules.apikeys.router import router as apikeys_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
+from app.modules.automations.router import internal_router as automations_internal_router
+from app.modules.automations.router import router as automations_router
+from app.modules.automations.router import staff_router as automations_staff_router
 from app.modules.billing.router import router as billing_router
 from app.modules.campaigns.router import router as campaigns_router
 from app.modules.canned_responses.router import router as canned_responses_router
@@ -228,6 +231,9 @@ def create_app() -> FastAPI:
     app.include_router(webhooks_router)
     app.include_router(audit_router)
     app.include_router(admin_router)
+    app.include_router(automations_router)
+    app.include_router(automations_staff_router)
+    app.include_router(automations_internal_router)
 
     return app
 

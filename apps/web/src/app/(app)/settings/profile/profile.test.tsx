@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProfilePage, { describeDevice } from "./page";
 import { useSession } from "@/lib/store/session";
 import type { ApiSession, ApiUser } from "@/lib/api/types";
 
 const listSessions = vi.fn();
+const logout = vi.fn();
+const replace = vi.fn();
 vi.mock("@/lib/api/auth", () => ({
   listSessions: () => listSessions(),
   revokeSession: vi.fn(),
+  logout: (opts?: { all?: boolean }) => logout(opts),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
 const USER: ApiUser = {
   id: "u1",
@@ -110,5 +114,23 @@ describe("ProfilePage", () => {
     await screen.findByDisplayValue("Real Person");
     expect(screen.queryByRole("button", { name: /Save changes/ })).toBeNull();
     expect(screen.getByDisplayValue("Real Person")).toHaveAttribute("readonly");
+  });
+
+  it("hides \"Log out all devices\" with only one session — nothing else to log out", async () => {
+    listSessions.mockResolvedValue([session({ id: "s1", current: true })]);
+    renderPage();
+    await screen.findByText("This device");
+    expect(screen.queryByRole("button", { name: /Log out all devices/i })).toBeNull();
+  });
+
+  it("logs out everywhere and sends the user to /login", async () => {
+    listSessions.mockResolvedValue([session({ id: "s1", current: true }), session({ id: "s2" })]);
+    logout.mockResolvedValue(undefined);
+    renderPage();
+    await screen.findByText("This device");
+
+    fireEvent.click(screen.getByRole("button", { name: /Log out all devices/i }));
+    await waitFor(() => expect(logout).toHaveBeenCalledWith({ all: true }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
 });

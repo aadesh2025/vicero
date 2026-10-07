@@ -44,6 +44,12 @@ export function clientHeaders(request?: Request): Record<string, string> {
   if (xff) out["X-Forwarded-For"] = xff;
   const ua = request?.headers.get("user-agent");
   if (ua) out["User-Agent"] = ua;
+  // Routes that call an API endpoint requiring `get_current_user` (logout, today) need the
+  // browser's own Bearer token passed through — the API only ever trusts this header, never
+  // the httpOnly cookie. Signup/login/magic/oauth calls have no Authorization header to begin
+  // with, so this is a no-op for them.
+  const auth = request?.headers.get("authorization");
+  if (auth) out["Authorization"] = auth;
   return out;
 }
 

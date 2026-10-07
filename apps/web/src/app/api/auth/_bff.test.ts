@@ -21,4 +21,11 @@ describe("clientHeaders", () => {
     expect(clientHeaders(req({}))).toEqual({});
     expect(clientHeaders(undefined)).toEqual({});
   });
+
+  it("forwards the caller's own Bearer token for routes the API authenticates", () => {
+    // /v1/auth/logout requires `get_current_user` (Bearer-only, never the httpOnly cookie).
+    // Without this, every BFF-routed logout 401'd at the API and the catch swallowed it —
+    // the browser's cookies got cleared but the server-side session lived on.
+    expect(clientHeaders(req({ authorization: "Bearer abc123" }))).toEqual({ Authorization: "Bearer abc123" });
+  });
 });

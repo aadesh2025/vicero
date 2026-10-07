@@ -46,9 +46,9 @@ export async function revokeSession(id: string) {
   return api<void>(`/v1/auth/sessions/${id}`, { method: "DELETE" });
 }
 
-export async function logout() {
+export async function logout(opts?: { all?: boolean }) {
   try {
-    await bff("/api/auth/logout");
+    await bff("/api/auth/logout", opts?.all ? { all: true } : undefined);
   } finally {
     clearAuth();
   }

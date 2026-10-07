@@ -85,12 +85,21 @@ def _user_out(user: User) -> schemas.UserOut:
 
 
 async def _issue_tokens(
-    session: AsyncSession, user: User, user_agent: str | None, ip: str | None
+    session: AsyncSession,
+    user: User,
+    user_agent: str | None,
+    ip: str | None,
+    *,
+    family_id: uuid.UUID | None = None,
 ) -> schemas.TokenPair:
     refresh = generate_opaque_token()
     row = Session(
         user_id=user.id,
         refresh_token_hash=hash_token(refresh),
+        # A fresh login/signup starts a new family (its own id, once flushed below); a
+        # rotation (refresh()) passes the parent's family_id so reuse detection can burn
+        # the whole lineage, not just the one row that got replayed.
+        session_family_id=family_id or uuid.uuid4(),
         user_agent=user_agent,
         ip=ip,
         expires_at=_now() + REFRESH_TTL,
@@ -258,20 +267,35 @@ async def login(
 async def refresh(
     session: AsyncSession, refresh_token: str, user_agent: str | None, ip: str | None
 ) -> schemas.TokenPair:
-    stmt = select(Session).where(
-        Session.refresh_token_hash == hash_token(refresh_token),
-        Session.revoked_at.is_(None),
-        Session.expires_at > _now(),
-    )
+    # FOR UPDATE: a second request racing on the same (stale) token blocks here until the
+    # first one commits its rotation, instead of both reading "not yet revoked" and both
+    # succeeding — the lost-update race that let one rotation fork into two live sessions
+    # (see the live incident write-up in docs/PROGRESS.md 2026-10-07).
+    stmt = select(Session).where(Session.refresh_token_hash == hash_token(refresh_token)).with_for_update()
     current = (await session.execute(stmt)).scalar_one_or_none()
     if current is None:
+        raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
+
+    if current.revoked_at is not None:
+        # This exact token was already rotated away. Either an attacker replayed a stolen
+        # token, or we just lost a race against our own earlier rotation — either way, the
+        # safe move is to treat the whole lineage as compromised, not just this one row.
+        await _revoke_family(session, current.session_family_id)
+        raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
+    if current.expires_at <= _now():
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
 
     current.revoked_at = _now()  # rotate: the old refresh token is now dead
     user = await session.get(User, current.user_id)
     if user is None or not user.is_active:
         raise AppError("auth.invalid_token", "Invalid or expired refresh token.", 401)
-    return await _issue_tokens(session, user, user_agent, ip)
+    return await _issue_tokens(session, user, user_agent, ip, family_id=current.session_family_id)
+
+
+async def _revoke_family(session: AsyncSession, family_id: uuid.UUID) -> None:
+    stmt = select(Session).where(Session.session_family_id == family_id, Session.revoked_at.is_(None))
+    for sibling in (await session.execute(stmt)).scalars().all():
+        sibling.revoked_at = _now()
 
 
 async def logout(session: AsyncSession, user: User, refresh_token: str | None) -> None:

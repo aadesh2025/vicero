@@ -2138,6 +2138,23 @@ Check the Model tab against this list before publishing.
 Full visual flow builder (ship minimal first), voice/telephony, native mobile apps, bot
 marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/Helm.
 
+## Refresh-token race / "logged out on revisit" (2026-10-07)
+- **Root cause, found live on production:** concurrent `POST /v1/auth/refresh` calls sharing
+  the same not-yet-rotated cookie both rotated and both succeeded (no locking), forking one
+  session into two; a slower third caller then replayed the stale token, got a 401, and the
+  BFF's unconditional cookie-clear-on-401 could wipe out a sibling's just-written valid cookie.
+  Not a config/deploy issue — the Sep-29 persistence fix (`72ae3dc`) was confirmed live and
+  correct; `SECRET_KEY`, `CORS_ORIGINS`, `WEB_BASE_URL`, `OAUTH_REDIRECT_BASE` all checked out.
+- **Fix:** BFF-side single-flight dedup on the refresh route (the real fix for this
+  deployment's single `web` container) + API-side `SELECT ... FOR UPDATE` and reuse-detection
+  that revokes the whole `session_family_id` lineage (migration `0031_session_family`). ADR-109.
+- **Also fixed while in this code:** `/api/auth/logout` never forwarded the caller's Bearer
+  token, so `/v1/auth/logout` 401'd silently and never actually revoked the server-side
+  session — logout only ever cleared cookies. Added "Log out all devices" to Settings →
+  Profile (the API's revoke-all was already there; the web app couldn't reach it).
+- Tests: `test_refresh_reuse_revokes_whole_family`, `test_logout_all_devices_revokes_every_session`
+  (backend); BFF dedup + Authorization-forwarding + logout-all-devices UI (frontend, 11 new cases).
+
 ## Billing B - multi-currency pricing (2026-10-06)
 - **B1 (backend):** USD/EUR/INR price lists in minor units, `app/core/geo.py` display-only country
   detection, `GET /v1/billing/plans?currency=`, ledger migration 0030 (`currency`, `amount_minor`),

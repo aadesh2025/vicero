@@ -18,6 +18,43 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-109: Refresh-token single-flight at the BFF + reuse-detection-with-family-revoke at the API
+- **Date:** 2026-10-07
+- **Status:** accepted
+- **Context:** Live incident (production, 2026-10-07): two near-simultaneous `POST
+  /v1/auth/refresh` calls on the same not-yet-rotated refresh-cookie value (two tabs / a reload
+  racing an in-flight retry) both read `revoked_at IS NULL` before either committed, both
+  rotated, and both succeeded — forking one session into two live siblings. A third, slower
+  caller then replayed the now-stale pre-rotation token and got a deterministic 401; the web
+  BFF's refresh route unconditionally clears the httpOnly cookie on any 401, so if that response
+  landed after a sibling's success had already written a good cookie, the clear wiped out a
+  perfectly valid session — the user was logged out with a live session still sitting in the DB.
+  `sessions` had 5 active rows for 2 users, 3 created in the triggering hour. See the chat log
+  this session was built from for the full log/timing evidence.
+- **Decision:** Two layers, not one:
+  1. **BFF (`apps/web/.../api/auth/refresh/route.ts`):** an in-process, per-token in-flight
+     `Map` so concurrent callers sharing the same cookie value await one rotation and get the
+     same result, instead of each hitting the API. This is the layer that actually prevents the
+     race for this deployment (one `web` container).
+  2. **API (`service.refresh`):** `SELECT ... FOR UPDATE` on the session row (serializes any
+     race the BFF layer doesn't catch) + reuse detection — replaying a token whose row is
+     already `revoked_at IS NOT NULL` revokes every session sharing its new `session_family_id`
+     column (migration `0031_session_family`), not just the one row. This is real defense
+     against a stolen/replayed token, independent of the race.
+  3. Fixed a second, unrelated bug found while reading this path: the BFF's `/api/auth/logout`
+     never forwarded the browser's `Authorization` header, so `/v1/auth/logout` (Bearer-only)
+     always 401'd there and the failure was silently swallowed — logout cleared cookies
+     client-side but never actually revoked the server-side session. Also added "log out all
+     devices" (UI for the API's existing revoke-all, previously unreachable from the web app).
+- **Alternatives considered:** Family-revoke alone, with no BFF dedup — rejected: two
+  legitimate tabs racing on an ordinary page load would then nuke their own just-created
+  session as a false-positive "reuse", which is a worse version of the bug being fixed. Locking
+  alone, no family-revoke — rejected: doesn't address actual token theft, just this race.
+- **Consequences:** The BFF's dedup lock is per-Node-process; if `web` is ever scaled to more
+  than one replica it stops coalescing across replicas and the API's FOR-UPDATE + family-revoke
+  becomes the only defense (correct, but reintroduces the false-positive risk for genuine
+  cross-tab races at that point — would need a shared lock, e.g. Redis, if that happens).
+
 ### ADR-108: Off-server backups — rclone crypt to a private Google Drive folder, daily, 14 days
 - **Date:** 2026-10-07
 - **Status:** accepted

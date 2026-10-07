@@ -15,7 +15,8 @@
   workflow's webhook URL. Sign the request (HMAC header `X-Vicero-Signature`).
 - **Sync mode**: n8n's "Respond to Webhook" node returns JSON → fed back to the model.
 - **Async mode**: n8n does long work, then calls back Vicero's callback endpoint with the
-  `run_id`; runtime resolves the pending tool call.
+  `run_id` and the `callback_token` it was given (a per-call HMAC bound to that run and org, ADR-110);
+  runtime resolves the pending tool call once, within 10 minutes.
 - Discovery: `GET /v1/tools/n8n/workflows` proxies n8n's API to list workflows so the user
   can pick one in the UI, then `POST /v1/tools/n8n/bind`.
 - **Multi-tenant scoping:** one n8n instance is shared across every org, so discovery filters by

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import time
 import uuid
@@ -19,7 +20,7 @@ from app.core.crypto import encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.core.ssrf import is_blocked_host
-from app.integrations.n8n_client import N8nClient, get_client
+from app.integrations.n8n_client import N8nClient, get_client, valid_callback_token
 from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
 from app.models import Agent, AgentVersion, MCPServer, Organization, Tool, ToolRun
@@ -140,7 +141,23 @@ async def update_tool(
     if data.enabled is not None:
         tool.enabled = data.enabled
     if data.config is not None:
-        tool.config = data.config
+        if tool.type == "n8n":
+            # An n8n tool's target is fixed at bind time, after the visibility, signature and ownership
+            # checks. Letting an org rewrite `webhook_url`/`workflow_id` here would bypass all of them.
+            # Only the call mode may change; to point at another workflow, bind a new tool.
+            if any(v != tool.config.get(k) for k, v in data.config.items() if k != "mode"):
+                raise AppError(
+                    "tools.n8n_config_locked",
+                    "An n8n tool's workflow cannot be changed. Bind the other workflow as a new tool.",
+                    400,
+                )
+            if "mode" in data.config:
+                mode = str(data.config["mode"]).lower()
+                if mode not in ("sync", "async"):
+                    raise AppError("tools.n8n_bad_mode", "mode must be 'sync' or 'async'.", 400)
+                tool.config = {**tool.config, "mode": mode}
+        else:
+            tool.config = data.config
     if data.input_schema is not None and tool.type != "builtin":
         tool.input_schema = data.input_schema
     return _tool_out(tool)
@@ -262,6 +279,21 @@ async def execute_tool_call(
     tool = tools_by_name.get(call.name)
     if tool is None:
         return ToolResult(output={}, status="error", error=f"tool '{call.name}' is not available")
+    # Defence in depth: the tool list was already built per org + agent, so this should never fire. If a
+    # future code path ever hands the runtime another tenant's tool, refuse and leave a security trail.
+    if tool.organization_id != ctx.org_id or (tool.agent_id is not None and tool.agent_id != ctx.agent_id):
+        log.warning(
+            "tool_ownership_violation",
+            tool_id=str(tool.id),
+            tool_org=str(tool.organization_id),
+            ctx_org=str(ctx.org_id),
+            tool_agent=str(tool.agent_id),
+            ctx_agent=str(ctx.agent_id),
+        )
+        return ToolResult(output={}, status="error", error=f"tool '{call.name}' is not available")
+    if tool.type == "n8n" and await _webhook_bound_to_other_org(session, tool.organization_id, tool.config):
+        log.warning("n8n_webhook_cross_org", tool_id=str(tool.id), org=str(tool.organization_id))
+        return ToolResult(output={}, status="error", error="This automation is not available.")
 
     run = ToolRun(
         organization_id=tool.organization_id,
@@ -476,6 +508,10 @@ async def bind_n8n_workflow(
     if settings.n8n_require_signature_check:
         await _require_signed_workflow(client, fetched, webhook_url)
 
+    if await _webhook_bound_to_other_org(session, ctx.org.id, {"webhook_url": webhook_url}):
+        # Same message as a hidden workflow: do not reveal that another org uses it.
+        raise AppError("tools.n8n_forbidden", "This workflow is not available to your organization.", 403)
+
     input_schema = data.input_schema or n8n_args_schema()
     tool = Tool(
         organization_id=ctx.org.id,
@@ -498,16 +534,59 @@ async def bind_n8n_workflow(
     return _tool_out(tool)
 
 
-async def resolve_n8n_callback(
-    session: AsyncSession, run_id: uuid.UUID, output: dict[str, Any], status: str, error: str | None
-) -> bool:
-    """Resolve a pending async n8n tool run from a verified callback. Returns True if updated."""
-    run = await session.get(ToolRun, run_id)
-    if run is None:
+# An async workflow gets this long to call back; later callbacks are refused (replay / stale).
+N8N_CALLBACK_MAX_AGE = dt.timedelta(minutes=10)
+N8N_CALLBACK_MAX_OUTPUT_BYTES = 64 * 1024
+
+
+def _webhook_path(config: dict[str, Any]) -> str | None:
+    path = urlparse(str(config.get("webhook_url", ""))).path.rstrip("/")
+    return path if path.startswith("/webhook/") else None
+
+
+async def _webhook_bound_to_other_org(session: AsyncSession, org_id: uuid.UUID, config: dict[str, Any]) -> bool:
+    """True if another organization already has a tool on the same n8n webhook path.
+
+    One n8n serves every org, so a webhook path is single-tenant. Matched on the path (not the host):
+    the host is rewritten to Vicero's own n8n when the call is made (`canonical_webhook_url`).
+    """
+    path = _webhook_path(config)
+    if path is None:
         return False
-    run.output = output
-    run.status = status
-    run.error = error
+    stmt = select(Tool.config).where(Tool.type == "n8n", Tool.organization_id != org_id)
+    return any(_webhook_path(other or {}) == path for other in (await session.execute(stmt)).scalars().all())
+
+
+def _reject_callback(reason: str, run_id: uuid.UUID) -> AppError:
+    log.warning("n8n_callback_rejected", reason=reason, run_id=str(run_id))
+    # One generic answer for every reason: the caller learns nothing about which runs exist.
+    return AppError("n8n.callback_rejected", "Callback rejected.", 404)
+
+
+async def resolve_n8n_callback(session: AsyncSession, data: schemas.N8nCallbackRequest) -> bool:
+    """Resolve a pending async n8n tool run from a callback whose transport signature is already verified.
+
+    Accepted only if ALL hold: the run exists and is an n8n run; the per-call token matches THIS run and
+    its org; the run is still ``pending`` (a run resolves once); it is younger than 10 minutes; the output
+    is small. Anything else is refused with one generic 404 and a security log line (reason, run id).
+    """
+    run = await session.get(ToolRun, data.run_id)
+    if run is None:
+        raise _reject_callback("unknown_run", data.run_id)
+    tool = await session.get(Tool, run.tool_id)
+    if tool is None or tool.type != "n8n" or tool.organization_id != run.organization_id:
+        raise _reject_callback("not_an_n8n_run", data.run_id)
+    if not valid_callback_token(data.callback_token, run.id, run.organization_id):
+        raise _reject_callback("bad_token", data.run_id)
+    if run.status != "pending":
+        raise _reject_callback("not_pending", data.run_id)
+    if dt.datetime.now(tz=dt.UTC) - run.created_at > N8N_CALLBACK_MAX_AGE:
+        raise _reject_callback("expired", data.run_id)
+    if len(json.dumps(data.output, default=str)) > N8N_CALLBACK_MAX_OUTPUT_BYTES:
+        raise _reject_callback("output_too_large", data.run_id)
+    run.output = data.output
+    run.status = data.status
+    run.error = data.error
     return True
 
 

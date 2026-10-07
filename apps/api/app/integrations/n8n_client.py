@@ -55,6 +55,22 @@ def verify_callback(signature: str | None, timestamp: str | None, body: bytes, *
     return hmac.compare_digest(expected, signature)
 
 
+def callback_token(run_id: object, org_id: object) -> str:
+    """Per-call token bound to ONE tool run and its org: hex HMAC-SHA256 of ``cb.<run_id>.<org_id>``.
+
+    Vicero hands it only to the workflow it just called, and the workflow must echo it back in its
+    callback. The transport signature (``verify_callback``) uses one secret shared by every workflow on
+    n8n, so on its own it cannot stop workflow A from resolving a run that belongs to workflow B (or
+    another org). This token can: it is useless for any other run.
+    """
+    mac = hmac.new(_signing_secret().encode(), f"cb.{run_id}.{org_id}".encode(), hashlib.sha256)
+    return mac.hexdigest()
+
+
+def valid_callback_token(token: str | None, run_id: object, org_id: object) -> bool:
+    return bool(token) and hmac.compare_digest(callback_token(run_id, org_id), str(token))
+
+
 class N8nClient:
     def __init__(
         self,
@@ -156,8 +172,20 @@ class N8nClient:
                 tags.add(str(name).strip().lower())
         return tags
 
+    def canonical_webhook_url(self, url: str) -> str:
+        """The URL Vicero will really call: THIS n8n's base URL plus the stored ``/webhook/<path>`` tail.
+
+        The stored URL is org-editable input. Only its path is trusted, so a tool can never make Vicero
+        send its signed request to another host (SSRF) or to a non-webhook endpoint of n8n.
+        """
+        tail = _webhook_tail(url)
+        if tail is None:
+            raise AppError("n8n.bad_webhook", "Webhook URL must be an n8n production /webhook/<path> URL.", 400)
+        return f"{self.base_url}{tail}"
+
     async def trigger_webhook(self, url: str, payload: dict[str, Any]) -> tuple[int, Any]:
         """POST a signed payload to an n8n webhook URL. Returns (status_code, parsed body)."""
+        url = self.canonical_webhook_url(url)
         body = json.dumps(payload).encode()
         ts, signature = sign(body)
         headers = {

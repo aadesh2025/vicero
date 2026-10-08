@@ -31,6 +31,11 @@ Format each entry as below. Newest at the top.
 - **Alternatives considered:** exposing n8n to clients (rejected: leaks the product, no tenant isolation, license risk); per-client
   n8n instances (rejected: memory on a 3.7 GB host); sending per-org secrets to n8n on every call (rejected: stored in n8n
   execution data); rate-limiting the editor login in Caddy (needs a plugin and a custom image, so a second password is used).
+- **Secrets and execution data (decided 2026-10-08):** secrets are NOT passed to n8n per call. n8n stores webhook input in its
+  execution data, so a per-call secret would be written there. Each client's third-party access lives in a per-org named n8n
+  credential (`ORG-<id> | <service>`, encrypted with `N8N_ENCRYPTION_KEY`); `config_encrypted` holds only non-secret parameters;
+  n8n execution pruning stays short (7 days). The editor login has no rate limit (stock Caddy cannot), so a second password
+  gates it; both are in RISK-REGISTER (R16, R17).
 - **Consequences:** staff build and register workflows by hand. The most-requested capabilities may later become native Vicero
   features, which also removes the license question. Clients must never be given n8n branding or links.
 

@@ -246,6 +246,14 @@ production proxy forwards exactly one of those headers, and (2) the API is reach
 through that proxy — otherwise any client can send the header itself. `?currency=USD|EUR|INR`
 always wins over the header. `XX` / `T1` (Cloudflare unknown / Tor) are treated as unknown → USD.
 
+`GEOIP_DB_PATH` (default empty = off) enables an **offline IP → country fallback** for when no proxy
+header supplies a country (e.g. plain Caddy on the VPS, no Cloudflare). Get the free DB-IP "country
+lite" file with `python scripts/fetch_geoip_db.py [path]` (no account or key; refresh monthly; CC BY 4.0,
+so the pricing page carries the "IP Geolocation by DB-IP" credit). The visitor address comes from
+`X-Forwarded-For` only via `TRUSTED_PROXIES` (docs/SECURITY.md §11); loopback/private addresses are
+unknown → USD. A missing or unreadable file is logged and ignored. Precedence: `?currency=` → trusted
+header → this lookup → USD. Still **display only**.
+
 ## Observability
 `SENTRY_DSN` (optional), `LOG_LEVEL` (default info).
 

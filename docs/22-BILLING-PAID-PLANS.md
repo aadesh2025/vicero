@@ -948,6 +948,8 @@ Same for demo workspaces you show to prospects.
   staff's explicit choice in the admin panel, and the amount is always computed from the plan table.
 - The ledger stores `currency` + `amount_minor` (migration 0030). Money is **never summed across
   currencies**; totals are per currency.
+- Without a CDN, `GEOIP_DB_PATH` adds an offline DB-IP lookup of the visitor's address (ADR-112) ranked
+  below the headers. Same display-only rule.
 - Production: the proxy must forward one of the headers, and the API must be reachable only through it
   when `TRUST_GEO_HEADERS=true` (docs/ENV.md).
 

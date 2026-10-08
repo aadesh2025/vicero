@@ -316,6 +316,10 @@ class Settings(BaseSettings):
     # read only when TRUST_GEO_HEADERS is true, which is safe only when the API is reachable solely
     # through a proxy that sets/overwrites one of them (docs/ENV.md).
     trust_geo_headers: bool = False
+    # Offline IP -> country database (MaxMind .mmdb format; DB-IP "country lite" works and needs no key).
+    # Empty = off. Used only when no trusted header gave a country, and only for DISPLAY (ADR-112).
+    # Fetch with `python scripts/fetch_geoip_db.py`.
+    geoip_db_path: str = ""
     geo_country_headers: str = "CF-IPCountry,X-Vercel-IP-Country,CloudFront-Viewer-Country,X-Country-Code"
     # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
     signups_per_ip_per_day: int = 3

@@ -499,3 +499,11 @@ async def test_n8n_client_lists_executions_without_data() -> None:
     out = await client.list_executions("wf1", 5)
     assert out == [{"id": "1", "status": "success"}]
     assert seen[0].url.params["workflowId"] == "wf1" and seen[0].url.params["includeData"] == "false"
+
+
+def test_n8n_connection_errors_read_as_unreachable() -> None:
+    """The text n8n's HTTP node gives for a host that is down (seen on the live sample workflow)."""
+    from app.modules.automations import sanitize
+
+    raw = "The connection cannot be established, this usually occurs due to an incorrect host(domain) value"
+    assert sanitize.friendly_error(raw) == "A connected service could not be reached."

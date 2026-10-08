@@ -151,6 +151,19 @@ Format each entry as below. Newest at the top.
   is normal. Open: SMTP, OAuth state in Redis, rotate the Groq key and the Google client secret that were
   pasted into a chat.
 
+### ADR-112: Offline IP-to-country fallback for the display currency (DB-IP Lite, no key)
+- **Date:** 2026-10-08
+- **Status:** accepted
+- **Context:** ADR-106 detected the currency only from a CDN header. With plain Caddy on the Hetzner VPS
+  (no Cloudflare) no header exists, so every visitor, including Indian ones, saw USD.
+- **Decision:** `GEOIP_DB_PATH` points at a MaxMind-format `.mmdb`; `resolve_currency` falls back to it
+  after `?currency=` and the trusted headers. The address comes from `resolve_client` (X-Forwarded-For
+  only from `TRUSTED_PROXIES`). DB-IP "IP to Country Lite" chosen over MaxMind GeoLite2: no account or
+  license key (so no `[HUMAN]` secret), same file format (`maxminddb` reads both), CC BY 4.0 with an
+  attribution line on /pricing. `scripts/fetch_geoip_db.py` downloads it; prod mounts a `geoip` volume.
+- **Consequences:** Still display-only and spoofable (VPN/proxy). Lookup is local, no per-request network
+  call. A missing file disables it (warning, never an error). The file needs a monthly refresh.
+
 ### ADR-106: Multi-currency price lists (USD / EUR / INR) with display-only geo detection (migration 0030)
 - **Date:** 2026-10-06
 - **Status:** accepted

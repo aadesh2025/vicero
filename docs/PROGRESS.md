@@ -2168,3 +2168,10 @@ marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/
   detection, `GET /v1/billing/plans?currency=`, ledger migration 0030 (`currency`, `amount_minor`),
   admin grant/packs/mark-paid take a currency, per-currency totals endpoint. ADR-106.
 - **B2 (frontend):** `formatMoney` (single minor-unit formatter), currency switcher on /pricing and /billing/upgrade (remembered in guarded localStorage), admin Change-plan / Add-packs / Mark-paid currency selects with previews from the API price table, per-currency Billing totals.
+
+## Ops clean-up (2026-10-08)
+- Transactional email now sends through Gmail SMTP.
+- The Groq key is kept as is, by the owner's decision.
+- `fix/deploy-pull-always` is merged: `deploy.sh` runs `docker compose pull --policy always` (4 retries), so a moving `:master` tag can no longer leave stale images. First run on the server pulled new api digest `a8d8b6cf...`; migrations at head (`0031_automations`); `/readyz` ok.
+- Admin confirmed: the owner account exists in production with `is_staff = true` (no change needed).
+- Open: the local geoip-fallback commit `3b6f941` is not yet pushed or merged.

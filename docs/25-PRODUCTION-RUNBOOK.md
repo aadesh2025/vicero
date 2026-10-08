@@ -194,3 +194,30 @@ rows daily. A failed run's text is replaced by a short plain-language message be
   in front of the editor instead.
 * n8n's Sustainable Use License limits how n8n may be offered to third parties. Clients never use n8n themselves and see no
   n8n branding; review the license before selling "n8n" as a feature (ADR-111).
+
+**Secrets limit (ADR-111, RISK-REGISTER R17).** Vicero does not send a client's secrets to n8n on each call: n8n stores webhook
+input in its execution data (about 7 days). A client's third-party access lives in a **per-org named credential inside n8n**,
+named `ORG-<org_id> | <service>` (encrypted with `N8N_ENCRYPTION_KEY`); never put a key in a workflow's input, output or name.
+Keep `EXECUTIONS_DATA_MAX_AGE` short (168 h). Vicero's own log keeps only a redacted, truncated summary for 30 days.
+
+## 12. How to build a client automation (checklist)
+
+Real automations are built only from a client's request in the queue (Admin → Client automations).
+
+1. **Request received.** Read it in the queue (org, agent, what they asked). Set it to *building*, or *rejected* with a plain
+   note the client will read. Ask the client for anything missing; never ask for a password in chat.
+2. **Plan check.** The request was already refused with an upgrade message if the plan has no free slot (Pro 5, Business 20;
+   Trial/Starter 0). Check the org's plan and monthly run cap (2,000 / 10,000) before promising anything.
+3. **Build** in the n8n editor.
+   * Name `ORG-<org_id> | <client name> | <purpose>` and tag it with the org slug. No emails, phones or other personal data in names or tags.
+   * No Code nodes. Reuse a shared workflow when the capability fits several clients; a per-org workflow only when needed.
+   * Credentials: one per org, named `ORG-<org_id> | <service>`. Never paste a secret into a node.
+   * Webhook trigger (if an agent will call it): verify Vicero's signature first (see `infra/n8n/`); async workflows echo `callback_token`.
+   * End with the signed **report run to Vicero** step (`POST /internal/automations/runs`, `AUTOMATION_REPORT_SECRET`); the global
+     Error Workflow reports failures the same way.
+4. **Test** with sample data in the editor: one success and one forced failure. Check the failure reads as a plain sentence on the
+   client's Automations page (never the raw n8n text).
+5. **Register** (Admin → Client automations → *Register workflow*, or `POST /v1/admin/automation-registry`): org, agent (optional),
+   the n8n workflow id, the `/webhook/<path>` if an agent calls it. One workflow belongs to exactly one org.
+6. **Activate** the workflow in n8n, confirm the first real run appears in the client's history and the request shows *active*.
+   To stop it: *Pause* in the registry (agents stop calling it at once); the run history stays.

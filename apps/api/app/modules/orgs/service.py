@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+import secrets
 import uuid
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
@@ -55,7 +57,32 @@ async def _unique_slug(session: AsyncSession, name: str) -> str:
         if exists is None:
             return candidate
         n += 1
-        candidate = f"{base}-{n}"
+        # A handful of readable tries (acme, acme-2, ...), then a random suffix, so a popular name never costs
+        # one query per existing duplicate.
+        candidate = f"{base}-{n}" if n <= 5 else f"{base}-{secrets.token_hex(3)}"
+
+
+async def _insert_org(session: AsyncSession, name: str, **fields: Any) -> Organization:
+    """Create an organization with a unique slug, safely under concurrency.
+
+    `_unique_slug` is check-then-insert, so two simultaneous signups with the same name both saw the slug free and
+    one died on the unique index with a 500. The index is the real guard: insert inside a savepoint and, on a slug
+    collision, retry with a random suffix.
+    """
+    slug = await _unique_slug(session, name)
+    for _ in range(8):
+        org = Organization(name=name, slug=slug, **fields)
+        try:
+            async with session.begin_nested():
+                session.add(org)
+                await session.flush()
+        except IntegrityError as exc:
+            if "slug" not in str(exc.orig):
+                raise
+            slug = f"{_slug_base(name)}-{secrets.token_hex(3)}"
+            continue
+        return org
+    raise AppError("orgs.slug_unavailable", "Could not pick a workspace address. Try a different name.", 409)
 
 
 async def _write_audit(
@@ -133,9 +160,9 @@ async def provision_trial_workspace(
     now = _now()
     ends = now + dt.timedelta(days=spec.trial_days)
     display = name or _workspace_name(user)
-    org = Organization(
-        name=display,
-        slug=await _unique_slug(session, display),
+    org = await _insert_org(
+        session,
+        display,
         plan=SELF_SERVE_PLAN,
         trial_started_at=now,
         trial_ends_at=ends,
@@ -144,8 +171,6 @@ async def provision_trial_workspace(
         # from replies (same reason operator provisioning seeds it).
         public_contacts=[user.email],
     )
-    session.add(org)
-    await session.flush()
     session.add(Membership(organization_id=org.id, user_id=user.id, role="owner", status="active"))
     session.add(OrgMessageUsage(organization_id=org.id))
     await _write_audit(session, org.id, user.id, "org.created", target_type="org", target_id=str(org.id))
@@ -198,9 +223,7 @@ async def create_org(session: AsyncSession, user: User, name: str) -> schemas.Or
     exists and never comes through here.
     """
     if user.is_staff or settings.allow_self_serve_orgs:
-        org = Organization(name=name, slug=await _unique_slug(session, name), created_by=user.id)
-        session.add(org)
-        await session.flush()
+        org = await _insert_org(session, name, created_by=user.id)
         session.add(Membership(organization_id=org.id, user_id=user.id, role="owner", status="active"))
         await _write_audit(session, org.id, user.id, "org.created", target_type="org", target_id=str(org.id))
         return _org_out(org, "owner")

@@ -94,7 +94,10 @@ _FRIENDLY: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?i)\b404\b|not found|no such"), "A connected service could not find the item it was asked for."),
     (re.compile(r"(?i)\b429\b|rate.?limit|too many requests|quota"), "A connected service is busy right now."),
     (
-        re.compile(r"(?i)econnrefused|enotfound|econnreset|getaddrinfo|could not (?:connect|resolve)|network|socket"),
+        re.compile(
+            r"(?i)econnrefused|enotfound|econnreset|getaddrinfo|could not (?:connect|resolve)|network|socket"
+            r"|connection (?:cannot|could not) be established|incorrect host|refused the connection"
+        ),
         "A connected service could not be reached.",
     ),
     (

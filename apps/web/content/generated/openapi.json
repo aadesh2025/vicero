@@ -1575,6 +1575,19 @@
         "title": "BindN8nRequest",
         "type": "object"
       },
+      "Body_request_data_deletion_api_meta_data_deletion_post": {
+        "properties": {
+          "signed_request": {
+            "title": "Signed Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signed_request"
+        ],
+        "title": "Body_request_data_deletion_api_meta_data_deletion_post",
+        "type": "object"
+      },
       "Body_upload_document_v1_knowledge__kb_id__documents_upload_post": {
         "properties": {
           "file": {
@@ -3709,6 +3722,61 @@
           "overdue_count"
         ],
         "title": "CurrencyTotalsOut",
+        "type": "object"
+      },
+      "DataDeletionAck": {
+        "properties": {
+          "confirmation_code": {
+            "title": "Confirmation Code",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "confirmation_code"
+        ],
+        "title": "DataDeletionAck",
+        "type": "object"
+      },
+      "DataDeletionStatus": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "confirmation_code": {
+            "title": "Confirmation Code",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation_code",
+          "status",
+          "requested_at",
+          "completed_at"
+        ],
+        "title": "DataDeletionStatus",
         "type": "object"
       },
       "DayPoint": {
@@ -11712,6 +11780,89 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/meta/data-deletion": {
+      "post": {
+        "operationId": "request_data_deletion_api_meta_data_deletion_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_request_data_deletion_api_meta_data_deletion_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataDeletionAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Request Data Deletion",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/meta/data-deletion/{code}": {
+      "get": {
+        "operationId": "data_deletion_status_api_meta_data_deletion__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataDeletionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Data Deletion Status",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "description": "Liveness — the process is up and serving.",

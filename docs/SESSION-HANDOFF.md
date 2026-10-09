@@ -3,6 +3,13 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ OPS UPDATE — 2026-10-08 (newest; read before the blocks below)
+
+- Production runs `master` at `0e3015a`; migrations at head `0031_automations`. Email goes via Gmail SMTP. The Groq key stays as is (owner's decision).
+- `deploy.sh` now always pulls images (`fix/deploy-pull-always` merged). Digests and rollback target: runbook §4 release log.
+- Owner account is staff in production. Deploy over this network is slow (a 137 MB layer took ~30+ min); `deploy.sh` retries the pull.
+- Unmerged: local commit `3b6f941` (offline IP-to-country fallback) on branch `docs/risk-trial-email-retry`, not pushed.
+
 ## ▶ CURRENT STATE — 2026-09-24 (this block supersedes the 2026-07-19 text below, kept as history)
 
 Branch `master`, HEAD `c3b6ec9`. Tags: `phase-20-complete`, `agentic-phase-1`…`4-complete`

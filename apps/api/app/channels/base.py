@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from app.core.crypto import decrypt
+from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.models import Channel
 
@@ -85,6 +86,22 @@ class BaseChannel:
         instead of growing `if channel == "whatsapp"` branches.
         """
         return None
+
+    def ensure_active(self, channel: Channel) -> None:
+        """Refuse to touch the provider for a channel that lost its connection.
+
+        `needs_reconnect` / `disconnected` are set by token health checks, a disconnect, or Meta's
+        deauthorize callback. Sending would only fail against a dead token, so say so plainly instead.
+        """
+        state = getattr(channel, "status", "active") or "active"
+        if state == "needs_reconnect":
+            raise AppError(
+                "channel_needs_reconnect",
+                "This channel lost its connection to Meta. Reconnect it from the agent's Channels tab.",
+                409,
+            )
+        if state == "disconnected":
+            raise AppError("channel_disconnected", "This channel is disconnected. Connect it again to send.", 409)
 
     async def fetch_profile(self, channel: Channel, external_id: str) -> ContactProfile | None:
         """Look up a sender's name/avatar out-of-band.

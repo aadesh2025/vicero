@@ -11,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.api.routers import health
 from app.channels.data_deletion_router import router as data_deletion_router
+from app.channels.meta_router import connect_router as meta_connect_router
+from app.channels.meta_router import router as meta_router
 from app.channels.router import router as channels_router
 from app.chat import guard_models
 from app.core.config import settings
@@ -218,7 +220,9 @@ def create_app() -> FastAPI:
     app.include_router(workflow_test_runs_by_workflow_router)
     app.include_router(workflow_test_run_router)
     app.include_router(public_router)
+    app.include_router(meta_connect_router)
     app.include_router(channels_router)
+    app.include_router(meta_router)
     app.include_router(data_deletion_router)
     app.include_router(inbox_router)
     app.include_router(analytics_router)

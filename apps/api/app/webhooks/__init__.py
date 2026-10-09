@@ -11,4 +11,5 @@ EVENT_CATALOG = (
     "document.failed",
     "tool.run",
     "usage.threshold",
+    "channel.needs_reconnect",
 )

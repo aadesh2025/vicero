@@ -111,14 +111,7 @@ async def _load_verified(
 
 
 async def _run_and_send(session: AsyncSession, channel: Any, adapter: Any, payload: dict[str, Any]) -> None:
-    msg, reply = await service.process_inbound(session, channel, adapter, payload)
-    if msg is not None and reply:
-        try:
-            await adapter.send(channel, msg.external_user_id, reply)
-        except Exception as exc:
-            # The inbound is already persisted; a provider-delivery failure must not
-            # 500 the webhook (that makes Telegram/Meta re-deliver → duplicate turns).
-            log.warning("channel_delivery_failed", channel_type=channel.type, error=str(exc))
+    await service.run_and_send(session, channel, adapter, payload)
 
 
 @router.post("/telegram/{channel_id}/webhook", dependencies=[_webhook_rl])

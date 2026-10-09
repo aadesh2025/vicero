@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from app.channels.base import BaseChannel, ContactProfile, InboundMessage, register
+from app.channels.meta_graph import graph_base
 from app.channels.meta_signature import verify_challenge, verify_signature
 from app.core.errors import AppError
 from app.core.logging import get_logger
@@ -71,7 +72,7 @@ def configured_templates(channel: Any) -> list[str]:
 
 class WhatsAppChannel(BaseChannel):
     type = "whatsapp"
-    secret_fields = ("access_token", "app_secret")
+    secret_fields = ("access_token", "app_secret", "registration_pin")
 
     async def verify(
         self, channel: Any, headers: Mapping[str, str], body: bytes, query: Mapping[str, str]
@@ -114,10 +115,12 @@ class WhatsAppChannel(BaseChannel):
     # ── sending ──────────────────────────────────────────────────────────────
     def check_can_send(self, channel: Any, *, last_inbound_at: dt.datetime | None) -> None:
         """Refuse a free-form send Meta would drop, so the operator finds out now."""
+        self.ensure_active(channel)
         if not window_open(last_inbound_at):
             raise WhatsAppWindowClosed(last_inbound_at)
 
     async def send(self, channel: Any, to: str, text: str) -> None:
+        self.ensure_active(channel)
         token = self.secret(channel, "access_token")
         phone_number_id = channel.config.get("phone_number_id")
         if not token or not phone_number_id:
@@ -144,6 +147,7 @@ class WhatsAppChannel(BaseChannel):
         "Hi {{1}}, your order {{2}} shipped" shape without modelling Meta's full
         header/button component tree.
         """
+        self.ensure_active(channel)
         token = self.secret(channel, "access_token")
         phone_number_id = channel.config.get("phone_number_id")
         if not token or not phone_number_id:
@@ -162,7 +166,7 @@ class WhatsAppChannel(BaseChannel):
         )
 
     async def _post(self, channel: Any, token: str, phone_number_id: str, body: dict[str, Any]) -> None:
-        async with self._client(base_url="https://graph.facebook.com/v19.0") as client:
+        async with self._client(base_url=graph_base()) as client:
             resp = await client.post(
                 f"/{phone_number_id}/messages",
                 headers={"Authorization": f"Bearer {token}"},

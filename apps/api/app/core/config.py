@@ -320,10 +320,19 @@ class Settings(BaseSettings):
     # Empty = off. Used only when no trusted header gave a country, and only for DISPLAY (ADR-112).
     # Fetch with `python scripts/fetch_geoip_db.py`.
     geoip_db_path: str = ""
-    # Meta app secret, used app-wide to verify Meta's Data Deletion Request Callback `signed_request`
-    # (channels/data_deletion.py). Empty = the callback refuses every request. Channel webhooks keep
-    # using the per-channel `app_secret`.
+    # The one Meta app Vicero owns (docs/26-META-ONE-CLICK-CONNECT.md, ADR-113). The secret signs/verifies the
+    # shared webhook (`/api/meta/webhook`), the Data Deletion and Deauthorize callbacks, and the server-side
+    # token exchange. One-click connect is "enabled" only when app id + secret + verify token are all set;
+    # WhatsApp additionally needs the Embedded Signup configuration id. Per-channel `app_secret` (the manual
+    # flow's own webhooks) is unaffected.
+    meta_app_id: str = ""
     meta_app_secret: str = ""
+    meta_verify_token: str = ""
+    meta_embedded_signup_config_id: str = ""
+    # One place for the Graph API version used by the channel adapters and the connect flow.
+    meta_graph_version: str = "v23.0"
+    # False until Meta has approved the app: the UI then tells customers only listed testers can connect.
+    meta_app_live: bool = False
     geo_country_headers: str = "CF-IPCountry,X-Vercel-IP-Country,CloudFront-Viewer-Country,X-Country-Code"
     # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
     signups_per_ip_per_day: int = 3

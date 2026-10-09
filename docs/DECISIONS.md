@@ -18,6 +18,42 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-113: One shared Meta webhook, one account per org (unique `(type, external_id)`), tokens only ever server-side
+- **Date:** 2026-10-09
+- **Status:** accepted
+- **Context:** Vicero now owns one Meta app (VICERO). Customers must connect WhatsApp, Messenger and Instagram with a login
+  button instead of pasting tokens. Meta allows exactly one webhook URL per app, but each manual channel had its own URL and
+  its own pasted `app_secret`. Pasted tokens also meant customers handled long-lived credentials in a browser form.
+- **Decision:**
+  1. **One shared webhook**, `GET/POST /api/meta/webhook`. The signature is checked once, over the raw body, with the app-wide
+     `META_APP_SECRET` (fail closed; an unset secret refuses everything). Each delivery is split into one event per message and
+     routed by `(channel type, provider id)`: WhatsApp `metadata.phone_number_id`, Page `entry.id`, Instagram `entry.id`. Unknown
+     ids get `200` and are dropped (a 4xx/5xx makes Meta retry and eventually disable the subscription). Parsing, the bot turn and
+     the reply stay in the existing adapters (`service.run_and_send`); the shared route only routes. Work goes to a Celery task
+     with no retry (a replay would answer twice); if the broker is down it runs inline. Retries from Meta are dropped by message id.
+  2. **`channels.external_id` + a partial unique index on `(type, external_id)`.** One phone number / Page / Instagram account can
+     belong to one channel, so routing is unambiguous and nobody can take over another org's account. A conflict is a `409`
+     raised *before* any Graph write. Disconnecting frees the id. The per-channel webhooks and the manual token flow are unchanged;
+     manual channels also claim their id (the same uniqueness applies to them) and are backfilled by migration `0033`
+     (oldest row wins where two orgs had typed the same id).
+  3. **Tokens never reach the browser.** The browser holds only a one-time authorization code (WhatsApp) or a short-lived user token
+     (Facebook login). The server exchanges them, re-verifies what the browser claimed with Graph (phone number belongs to the WABA;
+     Pages come from `/me/accounts`, not from the request), and stores tokens encrypted (Fernet) in `channels.config`. Page tokens
+     wait in a 10-minute, single-use, org+user-bound server-side session between "list Pages" and "connect".
+  4. **State machine** `active | needs_reconnect | disconnected` on the channel. Sends and operator replies refuse anything but
+     `active` with a typed `409`. A daily Celery task asks Meta (`debug_token`) whether each token is still valid and flips a channel
+     once per transition, emitting a `channel.needs_reconnect` webhook event. Meta's Deauthorize callback does the same
+     immediately. A Meta outage never flips a channel.
+  5. **The Graph version is a setting** (`META_GRAPH_VERSION`), used by the adapters and the connect flow. (Facebook *sign-in* for
+     Vicero accounts, `modules/auth/oauth.py`, is a separate feature and keeps its own pinned version.)
+- **Consequences:** Customers connect in about a minute and never see a token. Operating cost: Meta app review (Advanced Access for
+  the permissions in docs/26) is required before non-tester customers can connect. One shared URL means one shared rate-limit
+  bucket (1200/min per source IP). A page is unsubscribed from the app only when no other one-click channel of that Page remains,
+  because the subscription is per Page, not per channel. Manual channels created before this change keep working via their own URLs.
+- **Alternatives rejected:** per-channel webhooks under one app (Meta allows one URL); storing the browser-supplied ids without
+  checking them (lets a customer attach a number they do not own); returning page tokens to the browser for a client-side picker
+  (tokens in JS); a new table for connections (a second source of truth beside `channels`).
+
 ### ADR-111: n8n is hosted privately behind Vicero; clients see only the Automations page
 - **Date:** 2026-10-08
 - **Status:** accepted

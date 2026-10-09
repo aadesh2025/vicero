@@ -13,6 +13,14 @@ export interface ApiChannel {
   config: Record<string, unknown>;
   webhook_url: string | null;
   created_at: string;
+  /** "manual" (pasted tokens) or "meta_oauth" (one-click connect). Absent on older API builds. */
+  connection_source?: "manual" | "meta_oauth";
+  /** Anything but "active" never sends (docs/26). */
+  status?: "active" | "needs_reconnect" | "disconnected";
+  external_id?: string | null;
+  external_parent_id?: string | null;
+  token_expires_at?: string | null;
+  last_health_check_at?: string | null;
 }
 
 export function listChannels(agentId?: string) {

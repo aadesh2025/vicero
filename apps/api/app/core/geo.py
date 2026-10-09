@@ -6,16 +6,24 @@ forged header can put anyone in any country, and that is acceptable precisely be
 outcome is seeing another region's price list. Every money write takes its currency from an
 explicit staff choice (admin API), never from here.
 
-Pure functions, no DB, no I/O — `resolve_currency` only reads the request it is handed.
+No DB. The only I/O is a local IP-to-country file lookup (`GEOIP_DB_PATH`), used when no trusted
+proxy header supplied a country.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
+from functools import lru_cache
 from typing import Any, Literal
 
+import maxminddb
+
+from app.core.clientip import resolve_client
 from app.core.config import settings
 from app.core.plans import DEFAULT_CURRENCY, SUPPORTED_CURRENCIES
+
+log = logging.getLogger(__name__)
 
 CurrencySource = Literal["query", "geo", "default"]
 
@@ -62,6 +70,38 @@ def country_from_headers(headers: Mapping[str, str]) -> str | None:
     return None
 
 
+@lru_cache(maxsize=2)
+def _reader(path: str) -> maxminddb.Reader | None:
+    """Open the .mmdb once per path. A missing/corrupt file is logged and treated as 'no database'
+    - a pricing page must never 500 because a geo file is absent."""
+    try:
+        return maxminddb.open_database(path)
+    except (OSError, ValueError, maxminddb.InvalidDatabaseError):
+        log.warning("geoip database %r could not be opened; IP geolocation is off", path)
+        return None
+
+
+def country_from_ip(ip: str | None) -> str | None:
+    """ISO country for `ip` from the offline database, or `None` (no database, private/unknown
+    address, not in the database, or a lookup error). Never raises."""
+    if not ip or not settings.geoip_db_path:
+        return None
+    reader = _reader(settings.geoip_db_path)
+    if reader is None:
+        return None
+    try:
+        record = reader.get(ip)
+    except (ValueError, maxminddb.InvalidDatabaseError):
+        return None
+    if not isinstance(record, dict):
+        return None
+    country = record.get("country")
+    code = country.get("iso_code") if isinstance(country, dict) else None
+    if isinstance(code, str) and len(code) == 2 and code.upper() not in _UNKNOWN_COUNTRIES:
+        return code.upper()
+    return None
+
+
 def normalise_currency(value: str | None) -> str | None:
     """`'inr'` → `'INR'`; anything not in `SUPPORTED_CURRENCIES` → `None`."""
     if not isinstance(value, str):
@@ -78,6 +118,12 @@ def resolve_currency(request: Any, override: str | None = None) -> tuple[str, Cu
     if chosen is not None:
         return chosen, "query"
     country = country_from_headers(getattr(request, "headers", {}) or {})
+    if country is None and settings.geoip_db_path:
+        # Fallback when no proxy supplies a country: look the visitor's address up offline.
+        # `resolve_client` only believes X-Forwarded-For from a trusted proxy (TRUSTED_PROXIES).
+        client = resolve_client(request)
+        if client.known:
+            country = country_from_ip(client.ip)
     if country is not None:
         return currency_for_country(country), "geo"
     return DEFAULT_CURRENCY, "default"

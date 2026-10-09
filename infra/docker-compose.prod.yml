@@ -67,6 +67,9 @@ x-api-env: &api-env
   # (`./var/uploads`) resolves to the same directory via WORKDIR, but naming it here means the
   # setting and the mount are visibly one decision instead of two that happen to agree.
   UPLOAD_DIR: /app/var/uploads
+  # Offline IP->country file for the pricing page's display currency (ADR-112). Absent file = lookup off.
+  # Fill it: docker compose exec api python scripts/fetch_geoip_db.py /app/var/geoip/country.mmdb
+  GEOIP_DB_PATH: /app/var/geoip/country.mmdb
   ENV: prod
 
 services:
@@ -155,6 +158,7 @@ services:
       # Single-VPS fix. It does NOT survive scaling to a second node — the proper answer is
       # object storage (docs/15 §4 Option 2), which the persisted DoclingDocument needs anyway.
       - uploads:/app/var/uploads
+      - geoip:/app/var/geoip
     deploy:
       resources:
         limits:
@@ -451,5 +455,7 @@ volumes:
   # restoring the database alone leaving every `documents` row pointing at a file that is gone
   # (docs/15 §8.3, RISK-REGISTER R1 — closed).
   uploads:
+  # DB-IP country database (ADR-112); refreshed monthly by scripts/fetch_geoip_db.py.
+  geoip:
   ollamadata:
   n8ndata:

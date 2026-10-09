@@ -34,6 +34,10 @@ export default function PricingPage() {
           your own connected account — Vicero charges only for the platform.
         </p>
         <p>
+          Prices are shown in the currency detected for your location; use the switcher to change it.{" "}
+          <a href="https://db-ip.com" className="underline">IP Geolocation by DB-IP</a>.
+        </p>
+        <p>
           Using your own model API key (BYOK) is available on every plan and does not change your message limit.
         </p>
       </div>

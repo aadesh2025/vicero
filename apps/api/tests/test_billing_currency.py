@@ -388,3 +388,70 @@ async def test_ledger_columns_and_check_constraint(db_session: AsyncSession) -> 
     db_session.add(_cycle("GBP", 1))
     with pytest.raises(Exception, match="ck_billing_cycles_currency"):
         await db_session.flush()
+
+
+# ── offline IP -> country fallback (ADR-112) ───────────────────────────────────────
+class _FakeReader:
+    def __init__(self, table: dict[str, dict]) -> None:
+        self.table = table
+
+    def get(self, ip: str) -> dict | None:
+        return self.table.get(ip)
+
+
+def _ip_req(peer: str, xff: str | None = None, **headers: str) -> SimpleNamespace:
+    h = dict(headers)
+    if xff:
+        h["x-forwarded-for"] = xff
+    return SimpleNamespace(headers=h, client=SimpleNamespace(host=peer))
+
+
+@pytest.fixture
+def geoip(monkeypatch: pytest.MonkeyPatch) -> None:
+    table = {
+        "49.36.1.1": {"country": {"iso_code": "IN"}},
+        "81.2.69.1": {"country": {"iso_code": "DE"}},
+        "8.8.8.8": {"country": {"iso_code": "US"}},
+        "9.9.9.9": {"country": {"iso_code": "XX"}},
+    }
+    monkeypatch.setattr(settings, "geoip_db_path", "fake.mmdb")
+    monkeypatch.setattr(geo, "_reader", lambda _path: _FakeReader(table))
+
+
+@pytest.mark.usefixtures("geoip")
+def test_ip_fallback_picks_currency_from_the_visitor_address() -> None:
+    assert geo.resolve_currency(_ip_req("49.36.1.1"), None) == ("INR", "geo")
+    assert geo.resolve_currency(_ip_req("81.2.69.1"), None) == ("EUR", "geo")
+    assert geo.resolve_currency(_ip_req("8.8.8.8"), None) == ("USD", "geo")
+    # unknown address, "XX" country, loopback: no information -> default
+    assert geo.resolve_currency(_ip_req("1.2.3.4"), None) == ("USD", "default")
+    assert geo.resolve_currency(_ip_req("9.9.9.9"), None) == ("USD", "default")
+    assert geo.resolve_currency(_ip_req("127.0.0.1"), None) == ("USD", "default")
+
+
+@pytest.mark.usefixtures("geoip")
+def test_ip_fallback_reads_x_forwarded_for_only_from_a_trusted_proxy() -> None:
+    # Peer is our proxy (loopback is trusted by default): the forwarded address is the visitor.
+    assert geo.resolve_currency(_ip_req("127.0.0.1", xff="49.36.1.1"), None) == ("INR", "geo")
+    # Peer is an untrusted client sending its own XFF: the header is ignored, the peer is used.
+    assert geo.resolve_currency(_ip_req("8.8.8.8", xff="49.36.1.1"), None) == ("USD", "geo")
+
+
+@pytest.mark.usefixtures("geoip")
+def test_ip_fallback_ranks_below_query_and_trusted_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "trust_geo_headers", True)
+    assert geo.resolve_currency(_ip_req("49.36.1.1", **{"CF-IPCountry": "DE"}), None) == ("EUR", "geo")
+    assert geo.resolve_currency(_ip_req("49.36.1.1"), "usd") == ("USD", "query")
+
+
+def test_ip_fallback_off_without_a_database_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "geoip_db_path", "")
+    assert geo.resolve_currency(_ip_req("49.36.1.1"), None) == ("USD", "default")
+
+
+def test_missing_database_file_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "geoip_db_path", "does/not/exist.mmdb")
+    geo._reader.cache_clear()
+    assert geo.country_from_ip("49.36.1.1") is None
+    assert geo.resolve_currency(_ip_req("49.36.1.1"), None) == ("USD", "default")
+    geo._reader.cache_clear()

@@ -320,6 +320,10 @@ class Settings(BaseSettings):
     # Empty = off. Used only when no trusted header gave a country, and only for DISPLAY (ADR-112).
     # Fetch with `python scripts/fetch_geoip_db.py`.
     geoip_db_path: str = ""
+    # Meta app secret, used app-wide to verify Meta's Data Deletion Request Callback `signed_request`
+    # (channels/data_deletion.py). Empty = the callback refuses every request. Channel webhooks keep
+    # using the per-channel `app_secret`.
+    meta_app_secret: str = ""
     geo_country_headers: str = "CF-IPCountry,X-Vercel-IP-Country,CloudFront-Viewer-Country,X-Country-Code"
     # Abuse controls. Per-IP cap on new self-serve accounts per 24h; 0 disables.
     signups_per_ip_per_day: int = 3

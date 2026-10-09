@@ -54,6 +54,28 @@ def enqueue_document_ingestion(document_id: uuid.UUID) -> None:
     ingest_document_task.delay(str(document_id))
 
 
+async def _run_data_deletion(confirmation_code: str, user_id: str) -> str:
+    # Imported here: channels' router imports this module to enqueue, so a top-level import would be a cycle.
+    from app.channels.data_deletion import run_request as run_data_deletion
+
+    async with SessionFactory() as session:
+        status = await run_data_deletion(session, confirmation_code, user_id)
+        await session.commit()
+        return status
+
+
+@celery_app.task(name="meta.data_deletion", bind=True, max_retries=3, default_retry_delay=300)  # type: ignore[untyped-decorator]
+def data_deletion_task(self: object, confirmation_code: str, user_id: str) -> str:
+    """Erase a Meta user's data for one logged deletion request. Idempotent: a re-run is a no-op."""
+    log.info("data_deletion_task_start", confirmation_code=confirmation_code)
+    return _run(_run_data_deletion(confirmation_code, user_id))
+
+
+def enqueue_data_deletion(confirmation_code: str, user_id: str) -> None:
+    """Enqueue a Meta data-deletion request. Indirection kept small so tests can stub it out."""
+    data_deletion_task.delay(confirmation_code, user_id)
+
+
 async def _run_rollup(org_id: str, date_str: str) -> dict[str, int]:
     async with SessionFactory() as session:
         result = await rollup_org(session, uuid.UUID(org_id), dt.date.fromisoformat(date_str))

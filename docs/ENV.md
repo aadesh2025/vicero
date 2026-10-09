@@ -127,7 +127,7 @@ All three ride one Meta app, so they share `META_APP_SECRET` — the key behind 
 
 | Var | Surface | Needs human |
 |---|---|---|
-| `META_APP_SECRET` | all three — webhook signature verification | yes |
+| `META_APP_SECRET` | all three — webhook signature verification, and the `signed_request` check on the Data Deletion Request Callback (`POST /api/meta/data-deletion`; unset → 503) | yes |
 | `META_VERIFY_TOKEN` | all three — echoed back during Meta's `hub.challenge` handshake | no (you choose it) |
 | `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp Cloud API | yes |
 | `META_PAGE_ID`, `META_PAGE_ACCESS_TOKEN` | Facebook Messenger DMs + profile lookups | yes |

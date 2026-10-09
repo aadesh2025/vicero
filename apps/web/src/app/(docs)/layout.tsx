@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DocsNav } from "@/components/docs/docs-nav";
+import { LEGAL_LINKS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: { default: "Vicero docs", template: "%s — Vicero docs" },
@@ -29,6 +30,11 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             <Link href="/docs/api/authentication" className="transition-colors hover:text-text">
               API
             </Link>
+            {LEGAL_LINKS.map((l) => (
+              <Link key={l.href} href={l.href} className="transition-colors hover:text-text">
+                {l.label}
+              </Link>
+            ))}
             <Link href="/login" className="transition-colors hover:text-text">
               Sign in
             </Link>

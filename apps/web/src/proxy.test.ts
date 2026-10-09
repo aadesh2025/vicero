@@ -45,4 +45,8 @@ describe("proxy auth redirects", () => {
     expect(redirectPath(proxy(req("/docs")))).toBeNull();
     expect(redirectPath(proxy(req("/vault/login")))).toBeNull();
   });
+
+  it.each(["/privacy", "/terms", "/data-deletion"])("never redirects the public legal page %s", (path) => {
+    expect(redirectPath(proxy(req(path)))).toBeNull();
+  });
 });

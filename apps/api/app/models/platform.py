@@ -290,3 +290,21 @@ class Subscription(Base, UUIDPrimaryKey, TimestampMixin):
     plan: Mapped[str | None] = mapped_column(String(32))
     status: Mapped[str | None] = mapped_column(String(32))
     current_period_end: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DataDeletionRequest(Base, UUIDPrimaryKey, TimestampMixin):
+    """A Meta "Data Deletion Request Callback" and how far it has got.
+
+    Platform-level on purpose (no `organization_id`): Meta's callback names an app-scoped user,
+    not one of our tenants, so the deletion sweeps every org's contacts for that id. The id itself is
+    kept only as a hash, so this audit row does not retain the identifier it was asked to erase.
+    """
+
+    __tablename__ = "data_deletion_requests"
+
+    confirmation_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    user_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # pending | completed | failed
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    records_deleted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

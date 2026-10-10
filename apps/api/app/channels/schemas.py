@@ -36,3 +36,10 @@ class ChannelOut(BaseModel):
     # Shown to the channel owner so they can configure the provider side (and verify).
     webhook_secret: str | None
     created_at: dt.datetime
+    # Meta one-click connect (ADR-113). Manual channels report connection_source="manual", status="active".
+    connection_source: str = "manual"
+    status: str = "active"
+    external_id: str | None = None
+    external_parent_id: str | None = None
+    token_expires_at: dt.datetime | None = None
+    last_health_check_at: dt.datetime | None = None

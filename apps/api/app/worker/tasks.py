@@ -76,6 +76,42 @@ def enqueue_data_deletion(confirmation_code: str, user_id: str) -> None:
     data_deletion_task.delay(confirmation_code, user_id)
 
 
+async def _run_meta_inbound(channel_id: str, payload: dict[str, object]) -> None:
+    # Imported here: channels' router imports this module to enqueue, so a top-level import would be a cycle.
+    from app.channels.meta_webhook import handle_inbound
+
+    async with SessionFactory() as session:
+        await handle_inbound(session, uuid.UUID(channel_id), payload)
+        await session.commit()
+
+
+@celery_app.task(name="channels.meta_inbound", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
+def meta_inbound_task(self: object, channel_id: str, payload: dict[str, object]) -> None:
+    """One inbound message from the shared Meta webhook. No retry: a replayed turn would answer twice."""
+    log.info("meta_inbound_task_start", channel_id=channel_id)
+    _run(_run_meta_inbound(channel_id, payload))
+
+
+def enqueue_meta_inbound(channel_id: str, payload: dict[str, object]) -> None:
+    """Enqueue a routed Meta event. Indirection kept small so tests can stub it out."""
+    meta_inbound_task.delay(channel_id, payload)
+
+
+async def _run_meta_health() -> dict[str, int]:
+    from app.channels.meta_health import run_health_check
+
+    async with SessionFactory() as session:
+        result = await run_health_check(session)
+        await session.commit()
+        return result
+
+
+@celery_app.task(name="channels.meta_health", max_retries=0)  # type: ignore[untyped-decorator]
+def meta_health_task() -> dict[str, int]:
+    """Daily: flag one-click Meta channels whose token Meta no longer accepts (once per transition)."""
+    return _run(_run_meta_health())
+
+
 async def _run_rollup(org_id: str, date_str: str) -> dict[str, int]:
     async with SessionFactory() as session:
         result = await rollup_org(session, uuid.UUID(org_id), dt.date.fromisoformat(date_str))

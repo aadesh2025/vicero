@@ -128,7 +128,13 @@ All three ride one Meta app, so they share `META_APP_SECRET` — the key behind 
 | Var | Surface | Needs human |
 |---|---|---|
 | `META_APP_SECRET` | all three — webhook signature verification, and the `signed_request` check on the Data Deletion Request Callback (`POST /api/meta/data-deletion`; unset → 503) | yes |
-| `META_VERIFY_TOKEN` | all three — echoed back during Meta's `hub.challenge` handshake | no (you choose it) |
+| `META_VERIFY_TOKEN` | all three — echoed back during Meta's `hub.challenge` handshake; also the one verify token of the shared webhook `/api/meta/webhook` | no (you choose it) |
+| `META_APP_ID` | one-click connect — the Meta app's public id; served to the browser by `GET /v1/channels/meta/config` | yes (public value) |
+| `META_EMBEDDED_SIGNUP_CONFIG_ID` | one-click WhatsApp — the Embedded Signup configuration id (unset → WhatsApp one-click is off, Messenger/Instagram still work) | yes |
+| `META_GRAPH_VERSION` | every Meta call — Graph API version (default `v23.0`); the only place the version lives | no |
+| `META_APP_LIVE` | one-click connect — `true` once Meta approves the app; while `false` the UI says only testers can connect | no |
+
+One-click connect is **enabled only when `META_APP_ID`, `META_APP_SECRET` and `META_VERIFY_TOKEN` are all set** (see docs/26-META-ONE-CLICK-CONNECT.md). The browser needs no `NEXT_PUBLIC_*` variable for it: the web app reads the app id and configuration id at runtime, so enabling it never needs a web rebuild.
 | `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp Cloud API | yes |
 | `META_PAGE_ID`, `META_PAGE_ACCESS_TOKEN` | Facebook Messenger DMs + profile lookups | yes |
 | `INSTAGRAM_USER_ID`, `INSTAGRAM_PAGE_ACCESS_TOKEN` | Instagram DMs; needs `instagram_manage_messages` | yes |

@@ -45,6 +45,11 @@ celery_app.conf.update(
             "task": "automations.retention",
             "schedule": 86400.0,
         },
+        "meta-token-health": {
+            # One-click Meta channels: is each stored token still valid? (channels/meta_health.py)
+            "task": "channels.meta_health",
+            "schedule": 86400.0,
+        },
         "trial-lifecycle-sweep": {
             # Free-trial emails (3 days / 1 day left, ended, 80% / 100% of messages). Idempotent:
             # each is claimed atomically per workspace, so running more often is harmless.

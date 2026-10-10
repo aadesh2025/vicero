@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from app.channels.base import BaseChannel, ContactProfile, InboundMessage
+from app.channels.meta_graph import graph_base
 from app.channels.meta_signature import verify_challenge, verify_signature
 from app.core.logging import get_logger
 
@@ -61,12 +62,16 @@ class MetaMessagingChannel(BaseChannel):
         return None
 
     # ── outbound ─────────────────────────────────────────────────────────────
+    def check_can_send(self, channel: Any, *, last_inbound_at: Any) -> None:
+        self.ensure_active(channel)
+
     async def send(self, channel: Any, to: str, text: str) -> None:
+        self.ensure_active(channel)
         token = self.secret(channel, "page_access_token")
         if not token:
             log.warning("meta_send_skipped_no_token", channel_type=self.type, channel=str(channel.id))
             return
-        async with self._client(base_url=GRAPH_BASE) as client:
+        async with self._client(base_url=graph_base()) as client:
             await client.post(
                 "/me/messages",
                 headers={"Authorization": f"Bearer {token}"},
@@ -90,7 +95,7 @@ class MetaMessagingChannel(BaseChannel):
                 "meta_profile_skipped_no_token", channel_type=self.type, channel=str(channel.id)
             )
             return None
-        async with self._client(base_url=GRAPH_BASE) as client:
+        async with self._client(base_url=graph_base()) as client:
             resp = await client.get(
                 f"/{external_id}",
                 params={"fields": ",".join(self.profile_fields)},

@@ -1575,6 +1575,19 @@
         "title": "BindN8nRequest",
         "type": "object"
       },
+      "Body_deauthorize_api_meta_deauthorize_post": {
+        "properties": {
+          "signed_request": {
+            "title": "Signed Request",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signed_request"
+        ],
+        "title": "Body_deauthorize_api_meta_deauthorize_post",
+        "type": "object"
+      },
       "Body_request_data_deletion_api_meta_data_deletion_post": {
         "properties": {
           "signed_request": {
@@ -1818,6 +1831,11 @@
             "title": "Config",
             "type": "object"
           },
+          "connection_source": {
+            "default": "manual",
+            "title": "Connection Source",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1827,10 +1845,44 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "external_parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Parent Id"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "last_health_check_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Health Check At"
           },
           "name": {
             "anyOf": [
@@ -1842,6 +1894,23 @@
               }
             ],
             "title": "Name"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          },
+          "token_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Expires At"
           },
           "type": {
             "title": "Type",
@@ -4091,6 +4160,47 @@
         "title": "ExpectedToolCall",
         "type": "object"
       },
+      "FacebookConnectRequest": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Kinds",
+            "type": "array"
+          },
+          "page_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Page Ids",
+            "type": "array"
+          },
+          "session_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "agent_id",
+          "page_ids",
+          "kinds"
+        ],
+        "title": "FacebookConnectRequest",
+        "type": "object"
+      },
       "FeatureFlagOut": {
         "properties": {
           "description": {
@@ -5673,6 +5783,58 @@
         "title": "MessagesOut",
         "type": "object"
       },
+      "MetaConfigOut": {
+        "properties": {
+          "app_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Id"
+          },
+          "app_live": {
+            "title": "App Live",
+            "type": "boolean"
+          },
+          "config_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Id"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "graph_version": {
+            "title": "Graph Version",
+            "type": "string"
+          },
+          "whatsapp_enabled": {
+            "title": "Whatsapp Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "whatsapp_enabled",
+          "app_id",
+          "config_id",
+          "graph_version",
+          "app_live"
+        ],
+        "title": "MetaConfigOut",
+        "type": "object"
+      },
       "ModelOut": {
         "properties": {
           "context": {
@@ -6707,6 +6869,105 @@
           "created_at"
         ],
         "title": "PackOut",
+        "type": "object"
+      },
+      "PageInstagram": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "PageInstagram",
+        "type": "object"
+      },
+      "PageOut": {
+        "properties": {
+          "instagram": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageInstagram"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "page_id": {
+            "title": "Page Id",
+            "type": "string"
+          },
+          "picture": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picture"
+          }
+        },
+        "required": [
+          "page_id",
+          "name"
+        ],
+        "title": "PageOut",
+        "type": "object"
+      },
+      "PagesOut": {
+        "properties": {
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/PageOut"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "pages"
+        ],
+        "title": "PagesOut",
+        "type": "object"
+      },
+      "PagesRequest": {
+        "properties": {
+          "user_access_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "User Access Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_access_token"
+        ],
+        "title": "PagesRequest",
         "type": "object"
       },
       "PlanFeaturesOut": {
@@ -10886,6 +11147,43 @@
         "title": "WebhookOut",
         "type": "object"
       },
+      "WhatsAppConnectRequest": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "phone_number_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^\\d+$",
+            "title": "Phone Number Id",
+            "type": "string"
+          },
+          "waba_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^\\d+$",
+            "title": "Waba Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "code",
+          "waba_id",
+          "phone_number_id"
+        ],
+        "title": "WhatsAppConnectRequest",
+        "type": "object"
+      },
       "WidgetCampaign": {
         "description": "A proactive message the widget may show unprompted (see modules/campaigns).",
         "properties": {
@@ -11858,6 +12156,93 @@
           }
         },
         "summary": "Data Deletion Status",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/meta/deauthorize": {
+      "post": {
+        "description": "Meta's Deauthorize callback: the user removed the app, so their connected channels go dead.",
+        "operationId": "deauthorize_api_meta_deauthorize_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_deauthorize_api_meta_deauthorize_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Deauthorize Api Meta Deauthorize Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deauthorize",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/meta/webhook": {
+      "get": {
+        "description": "Meta's subscription handshake, checked against the single app-wide verify token.",
+        "operationId": "webhook_verify_api_meta_webhook_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Webhook Verify",
+        "tags": [
+          "channels"
+        ]
+      },
+      "post": {
+        "operationId": "webhook_receive_api_meta_webhook_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Webhook Receive Api Meta Webhook Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Webhook Receive",
         "tags": [
           "channels"
         ]
@@ -19742,6 +20127,324 @@
         ]
       }
     },
+    "/v1/channels/meta/config": {
+      "get": {
+        "operationId": "meta_config_v1_channels_meta_config_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meta Config",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/v1/channels/meta/facebook/connect": {
+      "post": {
+        "operationId": "facebook_connect_v1_channels_meta_facebook_connect_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacebookConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelOut"
+                  },
+                  "title": "Response Facebook Connect V1 Channels Meta Facebook Connect Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Facebook Connect",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/v1/channels/meta/facebook/pages": {
+      "post": {
+        "operationId": "facebook_pages_v1_channels_meta_facebook_pages_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Facebook Pages",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/v1/channels/meta/whatsapp/connect": {
+      "post": {
+        "operationId": "connect_whatsapp_v1_channels_meta_whatsapp_connect_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Connect Whatsapp",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/v1/channels/slack/{channel_id}/events": {
       "post": {
         "operationId": "slack_events_v1_channels_slack__channel_id__events_post",
@@ -20319,6 +21022,87 @@
           }
         ],
         "summary": "Enable Channel",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/v1/channels/{channel_id}/meta/disconnect": {
+      "post": {
+        "operationId": "meta_disconnect_v1_channels__channel_id__meta_disconnect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Channel Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Org-Id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Org-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meta Disconnect",
         "tags": [
           "channels"
         ]

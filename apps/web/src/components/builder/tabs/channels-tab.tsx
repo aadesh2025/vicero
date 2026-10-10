@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBuilder } from "@/lib/store/builder";
+import {
+  isMetaType,
+  MetaOverlays,
+  MetaRowActions,
+  MetaRowFooter,
+  useMetaConnect,
+} from "@/components/channels/meta-connect";
 import { getAgent, uploadWidgetLogo } from "@/lib/api/agents";
 import { API_BASE } from "@/lib/api/config";
 import type { AgentDraft, FloatingButtonStyle, InputBarButton, WidgetFont } from "@/lib/mock/builder";
@@ -22,6 +29,7 @@ import {
   disableChannel,
   enableChannel,
   listChannels,
+  type ApiChannel,
   type ChannelType,
 } from "@/lib/api/channels";
 
@@ -584,13 +592,19 @@ function MessagingChannels({ agentId }: { agentId: string }) {
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["channels", agentId] });
+  const meta = useMetaConnect({ agentId, onChanged: invalidate });
   const toggle = useMutation({
     mutationFn: ({ id, on }: { id: string; on: boolean }) => (on ? enableChannel(id) : disableChannel(id)),
     onSuccess: invalidate,
   });
   const remove = useMutation({ mutationFn: (id: string) => deleteChannel(id), onSuccess: invalidate });
 
-  const byType = new Map((channels ?? []).map((c) => [c.type, c]));
+  // One row per type. A disconnected one-click channel never hides a live channel of the same type.
+  const byType = new Map<string, ApiChannel>();
+  for (const c of channels ?? []) {
+    const cur = byType.get(c.type);
+    if (!cur || c.status !== "disconnected" || cur.status === "disconnected") byType.set(c.type, c);
+  }
 
   return (
     <SectionCard title="Messaging channels" description="Connect your agent to chat platforms.">
@@ -599,6 +613,8 @@ function MessagingChannels({ agentId }: { agentId: string }) {
           const spec = CHANNEL_SPECS[type];
           const ch = byType.get(type);
           const Icon = spec.icon;
+          const oneClick = ch?.connection_source === "meta_oauth";
+          const oneClickRow = isMetaType(type) && (!ch || oneClick);
           return (
             <li key={type} className="rounded-md border border-border bg-surface-2/50 p-3">
               <div className="flex items-center gap-3">
@@ -608,10 +624,20 @@ function MessagingChannels({ agentId }: { agentId: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text">{spec.label}</span>
-                    {ch && <Badge variant={ch.enabled ? "success" : "default"}>{ch.enabled ? "Live" : "Connected"}</Badge>}
+                    {ch && !oneClick && (
+                      <Badge variant={ch.enabled ? "success" : "default"}>{ch.enabled ? "Live" : "Connected"}</Badge>
+                    )}
                   </div>
+                  {oneClick && ch?.name && <p className="truncate text-xs text-faint">{ch.name}</p>}
                 </div>
-                {ch ? (
+                {oneClickRow && isMetaType(type) ? (
+                  <MetaRowActions
+                    type={type}
+                    channel={ch}
+                    meta={meta}
+                    onToggle={(id, on) => toggle.mutate({ id, on })}
+                  />
+                ) : ch ? (
                   <div className="flex items-center gap-2">
                     <Switch checked={ch.enabled} onCheckedChange={(on) => toggle.mutate({ id: ch.id, on })} />
                     <button
@@ -628,7 +654,10 @@ function MessagingChannels({ agentId }: { agentId: string }) {
                   </Button>
                 )}
               </div>
-              {ch?.webhook_url && (
+              {oneClickRow && isMetaType(type) && (
+                <MetaRowFooter type={type} meta={meta} onAdvanced={() => setConnecting(type)} />
+              )}
+              {ch?.webhook_url && !oneClick && (
                 <div className="mt-2 truncate rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-[11px] text-faint">
                   {ch.webhook_url}
                 </div>
@@ -637,6 +666,7 @@ function MessagingChannels({ agentId }: { agentId: string }) {
           );
         })}
       </ul>
+      <MetaOverlays meta={meta} agentId={agentId} />
       <ConnectDialog type={connecting} agentId={agentId} onClose={() => setConnecting(null)} onConnected={invalidate} />
     </SectionCard>
   );

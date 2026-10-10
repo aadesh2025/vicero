@@ -56,6 +56,33 @@ def _encrypt_secrets(adapter: BaseChannel, config: dict[str, Any]) -> dict[str, 
     return out
 
 
+#: Config key holding the provider-side id each Meta channel receives for (ADR-113).
+_EXTERNAL_ID_KEY = {"whatsapp": "phone_number_id", "facebook": "page_id", "instagram": "ig_user_id"}
+
+
+def external_id_from_config(channel_type: str, config: dict[str, Any]) -> str | None:
+    key = _EXTERNAL_ID_KEY.get(channel_type)
+    value = str(config.get(key) or "").strip()[:255] if key else ""
+    return value or None
+
+
+async def ensure_external_id_free(
+    session: AsyncSession, channel_type: str, external_id: str, *, exclude_id: uuid.UUID | None = None
+) -> None:
+    """One phone number / page / Instagram account belongs to one channel (unique index). Say so as a 409
+    instead of letting the index raise, and never reveal which workspace holds it."""
+    stmt = select(Channel.id).where(Channel.type == channel_type, Channel.external_id == external_id)
+    if exclude_id is not None:
+        stmt = stmt.where(Channel.id != exclude_id)
+    if (await session.execute(stmt.limit(1))).first() is not None:
+        raise AppError(
+            "channels.already_connected",
+            "This account is already connected to another channel. Disconnect it there first, "
+            "or contact support if it is yours.",
+            409,
+        )
+
+
 def _channel_out(channel: Channel, adapter: BaseChannel) -> schemas.ChannelOut:
     return schemas.ChannelOut(
         id=channel.id,
@@ -67,6 +94,12 @@ def _channel_out(channel: Channel, adapter: BaseChannel) -> schemas.ChannelOut:
         webhook_url=_webhook_url(channel),
         webhook_secret=channel.webhook_secret,
         created_at=channel.created_at,
+        connection_source=channel.connection_source,
+        status=channel.status,
+        external_id=channel.external_id,
+        external_parent_id=channel.external_parent_id,
+        token_expires_at=channel.token_expires_at,
+        last_health_check_at=channel.last_health_check_at,
     )
 
 
@@ -89,12 +122,18 @@ async def create_channel(
     if agent is None or agent.organization_id != ctx.org.id or agent.deleted_at is not None:
         raise AppError("agents.not_found", "Agent not found.", 404)
 
+    external_id = external_id_from_config(data.type, data.config)
+    if external_id:
+        await ensure_external_id_free(session, data.type, external_id)
     channel = Channel(
         organization_id=ctx.org.id,
         agent_id=data.agent_id,
         type=data.type,
         name=data.name or data.type.title(),
         enabled=False,
+        external_id=external_id,
+        connection_source="manual",
+        status="active",
         config=_encrypt_secrets(adapter, data.config),
         webhook_secret=secrets.token_urlsafe(24),
         created_by=ctx.user.id,
@@ -141,6 +180,12 @@ async def update_channel(
             if k in adapter.secret_fields and isinstance(v, str) and v.startswith("••••"):
                 continue  # unchanged masked secret
             merged[k] = v
+        if channel.connection_source == "manual":
+            external_id = external_id_from_config(channel.type, merged)
+            if external_id != channel.external_id:
+                if external_id:
+                    await ensure_external_id_free(session, channel.type, external_id, exclude_id=channel.id)
+                channel.external_id = external_id
         channel.config = _encrypt_secrets(adapter, merged)
     return _channel_out(channel, adapter)
 
@@ -247,3 +292,15 @@ async def process_inbound(
     await turn.run()
     reply = None if turn.handed_off else ((turn.result.content or "").strip() or None)
     return msg, reply
+
+
+async def run_and_send(session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]) -> None:
+    """process_inbound, then deliver the reply. Shared by every webhook entry point."""
+    msg, reply = await process_inbound(session, channel, adapter, payload)
+    if msg is not None and reply:
+        try:
+            await adapter.send(channel, msg.external_user_id, reply)
+        except Exception as exc:
+            # The inbound is already persisted; a provider-delivery failure must not
+            # 500 the webhook (that makes Telegram/Meta re-deliver → duplicate turns).
+            log.warning("channel_delivery_failed", channel_type=channel.type, error=str(exc))

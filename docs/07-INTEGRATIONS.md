@@ -143,7 +143,7 @@ secret and its `X-Hub-Signature-256` check (`channels/meta_signature.py`).
   accepted if its `object` matches the adapter's surface (`page` vs `instagram`), so one Meta
   app feeding several channels never cross-attributes a conversation. Read receipts, delivery
   confirmations, and `is_echo` (our own outbound) are ignored.
-- Outbound: `POST /v19.0/me/messages` with the page token as a Bearer header.
+- Outbound: `POST /{META_GRAPH_VERSION}/me/messages` with the page token as a Bearer header.
 - Identity: `fetch_profile` resolves a name + photo via the Graph API — `first_name`,
   `last_name`, `profile_pic` for Messenger; `name`, `username`, `profile_pic` for Instagram
   (needs `instagram_manage_messages`). Called only while the contact is still missing a name
@@ -151,6 +151,21 @@ secret and its `X-Hub-Signature-256` check (`channels/meta_signature.py`).
 - **Not included:** public post-comment moderation (the "Facebook comments" / "Instagram
   comments" surfaces). Different webhook fields, permissions, and reply semantics — see
   ADR-037.
+
+### One-click connect (shared Meta app) — WhatsApp, Messenger, Instagram
+Customers sign in with Meta instead of pasting tokens (ADR-113, docs/26-META-ONE-CLICK-CONNECT.md). Enabled only when
+`META_APP_ID`, `META_APP_SECRET` and `META_VERIFY_TOKEN` are set (`GET /v1/channels/meta/config` tells the UI).
+
+- **Shared webhook:** `GET/POST /api/meta/webhook`. The signature (`X-Hub-Signature-256`, raw body, `META_APP_SECRET`) is verified
+  once; each message is routed by `(type, external_id)` and handed to the same adapter code the per-channel webhooks use.
+  Unknown ids → `200`, ignored. Retries are de-duplicated by message id.
+- **Connect:** `POST /v1/channels/meta/whatsapp/connect` (Embedded Signup `code` + `waba_id` + `phone_number_id`, re-verified
+  against Graph), `POST /v1/channels/meta/facebook/pages` then `POST /v1/channels/meta/facebook/connect` (Page picker; Messenger
+  and/or Instagram), `POST /v1/channels/{id}/meta/disconnect`. Editor and above; each is audit-logged. Reconnecting the same
+  account updates the channel; an account already connected in another workspace is a `409`.
+- **Meta callbacks:** `POST /api/meta/data-deletion`, `POST /api/meta/deauthorize` (both `signed_request`).
+- **Health:** a daily task flags channels whose token Meta no longer accepts (`needs_reconnect`, event `channel.needs_reconnect`).
+- The manual token flow and the per-channel webhook URLs above still work unchanged.
 
 ### Slack
 - Config: bot token, signing secret. Verify Slack signature. Handle `event_callback`

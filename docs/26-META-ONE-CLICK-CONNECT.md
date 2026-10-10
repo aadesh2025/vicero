@@ -131,3 +131,43 @@ required, and then add it to `PAGE_SCOPES` in `apps/web/src/lib/meta/facebook-sd
   `docker exec vicero-prod-worker-1 celery -A app.worker.celery_app call channels.meta_health`.
 - **Rollback:** the migration only adds columns/an index. Roll back by redeploying the previous images (`rollback.sh`); the
   extra columns are ignored by older code. Do not `alembic downgrade` in production.
+
+## 7. First live test (you as an app tester)
+
+Before you start: you are listed under **App roles** in the Meta app and have accepted the invitation; `META_APP_ID` and
+`META_EMBEDDED_SIGNUP_CONFIG_ID` are set; the webhook is saved in the Meta dashboard (§3.4).
+
+**Open two terminals and leave them running while you test** (names only are matched; nothing prints a secret):
+
+```
+ssh vicero "docker logs -f --since 1m vicero-prod-api-1 2>&1 | grep --line-buffered -E 'meta|webhook|channel'"
+ssh vicero "docker logs -f --since 1m vicero-prod-worker-1 2>&1 | grep --line-buffered -E 'meta_inbound|channel|error|Traceback'"
+```
+
+Healthy signs: `POST /api/meta/webhook ... 200` in the api log, then `meta_inbound_task_start` in the worker log within a second.
+Warnings worth knowing: `meta_graph_failed` (Meta refused a call; the status/code is logged, never a token),
+`meta_inbound_ignored_inactive` (channel is not *Connected*), `channel_delivery_failed` (the reply could not be sent).
+Do not paste raw api logs anywhere: uvicorn's access line prints the webhook handshake query string, which includes the verify token.
+
+**A. WhatsApp (your own test number)**
+1. Dashboard -> your agent -> **Channels** -> **Connect WhatsApp**. The Meta window opens (allow pop-ups).
+2. Finish Embedded Signup with your test number. Expect "WhatsApp connected" and a *Connected* badge with the verified name.
+3. From **another phone**, WhatsApp-message that number: "hello". Expect a bot reply within a few seconds and the conversation in the inbox.
+
+**B. Messenger + Instagram (a Page you admin, with a linked Instagram professional account)**
+1. **Connect Messenger** -> Facebook login (accept every permission) -> tick the Page -> **Connect selected**.
+2. DM the Page from another Facebook account: expect a reply and the conversation in the inbox.
+3. **Connect Instagram** -> pick the same Page (its Instagram shows next to it) -> connect. DM the Instagram account from another
+   account: expect a reply.
+
+**C. Disconnect and clean-up**
+1. **Disconnect** the Instagram channel (confirm): Messenger must keep answering (the Page subscription is kept).
+2. **Disconnect** Messenger and WhatsApp. Expect badge *Disconnected* and no more replies.
+3. Check the token is gone and the account is free (counts and names only, no values):
+   `ssh vicero "docker exec vicero-prod-postgres-1 psql -U vicero -d vicero -c \"select type, status, enabled, external_id is not null as has_id, config ? 'access_token' or config ? 'page_access_token' as has_token from channels\""`
+   Expect `status=disconnected`, `has_id=f`, `has_token=f` for each.
+4. Connect the same number/Page again: it must work (the account was freed).
+
+**D. Quick failure checks (optional)**
+- Connect the same Page from a second workspace: clear "already connected" message.
+- In Facebook settings -> Business integrations, remove the app: within seconds the channels show *Needs reconnect*.

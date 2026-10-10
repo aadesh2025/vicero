@@ -29,7 +29,12 @@ async function setup(request: APIRequestContext, account: Account) {
         agent_id: agent.id,
         type: "whatsapp",
         // No app_secret, so the webhook signature check is skipped in this environment.
-        config: { phone_number_id: "PN1", access_token: "tok", templates: "order_update,welcome_back" },
+        // A phone number belongs to one channel (unique per type), so every run needs its own id.
+        config: {
+          phone_number_id: `PN${Date.now()}${Math.floor(Math.random() * 1e6)}`,
+          access_token: "tok",
+          templates: "order_update,welcome_back",
+        },
       },
     })
   ).json();

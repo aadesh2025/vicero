@@ -38,6 +38,9 @@ main() {
   fi
   echo "[deploy] migrations OK"
 
+  # Re-judge table/column grants for the read-only DB role after any schema change (no-op if it was never created).
+  bash "$ROOT/ops/viewer-setup.sh" --grants-only || echo "[deploy] WARNING: viewer grants not refreshed"
+
   echo "[deploy] up -d --no-build"
   dc up -d --no-build 2>&1 | tail -12
 

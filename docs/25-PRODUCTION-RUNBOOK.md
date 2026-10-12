@@ -16,9 +16,9 @@
 | Secrets on server | `/opt/vicero/.env` (mode 600). Never in git. |
 | Compose | `infra/docker-compose.prod.yml` + `infra/docker-compose.ghcr.yml` (the pull-not-build override) |
 | Images | `ghcr.io/aadesh2025/vicero-api:master`, `ghcr.io/aadesh2025/vicero-web:master` (public) |
-| Firewall | ufw: 22, 80, 443 only. Caddy is the only container publishing ports. |
+| Firewall | ufw: 22, 80, 443 only. Caddy is the only container publishing to the internet; Postgres publishes `127.0.0.1:5433` (loopback, SSH tunnel only, §13). |
 
-**Never publish 5432, 6379, 11434 or 5678.** Docker bypasses ufw for published ports.
+**Never publish 5432, 6379, 11434 or 5678 on a public address.** The one exception is Postgres on `127.0.0.1:5433` (§13). Docker bypasses ufw for published ports.
 
 ## 2. Deploy model: pull, never build
 
@@ -224,3 +224,28 @@ Real automations are built only from a client's request in the queue (Admin → 
    the n8n workflow id, the `/webhook/<path>` if an agent calls it. One workflow belongs to exactly one org.
 6. **Activate** the workflow in n8n, confirm the first real run appears in the client's history and the request shows *active*.
    To stop it: *Pause* in the registry (agents stop calling it at once); the run history stays.
+
+## 13. Visual DB access (read-only, SSH tunnel)
+
+Postgres is bound to the server's loopback only (`127.0.0.1:5433`, compose `postgres.ports`). It is not reachable from the
+internet; the only way in is an SSH tunnel with your key. The `viewer` role can only `SELECT`, and secret columns are hidden
+(`ops/viewer-setup.sh`, ADR-115). No password is stored in git or on the server.
+
+**Create the role** (prints the password once; save it in your password manager):
+```
+ssh vicero /opt/vicero/ops/viewer-setup.sh
+```
+New password: `ssh vicero /opt/vicero/ops/viewer-setup.sh --rotate`. Remove access: `... --drop`. `deploy.sh` re-applies the grants
+after every migration (no-op if the role does not exist); a table added later is invisible to `viewer` until then.
+
+**DBeaver on Windows**
+1. Database > New Database Connection > PostgreSQL > Next.
+2. Main tab: Host `localhost`, Port `5433`, Database `vicero`, Username `viewer`, Password = the one shown by the script. Tick Save password.
+3. SSH tab: tick Use SSH Tunnel. Host `87.232.72.3`, Port `22`, User `root`, Authentication Public Key,
+   Private key `C:\Users\user\.ssh\vicero_hetzner` (passphrase only if the key has one).
+4. Click Test tunnel configuration, then Test Connection (accept the host key the first time). Finish.
+5. Browse `vicero` > Schemas. Tables with secret columns appear under the `viewer` schema (safe columns only); the rest under `public`.
+
+**Check it is not public** (from any other computer): `nmap -Pn -p 5432,5433 87.232.72.3` must show both closed/filtered, and on the
+server `ss -ltn | grep 5433` must show `127.0.0.1:5433` and nothing else. `tests/test_infra_prod_compose.py` fails if compose publishes
+anything but Caddy and that loopback port.

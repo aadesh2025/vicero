@@ -7,7 +7,7 @@
 #   /opt/vicero/ops/viewer-setup.sh --drop         remove the role
 #
 # What `viewer` can do: SELECT. Nothing else (no write, no DDL, read-only transactions, 30 s statement limit,
-# 3 connections). Secrets are kept out of reach:
+# 5 connections). Secrets are kept out of reach:
 #   * public tables with NO secret column are readable as they are;
 #   * public tables WITH a secret column (hash / encrypted / token / secret columns, and channels.config) are NOT
 #     granted; the `viewer` schema holds a same-named view with only the safe columns, and it comes first in the
@@ -62,9 +62,9 @@ if [ "$MODE" = create ] || [ "$MODE" = rotate ]; then
     psql_ postgres <<SQL
 DO \$\$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'viewer') THEN
-    CREATE ROLE viewer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3 PASSWORD '${PW}';
+    CREATE ROLE viewer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 5 PASSWORD '${PW}';
   ELSE
-    ALTER ROLE viewer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 3 PASSWORD '${PW}';
+    ALTER ROLE viewer LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 5 PASSWORD '${PW}';
   END IF;
 END \$\$;
 SQL

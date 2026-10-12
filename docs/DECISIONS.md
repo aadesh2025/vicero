@@ -18,6 +18,19 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-115: Read-only `viewer` DB role over an SSH tunnel to a loopback-only Postgres port
+- **Date:** 2026-10-12
+- **Status:** accepted
+- **Context:** The owner wants to browse production data in DBeaver. Postgres was reachable only inside the compose network.
+  Docker bypasses ufw for published ports, so any `5433:5432` style publish would put the database on the internet.
+- **Decision:** Publish `127.0.0.1:5433:5432` only (loopback is not on a public interface; ufw stays 22/80/443). Reach it through
+  an SSH tunnel with the existing key. A `viewer` role (`ops/viewer-setup.sh`) has SELECT only, read-only transactions, a 30 s
+  statement limit and 5 connections. Tables with secret columns (hash / encrypted / token / secret, `channels.config`) are exposed
+  only as views of their safe columns in a `viewer` schema; token tables and `sessions` are not exposed. `deploy.sh` re-runs the
+  grants after migrations (a no-op when the role does not exist). The password is shown once and never stored.
+- **Consequences:** Postgres is recreated once on the first deploy (~10-20 s). A new table is invisible to `viewer` until the
+  next deploy. `tests/test_infra_prod_compose.py` fails if anything but Caddy and that loopback port is published.
+
 ### ADR-114: Page discovery falls back to Business Portfolios; the Instagram button lists Instagram accounts; one spinner per button
 - **Date:** 2026-10-12
 - **Status:** accepted

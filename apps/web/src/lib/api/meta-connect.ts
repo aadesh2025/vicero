@@ -20,7 +20,7 @@ export interface MetaPage {
   page_id: string;
   name: string;
   picture: string | null;
-  instagram: { id: string; username: string | null } | null;
+  instagram: { id: string; username: string | null; picture?: string | null } | null;
 }
 
 export interface MetaPagesResult {
@@ -38,11 +38,12 @@ export function connectWhatsApp(body: { agent_id: string; code: string; waba_id:
   return api<ApiChannel>("/v1/channels/meta/whatsapp/connect", { method: "POST", orgScoped: true, body });
 }
 
-export function listFacebookPages(userAccessToken: string) {
+export function listFacebookPages(userAccessToken: string, grantedScopes: string[] = []) {
   return api<MetaPagesResult>("/v1/channels/meta/facebook/pages", {
     method: "POST",
     orgScoped: true,
-    body: { user_access_token: userAccessToken },
+    // Permission names only; the server logs them for diagnosis and never anything secret.
+    body: { user_access_token: userAccessToken, granted_scopes: grantedScopes },
   });
 }
 

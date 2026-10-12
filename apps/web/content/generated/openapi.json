@@ -6877,6 +6877,17 @@
             "title": "Id",
             "type": "string"
           },
+          "picture": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picture"
+          },
           "username": {
             "anyOf": [
               {
@@ -6957,6 +6968,14 @@
       },
       "PagesRequest": {
         "properties": {
+          "granted_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Granted Scopes",
+            "type": "array"
+          },
           "user_access_token": {
             "maxLength": 4096,
             "minLength": 1,

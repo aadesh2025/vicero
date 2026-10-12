@@ -43,7 +43,7 @@ const CONNECT_LABEL: Record<MetaChannelType, string> = {
 const HELP: Record<MetaChannelType, string> = {
   whatsapp: "Connect your WhatsApp Business number in about 1 minute.",
   facebook: "Log in with Facebook and pick the Page that should chat with customers.",
-  instagram: "Log in with Facebook and pick the Page linked to your Instagram professional account.",
+  instagram: "Log in with Facebook and pick the Instagram professional account that should chat with customers.",
 };
 
 const NOT_SET_UP =
@@ -51,14 +51,23 @@ const NOT_SET_UP =
 const WHATSAPP_NOT_SET_UP =
   "WhatsApp sign-up isn't set up on this server yet. Use “Advanced: connect with tokens” instead.";
 const NOT_LIVE_NOTE = "Until our app is approved by Meta, only people added as testers can connect.";
+const ANOTHER_IN_PROGRESS = "Another connection is in progress";
+const NO_PAGES_MESSAGE =
+  "No Pages found for this Facebook login. Check: 1) you are logged into the Facebook account that manages the Page, 2) you ticked the Page in Meta's popup, 3) you have full control of the Page in Meta Business Suite.";
+const NO_INSTAGRAM_MESSAGE =
+  "No Instagram Business account is linked to your Pages. In Instagram go to Settings > Account type, switch to Professional, then link it to your Page.";
+const DOCS_HELP = { href: "/docs/channels/overview#connect-messenger-and-instagram", label: "Setup help" } as const;
 
 type Flow =
   | { kind: "idle" }
-  | { kind: "working"; message: string }
+  // `channel` is the button that started the flow: only that button shows a spinner.
+  | { kind: "working"; message: string; channel: MetaChannelType }
   | { kind: "success"; message: string }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; help?: { href: string; label: string } };
 
 interface PickerState {
+  /** Which button opened it: Messenger lists Pages, Instagram lists Instagram accounts. */
+  mode: MetaKind;
   sessionId: string;
   pages: MetaPage[];
   kinds: MetaKind[];
@@ -76,7 +85,10 @@ export interface MetaConnect {
   config: MetaConfig | undefined;
   configLoading: boolean;
   sdkReady: boolean;
+  /** True while any connection is in progress (the buttons are single-flight: one Meta popup at a time). */
   busy: boolean;
+  /** The button that is working, or null. Drives the per-button spinner. */
+  busyChannel: MetaChannelType | null;
   flow: Flow;
   picker: PickerState | null;
   disconnecting: ApiChannel | null;
@@ -121,20 +133,26 @@ export function useMetaConnect({ agentId, onChanged }: { agentId: string; onChan
     };
   }, [enabled, appId, version]);
 
-  const busy = flow.kind === "working";
+  const busyChannel = flow.kind === "working" ? flow.channel : null;
+  const busy = busyChannel !== null;
   const closePicker = useCallback(() => setPicker(null), []);
 
-  const failWith = (e: unknown) => setFlow({ kind: "error", message: describeError(e) });
+const failWith = (e: unknown) =>
+    setFlow({
+      kind: "error",
+      message: describeError(e),
+      help: e instanceof MetaFlowError && e.kind === "no_pages" ? DOCS_HELP : undefined,
+    });
 
   // `FB.login` must run synchronously inside the click, so neither start* function awaits before it.
   const startWhatsApp = () => {
     if (!config?.whatsapp_enabled || !config.config_id) return;
     if (!sdk) return setFlow({ kind: "error", message: "Facebook sign-in is still loading. Try again in a moment." });
-    setFlow({ kind: "working", message: "Waiting for WhatsApp sign-up in the Meta window…" });
+    setFlow({ kind: "working", channel: "whatsapp", message: "Waiting for WhatsApp sign-up in the Meta window…" });
     const configId = config.config_id;
     startWhatsAppSignup(sdk, configId)
       .then(async (result) => {
-        setFlow({ kind: "working", message: "Connecting your WhatsApp number…" });
+        setFlow({ kind: "working", channel: "whatsapp", message: "Connecting your WhatsApp number…" });
         await connectWhatsApp({ agent_id: agentId, ...result });
         setFlow({ kind: "success", message: "WhatsApp connected. Your agent now answers on this number." });
         onChanged();
@@ -145,16 +163,20 @@ export function useMetaConnect({ agentId, onChanged }: { agentId: string; onChan
   const startPages = (kind: MetaKind) => {
     if (!config?.enabled) return;
     if (!sdk) return setFlow({ kind: "error", message: "Facebook sign-in is still loading. Try again in a moment." });
-    setFlow({ kind: "working", message: "Waiting for Facebook login…" });
+    const channel: MetaChannelType = kind === "messenger" ? "facebook" : "instagram";
+    setFlow({ kind: "working", channel, message: "Waiting for Facebook login…" });
     loginForPages(sdk)
-      .then(async (token) => {
-        setFlow({ kind: "working", message: "Loading your Pages…" });
-        const result = await listFacebookPages(token);
-        if (result.pages.length === 0) {
-          throw new MetaFlowError("meta", "This Facebook account doesn't manage any Pages.");
+      .then(async ({ accessToken, grantedScopes }) => {
+        setFlow({ kind: "working", channel, message: kind === "instagram" ? "Loading your Instagram accounts…" : "Loading your Pages…" });
+        const result = await listFacebookPages(accessToken, grantedScopes);
+        if (result.pages.length === 0) throw new MetaFlowError("no_pages", NO_PAGES_MESSAGE);
+        // The Instagram button lists Instagram accounts, so Pages with none linked are not shown at all.
+        if (kind === "instagram" && !result.pages.some((p) => p.instagram)) {
+          throw new MetaFlowError("no_instagram", NO_INSTAGRAM_MESSAGE);
         }
         setFlow({ kind: "idle" });
         setPicker({
+          mode: kind,
           sessionId: result.session_id,
           pages: result.pages,
           kinds: [kind],
@@ -225,6 +247,7 @@ export function useMetaConnect({ agentId, onChanged }: { agentId: string; onChan
     configLoading,
     sdkReady: sdk !== null,
     busy,
+    busyChannel,
     flow,
     picker,
     disconnecting,
@@ -266,16 +289,19 @@ export function MetaRowActions({
   const disabledReason = type === "whatsapp" && meta.config?.enabled ? WHATSAPP_NOT_SET_UP : NOT_SET_UP;
 
   const connect = () => (type === "whatsapp" ? meta.startWhatsApp() : meta.startPages(type === "facebook" ? "messenger" : "instagram"));
+  const working = meta.busyChannel === type; // this button's flow
+  const blockedByOther = meta.busy && !working; // someone else's flow: disabled, no spinner
   const connectButton = (text: string, variant: "primary" | "outline" = "primary") => (
-    <span title={available ? undefined : disabledReason}>
+    <span title={!available ? disabledReason : blockedByOther ? ANOTHER_IN_PROGRESS : undefined}>
       <Button
         size="sm"
         variant={variant}
         onClick={connect}
         disabled={!available || meta.busy || (available && !meta.sdkReady)}
+        aria-busy={working || undefined}
         aria-describedby={available ? undefined : hintId}
       >
-        {meta.busy && <Loader2 className="size-4 animate-spin" aria-hidden />} {text}
+        {working && <Loader2 className="size-4 animate-spin" aria-hidden />} {text}
       </Button>
       {!available && (
         <span id={hintId} className="sr-only">
@@ -348,14 +374,30 @@ export function MetaOverlays({ meta, agentId }: { meta: MetaConnect; agentId: st
           </p>
         )}
         {flow.kind === "success" && <p className="text-success-text">{flow.message}</p>}
-        {flow.kind === "error" && <p className="text-error-text">{flow.message}</p>}
+        {flow.kind === "error" && (
+          <p className="text-error-text">
+            {flow.message}
+            {flow.help && (
+              <>
+                {" "}
+                <a href={flow.help.href} target="_blank" rel="noreferrer" className="underline">
+                  {flow.help.label}
+                </a>
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       <Dialog open={picker !== null} onOpenChange={(open) => !open && meta.closePicker()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Choose what to connect</DialogTitle>
-            <DialogDescription>Pick the Facebook Pages your agent should answer on.</DialogDescription>
+            <DialogTitle>{picker?.mode === "instagram" ? "Choose an Instagram account" : "Choose what to connect"}</DialogTitle>
+            <DialogDescription>
+              {picker?.mode === "instagram"
+                ? "Pick the Instagram accounts your agent should answer on."
+                : "Pick the Facebook Pages your agent should answer on."}
+            </DialogDescription>
           </DialogHeader>
           {picker && <PagePicker picker={picker} meta={meta} agentId={agentId} />}
         </DialogContent>
@@ -391,7 +433,64 @@ export function MetaOverlays({ meta, agentId }: { meta: MetaConnect; agentId: st
 
 const KIND_LABEL: Record<MetaKind, string> = { messenger: "Messenger", instagram: "Instagram" };
 
+/** Instagram button: one row per linked Instagram account. The Page behind it is only context ("via ..."). */
+function InstagramPicker({ picker, meta, agentId }: { picker: PickerState; meta: MetaConnect; agentId: string }) {
+  const linked = picker.pages.filter((p) => p.instagram);
+  const canSubmit = picker.selected.length > 0 && !picker.submitting;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void meta.submitPicker(agentId);
+      }}
+      className="space-y-4"
+    >
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-bold text-muted">Instagram accounts</legend>
+        <ul className="max-h-64 space-y-1.5 overflow-y-auto">
+          {linked.map((page) => {
+            const ig = page.instagram!;
+            const handle = ig.username ? `@${ig.username}` : ig.id;
+            return (
+              <li key={page.page_id}>
+                <label className="flex items-center gap-3 rounded-md border border-border p-2 text-sm hover:bg-surface-2">
+                  <input
+                    type="checkbox"
+                    checked={picker.selected.includes(page.page_id)}
+                    onChange={() => meta.togglePickerPage(page.page_id)}
+                    aria-label={handle}
+                    className="size-4 accent-[rgb(var(--accent-strong))]"
+                  />
+                  {ig.picture ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ig.picture} alt="" className="size-8 rounded-full object-cover" />
+                  ) : (
+                    <span className="size-8 rounded-full bg-surface-3" aria-hidden />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-text">{handle}</span>
+                    <span className="block truncate text-xs text-faint">via {page.name}</span>
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      </fieldset>
+      {picker.error && (
+        <p role="alert" className="text-sm text-error-text">
+          {picker.error}
+        </p>
+      )}
+      <Button type="submit" variant="primary" className="w-full" disabled={!canSubmit}>
+        {picker.submitting && <Loader2 className="size-4 animate-spin" aria-hidden />} Connect selected
+      </Button>
+    </form>
+  );
+}
+
 function PagePicker({ picker, meta, agentId }: { picker: PickerState; meta: MetaConnect; agentId: string }) {
+  if (picker.mode === "instagram") return <InstagramPicker picker={picker} meta={meta} agentId={agentId} />;
   const wantsInstagram = picker.kinds.includes("instagram");
   const toggleKind = (kind: MetaKind) => {
     const next = picker.kinds.includes(kind) ? picker.kinds.filter((k) => k !== kind) : [...picker.kinds, kind];

@@ -3,6 +3,7 @@ deauthorize, token health and the outbound guard. The Graph API is mocked; nothi
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -14,6 +15,7 @@ from typing import Any
 
 import httpx
 import pytest
+import structlog
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -568,7 +570,11 @@ def _pages_graph(graph: FakeGraph) -> None:
                     "name": "Acme Shop",
                     "access_token": "PAGE_TOKEN_1",
                     "picture": {"data": {"url": "https://img/1.png"}},
-                    "instagram_business_account": {"id": "IG1", "username": "acme"},
+                    "instagram_business_account": {
+                        "id": "IG1",
+                        "username": "acme",
+                        "profile_picture_url": "https://img/ig1.png",
+                    },
                 },
                 {"id": "PG2", "name": "No Insta", "access_token": "PAGE_TOKEN_2"},
             ]
@@ -595,13 +601,145 @@ async def test_pages_list_returns_only_public_fields(client: AsyncClient, graph:
         "page_id": "PG1",
         "name": "Acme Shop",
         "picture": "https://img/1.png",
-        "instagram": {"id": "IG1", "username": "acme"},
+        "instagram": {"id": "IG1", "username": "acme", "picture": "https://img/ig1.png"},
     }
     assert body["pages"][1]["instagram"] is None
     assert "PAGE_TOKEN" not in r.text and "LONG_USER_TOKEN" not in r.text and "SHORT" not in r.text
     ex = graph.called("GET", "/oauth/access_token")[0]["params"]
     assert ex["grant_type"] == "fb_exchange_token" and ex["fb_exchange_token"] == "SHORT"
     assert graph.called("GET", "/me/accounts")[0]["auth"] == "Bearer LONG_USER_TOKEN"
+
+
+# ── Pages owned by a Business Portfolio (ADR-114) ─────────────────────────────────
+def _portfolio_graph(graph: FakeGraph) -> None:
+    """/me/accounts is empty (the real-world symptom); the Pages live behind a Business Portfolio."""
+    graph.on("GET", "/oauth/access_token", {"access_token": "LONG_USER_TOKEN"})
+    graph.on("GET", "/me", {"id": "FBUSER9"})
+    graph.on("GET", "/me/accounts", {"data": []})
+    graph.on("GET", "/me/businesses", {"data": [{"id": "5001", "name": "Acme Portfolio"}]})
+    page_a = {
+        "id": "PGA",
+        "name": "Portfolio Page A",
+        "access_token": "PAGE_TOKEN_A",
+        "instagram_business_account": {"id": "IGA", "username": "acme_a", "profile_picture_url": "https://img/a.png"},
+    }
+    graph.on("GET", "/5001/owned_pages", {"data": [page_a]})
+    graph.on(
+        "GET",
+        "/5001/client_pages",
+        {"data": [page_a, {"id": "PGB", "name": "Client Page B", "access_token": "PAGE_TOKEN_B"}]},
+    )
+    graph.on("POST", "/PGA/subscribed_apps", {"success": True})
+
+
+async def test_empty_me_accounts_falls_back_to_business_portfolio_pages(client: AsyncClient, graph: FakeGraph) -> None:
+    _portfolio_graph(graph)
+    headers = await _headers(client, "bp1@example.com")
+    aid = await _fake_agent(client, headers)
+    r = await client.post("/v1/channels/meta/facebook/pages", json={"user_access_token": "SHORT"}, headers=headers)
+    assert r.status_code == 200, r.text
+    pages = r.json()["pages"]
+    assert [p["page_id"] for p in pages] == ["PGA", "PGB"]  # merged and de-duplicated
+    assert pages[0]["instagram"] == {"id": "IGA", "username": "acme_a", "picture": "https://img/a.png"}
+    assert "PAGE_TOKEN" not in r.text  # Page tokens still never reach the browser
+    fields = graph.called("GET", "/5001/owned_pages")[0]
+    assert fields["auth"] == "Bearer LONG_USER_TOKEN"
+    assert "instagram_business_account" in fields["params"]["fields"] and "access_token" in fields["params"]["fields"]
+
+    # A Page found through the portfolio can be connected exactly like a directly-managed one.
+    conn = await client.post(
+        "/v1/channels/meta/facebook/connect",
+        json={"session_id": r.json()["session_id"], "agent_id": aid, "page_ids": ["PGA"], "kinds": ["instagram"]},
+        headers=headers,
+    )
+    assert conn.status_code == 200, conn.text
+    assert conn.json()[0]["external_id"] == "IGA" and conn.json()[0]["type"] == "instagram"
+    assert graph.called("POST", "/PGA/subscribed_apps")[0]["auth"] == "Bearer PAGE_TOKEN_A"
+
+
+async def test_business_fallback_is_skipped_when_me_accounts_has_pages(client: AsyncClient, graph: FakeGraph) -> None:
+    _pages_graph(graph)
+    headers = await _headers(client, "bp2@example.com")
+    await _list_pages(client, headers)
+    assert graph.called("GET", "/me/businesses") == []
+
+
+async def test_business_fallback_caps_pages(client: AsyncClient, graph: FakeGraph) -> None:
+    _portfolio_graph(graph)
+    many = [{"id": f"{9000 + i}", "name": f"P{i}", "access_token": f"TOK{i}"} for i in range(80)]
+    graph.on("GET", "/5001/owned_pages", {"data": many})
+    headers = await _headers(client, "bp3@example.com")
+    body = await _list_pages(client, headers)
+    assert len(body["pages"]) == meta_connect.MAX_PAGES == 50
+    # The cap also stops the walk: once 50 are in hand the second edge is not even asked.
+    assert graph.called("GET", "/5001/client_pages") == []
+
+
+async def test_business_fallback_skips_a_failing_edge_and_pages_without_tokens(
+    client: AsyncClient, graph: FakeGraph
+) -> None:
+    _portfolio_graph(graph)
+    graph.on("GET", "/5001/owned_pages", {"error": {"message": "(#200) Permission denied", "code": 200}}, 403)
+    graph.on(
+        "GET",
+        "/5001/client_pages",
+        {
+            "data": [
+                {"id": "PGB", "name": "Client Page B", "access_token": "PAGE_TOKEN_B"},
+                {"id": "PGX", "name": "No token"},
+            ]
+        },
+    )
+    headers = await _headers(client, "bp4@example.com")
+    body = await _list_pages(client, headers)
+    assert [p["page_id"] for p in body["pages"]] == ["PGB"]  # the denied edge and the token-less Page are skipped
+
+
+async def test_business_fallback_with_no_businesses_is_just_empty(client: AsyncClient, graph: FakeGraph) -> None:
+    _portfolio_graph(graph)
+    graph.on("GET", "/me/businesses", {"error": {"message": "(#100) Missing permission", "code": 100}}, 400)
+    headers = await _headers(client, "bp5@example.com")
+    assert (await _list_pages(client, headers))["pages"] == []
+
+
+async def test_business_fallback_is_time_boxed(
+    client: AsyncClient, graph: FakeGraph, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _portfolio_graph(graph)
+    fast = meta_graph.transport
+
+    async def slow(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/me/businesses"):
+            await asyncio.sleep(2)
+        return await fast.handle_async_request(request)  # type: ignore[union-attr]
+
+    meta_graph.transport = httpx.MockTransport(slow)
+    monkeypatch.setattr(meta_connect, "BUSINESS_FALLBACK_TIMEOUT", 0.05)
+    headers = await _headers(client, "bp6@example.com")
+    body = await _list_pages(client, headers)
+    assert body["pages"] == []  # timed out: the same empty result as before, not an error
+
+
+async def test_pages_listed_log_has_counts_and_scope_names_only(client: AsyncClient, graph: FakeGraph) -> None:
+    _portfolio_graph(graph)
+    headers = await _headers(client, "bp7@example.com")
+    with structlog.testing.capture_logs() as logs:
+        r = await client.post(
+            "/v1/channels/meta/facebook/pages",
+            json={
+                "user_access_token": "SHORT_SECRET_USER_TOKEN",
+                "granted_scopes": ["pages_show_list", "business_management", "bad scope; drop table", "TOKEN=abc"],
+            },
+            headers=headers,
+        )
+    assert r.status_code == 200
+    entry = next(e for e in logs if e["event"] == "meta_pages_listed")
+    assert entry["count_direct"] == 0 and entry["count_business"] == 2
+    assert entry["has_granted_scopes"] is True
+    assert entry["granted_scopes"] == ["pages_show_list", "business_management"]  # malformed names are dropped
+    blob = json.dumps(logs, default=str)
+    for secret in ("SHORT_SECRET_USER_TOKEN", "LONG_USER_TOKEN", "PAGE_TOKEN_A", "PAGE_TOKEN_B"):
+        assert secret not in blob
 
 
 async def test_pages_connect_messenger_and_instagram(

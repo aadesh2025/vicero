@@ -13,8 +13,8 @@ proxy header supplied a country.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Mapping
-from functools import lru_cache
 from typing import Any, Literal
 
 import maxminddb
@@ -70,15 +70,39 @@ def country_from_headers(headers: Mapping[str, str]) -> str | None:
     return None
 
 
-@lru_cache(maxsize=2)
+_readers: dict[str, tuple[int, maxminddb.Reader]] = {}
+_warned: set[str] = set()
+
+
 def _reader(path: str) -> maxminddb.Reader | None:
-    """Open the .mmdb once per path. A missing/corrupt file is logged and treated as 'no database'
-    - a pricing page must never 500 because a geo file is absent."""
+    """The open database for `path`, reopened whenever the file changes on disk.
+
+    Keyed on the file's mtime, not cached forever: the monthly refresh replaces the file, and a
+    file that was missing at the first request (the container started before the download) must
+    be picked up without a restart. A missing/corrupt file is logged once and treated as 'no
+    database' - a pricing page must never 500 because a geo file is absent."""
     try:
-        return maxminddb.open_database(path)
-    except (OSError, ValueError, maxminddb.InvalidDatabaseError):
-        log.warning("geoip database %r could not be opened; IP geolocation is off", path)
+        mtime = os.stat(path).st_mtime_ns
+    except OSError:
+        if path not in _warned:
+            _warned.add(path)
+            log.warning("geoip database %r not found; IP geolocation is off until it exists", path)
         return None
+    cached = _readers.get(path)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    try:
+        reader = maxminddb.open_database(path)
+    except (OSError, ValueError, maxminddb.InvalidDatabaseError):
+        if path not in _warned:
+            _warned.add(path)
+            log.warning("geoip database %r could not be opened; IP geolocation is off", path)
+        return None
+    _warned.discard(path)
+    if cached is not None:
+        cached[1].close()
+    _readers[path] = (mtime, reader)
+    return reader
 
 
 def country_from_ip(ip: str | None) -> str | None:

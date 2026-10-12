@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -451,7 +452,25 @@ def test_ip_fallback_off_without_a_database_path(monkeypatch: pytest.MonkeyPatch
 
 def test_missing_database_file_never_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "geoip_db_path", "does/not/exist.mmdb")
-    geo._reader.cache_clear()
+    geo._readers.clear()
     assert geo.country_from_ip("49.36.1.1") is None
     assert geo.resolve_currency(_ip_req("49.36.1.1"), None) == ("USD", "default")
-    geo._reader.cache_clear()
+    geo._readers.clear()
+
+
+def test_database_appearing_or_changing_after_start_is_picked_up(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """The container can start before the download, and the monthly refresh replaces the file:
+    neither may need an API restart."""
+    path = tmp_path / "country.mmdb"
+    monkeypatch.setattr(settings, "geoip_db_path", str(path))
+    geo._readers.clear()
+    geo._warned.clear()
+    assert geo.country_from_ip("49.36.1.1") is None  # not there yet
+    real = Path("var/geoip/country.mmdb")
+    if not real.exists():
+        pytest.skip("run scripts/fetch_geoip_db.py to enable this check")
+    path.write_bytes(real.read_bytes())
+    assert geo.country_from_ip("49.36.1.1") == "IN"  # appeared after the first miss
+    geo._readers.clear()

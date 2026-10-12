@@ -302,3 +302,18 @@ def test_caddy_requires_the_editor_gate_and_serves_no_public_webhooks() -> None:
     env = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]["caddy"]["environment"]
     for name in ("N8N_DOMAIN", "N8N_EDITOR_GATE_USER", "N8N_EDITOR_GATE_HASH"):
         assert f"${{{name}:?" in str(env[name]), f"{name} must be required so the stack cannot start ungated"
+
+
+def test_only_caddy_and_the_loopback_db_port_are_published(compose: dict[str, Any]) -> None:
+    """Docker bypasses ufw for published ports, so the only safe host binds are Caddy's and loopback.
+
+    Postgres is published for the SSH-tunnelled DB client (docs/25 §13) on 127.0.0.1 only; a bare
+    "5433:5432" would bind 0.0.0.0 and put the database on the internet.
+    """
+    published = {
+        name: [str(p) for p in (svc.get("ports") or [])] for name, svc in _services(compose).items()
+    }
+    assert published.pop("postgres") == ["127.0.0.1:5433:5432"]
+    assert set(published.pop("caddy")) == {"80:80", "443:443"}
+    leaked = {name: ports for name, ports in published.items() if ports}
+    assert not leaked, f"unexpected published ports: {leaked}"

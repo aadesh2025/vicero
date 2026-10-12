@@ -98,7 +98,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    # No host port published in prod — only reachable inside the compose network.
+    # Loopback-only host port, for a DB client over an SSH tunnel (docs/25 §13). 127.0.0.1 is not on any public
+    # interface, so Docker's ufw bypass does not apply. NEVER change this to "5433:5432" (that is 0.0.0.0).
+    ports:
+      - "127.0.0.1:5433:5432"
 
   redis:
     image: redis:7

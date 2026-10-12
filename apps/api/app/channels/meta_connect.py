@@ -8,7 +8,9 @@ ourselves. All conflict checks run before the first Graph write, so a refused co
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import re
 import secrets
 import uuid
 from typing import Any
@@ -41,6 +43,14 @@ log = get_logger("channels.meta_connect")
 PAGE_SUBSCRIBED_FIELDS = "messages,messaging_postbacks"
 
 _SECRET_CONFIG_KEYS = ("access_token", "page_access_token", "registration_pin")
+
+#: Fields requested for every Page listing (direct and business-portfolio).
+PAGE_FIELDS = "id,name,access_token,picture{url},instagram_business_account{id,username,profile_picture_url}"
+#: Business-portfolio fallback limits (ADR-114): a bounded, time-boxed walk, never an open-ended crawl.
+MAX_PAGES = 50
+MAX_BUSINESSES = 10
+BUSINESS_FALLBACK_TIMEOUT = 20.0
+_SCOPE_NAME = re.compile(r"^[a-z_]{1,64}$")
 
 
 # ── config ────────────────────────────────────────────────────────────────────────
@@ -84,11 +94,15 @@ class WhatsAppConnectRequest(BaseModel):
 
 class PagesRequest(BaseModel):
     user_access_token: str = Field(min_length=1, max_length=4096)
+    #: Permission *names* Meta reported as granted in the login popup. Used only for a diagnostic log line.
+    granted_scopes: list[str] = Field(default_factory=list, max_length=50)
 
 
 class PageInstagram(BaseModel):
     id: str
     username: str | None = None
+    #: The Instagram account's own profile picture (the Instagram picker shows it).
+    picture: str | None = None
 
 
 class PageOut(BaseModel):
@@ -314,6 +328,100 @@ async def connect_whatsapp(session: AsyncSession, ctx: OrgContext, data: WhatsAp
 
 
 # ── Messenger + Instagram ─────────────────────────────────────────────────────────
+def _page_record(p: Any) -> dict[str, Any] | None:
+    """One Graph Page object -> what we keep, or None if it cannot be connected (no id / no Page token)."""
+    if not isinstance(p, dict) or not p.get("id") or not p.get("access_token"):
+        return None
+    ig = p.get("instagram_business_account")
+    pic = p.get("picture")
+    picture = ((pic.get("data") or {}).get("url")) if isinstance(pic, dict) else None
+    instagram = None
+    if isinstance(ig, dict) and ig.get("id"):
+        instagram = {
+            "id": str(ig["id"]),
+            "username": ig.get("username"),
+            "picture": ig.get("profile_picture_url"),
+        }
+    return {
+        "page_id": str(p["id"]),
+        "name": str(p.get("name") or p["id"]),
+        "picture": picture,
+        "instagram": instagram,
+        "access_token": str(p["access_token"]),
+    }
+
+
+def _dedupe_pages(pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: dict[str, dict[str, Any]] = {}
+    for page in pages:
+        seen.setdefault(page["page_id"], page)  # first wins: a directly-managed Page beats a portfolio entry
+    return list(seen.values())
+
+
+async def _direct_pages(token: str) -> list[dict[str, Any]]:
+    """The Pages `/me/accounts` returns (those the user manages directly)."""
+    stored: list[dict[str, Any]] = []
+    after: str | None = None
+    for _ in range(5):  # 500 pages is far beyond any real customer
+        params: dict[str, Any] = {"fields": PAGE_FIELDS, "limit": 100}
+        if after:
+            params["after"] = after
+        body = await graph.call("GET", "/me/accounts", token=token, params=params)
+        stored += [r for r in (_page_record(p) for p in body.get("data") or []) if r]
+        raw_paging = body.get("paging")
+        paging: dict[str, Any] = raw_paging if isinstance(raw_paging, dict) else {}
+        after = ((paging.get("cursors") or {}).get("after")) if paging.get("next") else None
+        if not after:
+            break
+    return stored
+
+
+async def _business_pages(token: str) -> tuple[list[dict[str, Any]], int]:
+    """Fallback: Pages reachable through the user's Business Portfolios (needs `business_management`).
+
+    Bounded three ways: at most MAX_BUSINESSES portfolios, MAX_PAGES Pages, BUSINESS_FALLBACK_TIMEOUT seconds.
+    Anything that fails or times out is skipped, so the worst case is the same empty list as before.
+    Returns (pages, how many Pages Meta listed without giving us a Page token).
+    """
+    found: list[dict[str, Any]] = []
+    no_token = 0
+
+    async def walk() -> None:
+        nonlocal no_token
+        businesses = await graph.call("GET", "/me/businesses", token=token, params={"fields": "id,name", "limit": 25})
+        for b in (businesses.get("data") or [])[:MAX_BUSINESSES]:
+            business_id = str(b.get("id") or "") if isinstance(b, dict) else ""
+            if not business_id.isdigit():
+                continue
+            for edge in ("owned_pages", "client_pages"):
+                if len(_dedupe_pages(found)) >= MAX_PAGES:
+                    return
+                try:
+                    body = await graph.call(
+                        "GET",
+                        f"/{business_id}/{edge}",
+                        token=token,
+                        params={"fields": PAGE_FIELDS, "limit": MAX_PAGES},
+                    )
+                except MetaGraphError as exc:
+                    log.info("meta_business_pages_unavailable", edge=edge, status=exc.status, meta_code=exc.code)
+                    continue
+                for p in body.get("data") or []:
+                    record = _page_record(p)
+                    if record:
+                        found.append(record)
+                    else:
+                        no_token += 1
+
+    try:
+        await asyncio.wait_for(walk(), timeout=BUSINESS_FALLBACK_TIMEOUT)
+    except TimeoutError:
+        log.warning("meta_business_pages_timeout", found=len(found))
+    except MetaGraphError as exc:
+        log.info("meta_businesses_unavailable", status=exc.status, meta_code=exc.code)
+    return _dedupe_pages(found)[:MAX_PAGES], no_token
+
+
 async def list_pages(session: AsyncSession, ctx: OrgContext, data: PagesRequest) -> PagesOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
     if not meta_enabled():
@@ -323,40 +431,27 @@ async def list_pages(session: AsyncSession, ctx: OrgContext, data: PagesRequest)
         if not long_lived:
             raise AppError("meta.exchange_failed", "Meta did not return an access token.", 400)
         me = await graph.call("GET", "/me", token=long_lived, params={"fields": "id"})
-        stored: list[dict[str, Any]] = []
-        after: str | None = None
-        for _ in range(5):  # 500 pages is far beyond any real customer
-            params: dict[str, Any] = {
-                "fields": "id,name,access_token,picture{url},instagram_business_account{id,username}",
-                "limit": 100,
-            }
-            if after:
-                params["after"] = after
-            body = await graph.call("GET", "/me/accounts", token=long_lived, params=params)
-            for p in body.get("data") or []:
-                if not isinstance(p, dict) or not p.get("id") or not p.get("access_token"):
-                    continue
-                ig = p.get("instagram_business_account")
-                pic = p.get("picture")
-                picture = ((pic.get("data") or {}).get("url")) if isinstance(pic, dict) else None
-                stored.append(
-                    {
-                        "page_id": str(p["id"]),
-                        "name": str(p.get("name") or p["id"]),
-                        "picture": picture,
-                        "instagram": {"id": str(ig["id"]), "username": ig.get("username")}
-                        if isinstance(ig, dict) and ig.get("id")
-                        else None,
-                        "access_token": str(p["access_token"]),
-                    }
-                )
-            raw_paging = body.get("paging")
-            paging: dict[str, Any] = raw_paging if isinstance(raw_paging, dict) else {}
-            after = ((paging.get("cursors") or {}).get("after")) if paging.get("next") else None
-            if not after:
-                break
+        direct = await _direct_pages(long_lived)
     except MetaGraphError as exc:
         raise _graph_failure(exc) from exc
+
+    # A Page owned by a Business Portfolio does not appear in /me/accounts for many logins.
+    business: list[dict[str, Any]] = []
+    no_token = 0
+    if not direct:
+        business, no_token = await _business_pages(long_lived)
+    stored = _dedupe_pages(direct + business)[:MAX_PAGES] if business else direct
+
+    scopes = [x for x in data.granted_scopes if _SCOPE_NAME.fullmatch(x)][:30]
+    # Counts and permission *names* only: never a token, a code or an id.
+    log.info(
+        "meta_pages_listed",
+        count_direct=len(direct),
+        count_business=len(business),
+        count_business_without_token=no_token,
+        has_granted_scopes=bool(scopes),
+        granted_scopes=scopes,
+    )
 
     session_id = await meta_session.create(ctx.org.id, ctx.user.id, stored, str(me.get("id") or ""))
     await write_audit(session, ctx.org.id, ctx.user.id, "channel.meta_pages_listed", meta={"pages": len(stored)})

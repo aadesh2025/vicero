@@ -77,9 +77,12 @@ checkboxes above only enable the *fields* for the app.
 | `pages_manage_metadata` | Subscribe the Page to the app |
 | `instagram_basic` | Read the linked Instagram professional account |
 | `instagram_manage_messages` | Instagram DMs |
+| `business_management` | Find Pages owned by a **Business Portfolio** (see below). The use case shows it as *Ready for testing*; it needs Advanced Access via App Review like the others. |
 
-`business_management` is **not** requested. Add it only if Meta review or a customer's Business Portfolio setup proves it is
-required, and then add it to `PAGE_SCOPES` in `apps/web/src/lib/meta/facebook-sdk.ts`.
+**Why `business_management` (ADR-114).** For a Page owned by a Business Portfolio, `GET /me/accounts` returns an empty list. The
+server then falls back to `GET /me/businesses` and, for each portfolio, `owned_pages` and `client_pages` (at most 10 portfolios,
+50 Pages, 20 seconds; any failure just yields the same empty result as before). Without this scope customers with portfolio
+Pages see "No Pages found". The list of requested scopes lives in `PAGE_SCOPES` in `apps/web/src/lib/meta/facebook-sdk.ts`.
 
 **3.6 Testing before approval**
 - [ ] *App roles → Roles*: add every tester (Administrators/Developers/Testers) by their Facebook account; they must accept
@@ -94,7 +97,9 @@ required, and then add it to `PAGE_SCOPES` in `apps/web/src/lib/meta/facebook-sd
 - [ ] Reconnect the same number → same channel row, no duplicate
 - [ ] Connect the same number from a second workspace → clear "already connected" message, first workspace unaffected
 - [ ] Connect Messenger (one Page) → DM the Page → reply arrives
-- [ ] Connect Instagram → DM the account → reply arrives; a Page with no Instagram link cannot be ticked
+- [ ] Connect Instagram → the picker lists Instagram accounts (picture, `@username`, "via <Page>"), never Pages without one → DM the account → reply arrives
+- [ ] A login whose Page is owned by a Business Portfolio still lists the Page (fallback); the api log shows one `meta_pages_listed` line with counts and scope *names* only
+- [ ] Click one Connect button: only that button spins, the others are disabled with "Another connection is in progress"
 - [ ] Disconnect Instagram while Messenger stays connected → Messenger still answers (Page subscription kept)
 - [ ] Disconnect Messenger → badge *Disconnected*, token gone from `channels.config`, number/Page free for another workspace
 - [ ] Remove the app in Facebook settings (Deauthorize) → channels flip to *Needs reconnect* within seconds
@@ -117,6 +122,8 @@ required, and then add it to `PAGE_SCOPES` in `apps/web/src/lib/meta/facebook-sd
 | "That phone number is not part of the WhatsApp Business Account" | The browser's ids did not match what Meta says the token can access. Retry the whole sign-up; this check is deliberate. |
 | `meta.graph_error` with Meta's message | Surfaced verbatim (never a token). Typical: expired authorization code (retry), missing permission (App Review / tester role), number needs verification in WhatsApp Manager. |
 | "already connected to another Vicero workspace" | The account is attached elsewhere. Disconnect it there, or contact support if it is yours. |
+| "No Pages found for this Facebook login" | The login returned no Page Vicero can use. Check: you logged into the account that manages the Page; you ticked the Page in Meta's popup; you have full control of the Page in Meta Business Suite (Settings → People/Partners). For portfolio-owned Pages the login must have granted `business_management`. The api log line `meta_pages_listed` shows `count_direct`, `count_business`, `count_business_without_token` (Pages Meta listed but gave no Page token for: usually missing Page tasks) and the granted scope names. |
+| "No Instagram Business account is linked to your Pages" | Instagram: Settings → Account type → switch to Professional, then link it to the Facebook Page (Page settings → Linked accounts). |
 | Channel shows *Needs reconnect* | Token revoked/expired, password change, or the user removed the app. Press **Reconnect**. |
 | Replies stop after ~24 h on WhatsApp | The 24-hour customer-service window (unchanged); use an approved template. |
 | `GRAPH` errors after a version bump | Set `META_GRAPH_VERSION` to a version Meta currently supports; it is read at request time by the adapters and by the Facebook SDK (`FB.init`). |

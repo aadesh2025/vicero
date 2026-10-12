@@ -30,7 +30,15 @@ declare global {
 }
 
 /** Why a flow stopped; the UI maps each kind to plain-English copy. */
-export type MetaFlowErrorKind = "sdk" | "blocked" | "cancelled" | "meta" | "timeout" | "permissions";
+export type MetaFlowErrorKind =
+  | "sdk"
+  | "blocked"
+  | "cancelled"
+  | "meta"
+  | "timeout"
+  | "permissions"
+  | "no_pages"
+  | "no_instagram";
 
 export class MetaFlowError extends Error {
   kind: MetaFlowErrorKind;
@@ -40,13 +48,17 @@ export class MetaFlowError extends Error {
   }
 }
 
-/** Permissions the Messenger + Instagram login asks for (docs/26). `business_management` is not needed. */
+/**
+ * Permissions the Messenger + Instagram login asks for (docs/26, ADR-114). `business_management` is what lets the
+ * server find Pages owned by a Business Portfolio: for those, `/me/accounts` comes back empty without it.
+ */
 export const PAGE_SCOPES = [
   "pages_show_list",
   "pages_messaging",
   "pages_manage_metadata",
   "instagram_basic",
   "instagram_manage_messages",
+  "business_management",
 ] as const;
 
 /** A popup that is closed within this long of the click almost certainly never opened. */
@@ -210,8 +222,15 @@ export function startWhatsAppSignup(fb: FbSdk, configId: string): Promise<WhatsA
   });
 }
 
-/** Facebook login for Messenger + Instagram. Resolves with a short-lived user token for the server to exchange. */
-export function loginForPages(fb: FbSdk): Promise<string> {
+/** What the Messenger + Instagram login hands back: a short-lived user token, plus which permissions were granted. */
+export interface PagesLogin {
+  accessToken: string;
+  /** Permission names only, as Meta reported them (`return_scopes`). Empty when Meta did not say. */
+  grantedScopes: string[];
+}
+
+/** Facebook login for Messenger + Instagram. The token is short-lived: the server exchanges it. */
+export function loginForPages(fb: FbSdk): Promise<PagesLogin> {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now();
     fb.login(
@@ -227,20 +246,21 @@ export function loginForPages(fb: FbSdk): Promise<string> {
           return;
         }
         const granted = response.authResponse?.grantedScopes;
+        const grantedScopes = granted ? granted.split(",").map((s) => s.trim()).filter(Boolean) : [];
         if (granted) {
-          const have = new Set(granted.split(","));
+          const have = new Set(grantedScopes);
           const missing = PAGE_SCOPES.filter((s) => !have.has(s));
           if (missing.length > 0) {
             reject(
               new MetaFlowError(
                 "permissions",
-                `Vicero needs every permission to manage your messages. Missing: ${missing.join(", ")}.`,
+                `Facebook did not grant: ${missing.join(", ")}. Vicero needs every permission to manage your messages: tick them all in Meta's popup and try again.`,
               ),
             );
             return;
           }
         }
-        resolve(token);
+        resolve({ accessToken: token, grantedScopes });
       },
       { scope: PAGE_SCOPES.join(","), return_scopes: true },
     );

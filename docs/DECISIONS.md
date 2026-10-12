@@ -18,6 +18,29 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-114: Page discovery falls back to Business Portfolios; the Instagram button lists Instagram accounts; one spinner per button
+- **Date:** 2026-10-12
+- **Status:** accepted
+- **Context:** First live tests of one-click connect (ADR-113) failed for a customer whose Page is owned by a Business Portfolio:
+  `GET /me/accounts` is empty for such a login unless `business_management` was granted, so Vicero said "doesn't manage any Pages".
+  The Instagram button also showed Facebook Pages (with an Instagram line) although the customer is choosing an Instagram account, and
+  one global `busy` flag made all three Connect buttons spin together.
+- **Decision:**
+  1. Request `business_management` in the login. When `/me/accounts` is empty the server walks `/me/businesses` ->
+     `/{business}/owned_pages` + `client_pages`, merged and de-duplicated by Page id, bounded to 10 portfolios / 50 Pages / 20 s;
+     any failed edge is skipped. The result feeds the same encrypted session and the same connect endpoint, so uniqueness, encryption
+     and the cross-org 409 are untouched. One safe log line `meta_pages_listed` records counts and permission *names* only.
+  2. The Instagram button lists Instagram accounts (picture, `@username`, "via <Page>") and hides Pages without one; the Page token stays
+     server-side and the channel's `external_id` is still the Instagram business account id. The Messenger button keeps the Page picker.
+  3. The flow state carries the button that started it (`working.channel`); only that button spins and the others are disabled with
+     "Another connection is in progress" (the Meta popup is single-flight, so they are not left clickable).
+  4. A login that omits a requested permission fails with the names of the permissions Meta did not grant.
+- **Consequences:** `business_management` must also pass App Review for non-testers (docs/26 §3.5). A portfolio Page for which Meta gives no
+  Page token is skipped (counted in the log) because it cannot be connected. The fallback adds up to ~20 s in the worst case, only when
+  the direct list is empty.
+- **Alternatives rejected:** asking customers to paste a Page token (defeats one-click); crawling every portfolio page-by-page without a cap;
+  letting the buttons stay clickable during a flow (two concurrent Meta popups and one shared status line).
+
 ### ADR-113: One shared Meta webhook, one account per org (unique `(type, external_id)`), tokens only ever server-side
 - **Date:** 2026-10-09
 - **Status:** accepted

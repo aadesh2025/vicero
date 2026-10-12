@@ -263,13 +263,16 @@ describe("Messenger and Instagram", () => {
         "pages_manage_metadata",
         "instagram_basic",
         "instagram_manage_messages",
+        "business_management", // finds Pages owned by a Business Portfolio
       ]),
     );
-    expect(scope).not.toContain("business_management");
 
     act(() => loginCallback?.({ authResponse: { accessToken: "SHORT_TOKEN", grantedScopes: String(loginOptions?.scope) } }));
     const dialog = await screen.findByRole("dialog");
-    expect(metaApi.listFacebookPages).toHaveBeenCalledWith("SHORT_TOKEN");
+    expect(metaApi.listFacebookPages).toHaveBeenCalledWith(
+      "SHORT_TOKEN",
+      expect.arrayContaining(["pages_show_list", "business_management"]),
+    );
 
     // Messenger was preselected by the button; Submit is disabled until a Page is ticked.
     const submit = within(dialog).getByRole("button", { name: /connect selected/i });
@@ -290,15 +293,17 @@ describe("Messenger and Instagram", () => {
     expect(onChanged).toHaveBeenCalled();
   });
 
-  it("blocks Pages without an Instagram account once Instagram is chosen", async () => {
+  it("Messenger keeps the Page picker and blocks Pages without Instagram once Instagram is ticked", async () => {
     vi.mocked(metaApi.listFacebookPages).mockResolvedValue(PAGES);
     renderHarness();
-    fireEvent.click(await ready(/connect instagram/i));
+    fireEvent.click(await ready(/connect messenger/i));
     act(() => loginCallback?.({ authResponse: { accessToken: "T" } }));
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Choose what to connect")).toBeInTheDocument();
+    expect(within(dialog).getByRole("checkbox", { name: /no insta/i })).toBeEnabled(); // Messenger needs no Instagram
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Instagram" }));
     expect(within(dialog).getByRole("checkbox", { name: /no insta/i })).toBeDisabled();
     expect(within(dialog).getByRole("checkbox", { name: /acme shop/i })).toBeEnabled();
-    expect(within(dialog).getByText(/@acme/)).toBeInTheDocument();
   });
 
   it("shows a 409 from the server inside the picker and keeps it open", async () => {
@@ -320,7 +325,7 @@ describe("Messenger and Instagram", () => {
     renderHarness();
     fireEvent.click(await ready(/connect messenger/i));
     act(() => loginCallback?.({ authResponse: { accessToken: "T", grantedScopes: "pages_show_list" } }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/missing: .*pages_messaging/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/did not grant: .*pages_messaging.*business_management/i);
     expect(metaApi.listFacebookPages).not.toHaveBeenCalled();
   });
 });
@@ -360,6 +365,128 @@ describe("connected channels", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: /cancel/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(metaApi.disconnectMetaChannel).not.toHaveBeenCalled();
+  });
+});
+
+describe("per-button loading", () => {
+  const spinner = (el: HTMLElement) => el.querySelector("svg.animate-spin");
+
+  it("only the clicked button spins; the others are disabled without a spinner and say why", async () => {
+    renderHarness();
+    fireEvent.click(await ready(/connect instagram/i)); // the popup is open; nobody answers yet
+
+    expect(spinner(screen.getByTestId("instagram"))).not.toBeNull();
+    for (const [row, name] of [
+      ["whatsapp", /^connect whatsapp/i],
+      ["facebook", /^connect messenger/i],
+    ] as const) {
+      const rowEl = screen.getByTestId(row);
+      expect(spinner(rowEl)).toBeNull();
+      const button = within(rowEl).getByRole("button", { name });
+      expect(button).toBeDisabled();
+      expect(button.closest("span[title]")).toHaveAttribute("title", "Another connection is in progress");
+    }
+  });
+
+  it("spins the Messenger button, not Instagram, for the Messenger flow", async () => {
+    renderHarness();
+    fireEvent.click(await ready(/connect messenger/i));
+    expect(spinner(screen.getByTestId("facebook"))).not.toBeNull();
+    expect(spinner(screen.getByTestId("instagram"))).toBeNull();
+    expect(spinner(screen.getByTestId("whatsapp"))).toBeNull();
+  });
+
+  it("spins only the WhatsApp button for the WhatsApp flow", async () => {
+    renderHarness();
+    fireEvent.click(await ready(/connect whatsapp/i));
+    expect(spinner(screen.getByTestId("whatsapp"))).not.toBeNull();
+    expect(spinner(screen.getByTestId("facebook"))).toBeNull();
+    expect(spinner(screen.getByTestId("instagram"))).toBeNull();
+  });
+
+  it("frees every button, with no spinner left, when the flow ends", async () => {
+    renderHarness();
+    fireEvent.click(await ready(/connect instagram/i));
+    facebookMessage({ type: "WA_EMBEDDED_SIGNUP" }); // unrelated message: changes nothing
+    act(() => loginCallback?.({ authResponse: null })); // the popup was closed
+    await screen.findByRole("alert");
+    for (const row of ["whatsapp", "facebook", "instagram"]) {
+      expect(spinner(screen.getByTestId(row))).toBeNull();
+    }
+    expect(within(screen.getByTestId("facebook")).getByRole("button", { name: /^connect messenger/i })).toBeEnabled();
+  });
+});
+
+describe("Instagram account picker", () => {
+  const IG_PAGES = {
+    session_id: "sess-ig",
+    pages: [
+      {
+        page_id: "PG1",
+        name: "Acme Shop",
+        picture: "https://img/page.png",
+        instagram: { id: "IG1", username: "acme", picture: "https://img/ig.png" },
+      },
+      { page_id: "PG2", name: "No Insta", picture: null, instagram: null },
+    ],
+  };
+
+  it("lists Instagram accounts (picture, @username, via Page), never the Pages without one", async () => {
+    vi.mocked(metaApi.listFacebookPages).mockResolvedValue(IG_PAGES);
+    vi.mocked(metaApi.connectFacebookPages).mockResolvedValue([channel({ type: "instagram" })]);
+    renderHarness();
+    fireEvent.click(await ready(/connect instagram/i));
+    act(() => loginCallback?.({ authResponse: { accessToken: "T" } }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Choose an Instagram account")).toBeInTheDocument();
+    expect(within(dialog).getByText("@acme")).toBeInTheDocument();
+    expect(within(dialog).getByText("via Acme Shop")).toBeInTheDocument();
+    expect(dialog.querySelector('img[src="https://img/ig.png"]')).not.toBeNull(); // the account's own picture
+    expect(within(dialog).queryByText(/no insta/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Connect as")).not.toBeInTheDocument(); // no Messenger/Instagram toggle here
+
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "@acme" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /connect selected/i }));
+    // The Page is still what the server connects through; the channel is the Instagram account.
+    await waitFor(() =>
+      expect(metaApi.connectFacebookPages).toHaveBeenCalledWith({
+        session_id: "sess-ig",
+        agent_id: "a1",
+        page_ids: ["PG1"],
+        kinds: ["instagram"],
+      }),
+    );
+  });
+
+  it("says how to link an account, and opens no empty list, when no Page has Instagram", async () => {
+    vi.mocked(metaApi.listFacebookPages).mockResolvedValue({ session_id: "s", pages: [IG_PAGES.pages[1]] });
+    renderHarness();
+    fireEvent.click(await ready(/connect instagram/i));
+    act(() => loginCallback?.({ authResponse: { accessToken: "T" } }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No Instagram Business account is linked to your Pages. In Instagram go to Settings > Account type, switch to Professional, then link it to your Page.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});
+
+describe("no Pages found", () => {
+  it("gives an actionable checklist and a help link, and opens no empty picker", async () => {
+    vi.mocked(metaApi.listFacebookPages).mockResolvedValue({ session_id: "s", pages: [] });
+    renderHarness();
+    fireEvent.click(await ready(/connect messenger/i));
+    act(() => loginCallback?.({ authResponse: { accessToken: "T", grantedScopes: String(loginOptions?.scope) } }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("No Pages found for this Facebook login. Check:");
+    expect(alert).toHaveTextContent("1) you are logged into the Facebook account that manages the Page");
+    expect(alert).toHaveTextContent("2) you ticked the Page in Meta's popup");
+    expect(alert).toHaveTextContent("3) you have full control of the Page in Meta Business Suite");
+    expect(within(alert).getByRole("link", { name: /setup help/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("/docs/channels/overview"),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 

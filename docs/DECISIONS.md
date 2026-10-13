@@ -18,9 +18,9 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
-### ADR-116: Meta inbound latency: bounded, overlapped guard calls on one reused client; per-turn stage timings; contact identity and an "All chats" inbox view
+### ADR-116: Contact identity and an "All chats" inbox view (the Meta latency changes of PR #20 were rolled back)
 - **Date:** 2026-10-12
-- **Status:** accepted
+- **Status:** accepted for items 5 and 6 only. **Items 1-4 (latency) are NOT shipped**: after PR #20 was deployed on 2026-10-13 replies to Instagram DMs stopped, the stack was rolled back, and the cause was never found because the worker logs were lost with the container recreate. Those changes are saved on branch `wip/latency-long-lived-loop` (persistent worker loop, guard calls overlapped with retrieval, shared HTTP client, timing line). The 28 s finding below still stands. Re-ship them one at a time, each with a live DM test and the worker logs captured BEFORE any rollback.
 - **Context:** A 28 s reply to an Instagram "Hi". Measured: the LLM took 0.8-4.6 s and the embedding 1.3 s, but ~23 s passed between task start and `guard_l2_unavailable` with an empty error. Inside the worker container `getaddrinfo("api.groq.com")` costs ~4 s on every DNS-cache miss, and `httpx.Timeout` does not cover name resolution, so the "300 ms" L2 call could cost seconds. L2 (and L3) also ran serially in front of retrieval, each on a brand-new client (new DNS + TLS every turn).
 - **Decision:**
   1. **Bound the whole call.** L2 and L3 wrap DNS + connect + request in `asyncio.wait_for(budget + 250 ms)` (`chat/guard_http.bounded`). Still fail-open (ADR-051) and still loud: `guard_l2_unavailable` now says `timed out after N ms` instead of an empty string. L1 is untouched (no network).

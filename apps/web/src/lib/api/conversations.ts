@@ -19,12 +19,24 @@ export interface ApiMessage {
   created_at: string;
 }
 
+export interface ApiConversationContact {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  /** Platform handle without the "@" (Instagram), when known. */
+  username?: string | null;
+  crm_contact_id?: string | null;
+}
+
 export interface ApiConversation {
   id: string;
   agent_id: string;
   channel: string;
   status: string;
   title: string | null;
+  /** Who is on the other end. Null for widget/playground chats and threads that predate contact resolution. */
+  contact?: ApiConversationContact | null;
+  channel_user_id?: string | null;
   message_count: number;
   last_message_at: string | null;
   created_at: string;

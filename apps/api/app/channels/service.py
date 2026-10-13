@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import usage
 from app.channels import schemas
 from app.channels.base import BaseChannel, InboundMessage, get_channel
+from app.chat import stage_timing
 from app.chat.inbound import InboundTurn
 from app.contacts import resolve_contact
 from app.core import rbac
@@ -280,14 +281,16 @@ async def process_inbound(
     if not channel.enabled:
         log.info("channel_inbound_ignored_disabled", channel=str(channel.id))
         return msg, None
-    agent = await session.get(Agent, channel.agent_id)
-    if agent is None or agent.deleted_at is not None:
-        return msg, None
-    version = await _live_version(session, agent)
-    if version is None:
-        return msg, None
-    contact = await resolve_contact(session, channel, adapter, msg.external_user_id, msg.profile)
-    conv = await _get_or_create_conversation(session, channel, msg.external_user_id, contact)
+    with stage_timing.stage("channel_load"):
+        agent = await session.get(Agent, channel.agent_id)
+        if agent is None or agent.deleted_at is not None:
+            return msg, None
+        version = await _live_version(session, agent)
+        if version is None:
+            return msg, None
+    with stage_timing.stage("contact"):  # includes the Graph profile fetch while name/photo are unknown
+        contact = await resolve_contact(session, channel, adapter, msg.external_user_id, msg.profile)
+        conv = await _get_or_create_conversation(session, channel, msg.external_user_id, contact)
     turn = InboundTurn(session, agent, version, conv, msg.text)
     await turn.run()
     reply = None if turn.handed_off else ((turn.result.content or "").strip() or None)
@@ -299,7 +302,8 @@ async def run_and_send(session: AsyncSession, channel: Channel, adapter: BaseCha
     msg, reply = await process_inbound(session, channel, adapter, payload)
     if msg is not None and reply:
         try:
-            await adapter.send(channel, msg.external_user_id, reply)
+            with stage_timing.stage("send"):
+                await adapter.send(channel, msg.external_user_id, reply)
         except Exception as exc:
             # The inbound is already persisted; a provider-delivery failure must not
             # 500 the webhook (that makes Telegram/Meta re-deliver → duplicate turns).

@@ -30,6 +30,7 @@ from typing import Any, Literal
 
 import httpx
 
+from app.chat import guard_http
 from app.chat.guard_models import platform_guard_key
 from app.core import metrics
 from app.core.config import settings
@@ -192,11 +193,14 @@ async def classify(
         recent = "\n".join(f"- {h[:300]}" for h in history[-4:])
         context = f"Earlier messages from this customer, oldest first:\n{recent}\n\n"
 
-    timeout = httpx.Timeout(settings.guard_policy_timeout_ms / 1000.0)
+    budget_ms = settings.guard_policy_timeout_ms
+    timeout = httpx.Timeout(budget_ms / 1000.0)
+    client, owned = guard_http.make_client(transport)
     try:
-        async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
-            resp = await client.post(
+        resp = await guard_http.bounded(
+            client.post(
                 _GROQ_CHAT_URL,
+                timeout=timeout,
                 headers={"Authorization": f"Bearer {key}"},
                 json={
                     "model": settings.guard_policy_model,
@@ -206,18 +210,23 @@ async def classify(
                         {"role": "user", "content": f"{context}Message to grade:\n{message[:4000]}"},
                     ],
                 },
-            )
-            resp.raise_for_status()
-            body = resp.json()
+            ),
+            budget_ms,
+        )
+        resp.raise_for_status()
+        body = resp.json()
     except Exception as exc:
         metrics.observe_policy_call("error", 0)
         log.warning(
             "guard_l3_unavailable",
-            error=str(exc)[:200],
+            error=guard_http.describe(exc, budget_ms),
             model=settings.guard_policy_model,
             impact="this turn was not graded for distress; no alert was raised",
         )
         return None
+    finally:
+        if owned:
+            await client.aclose()
 
     content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
     tokens = int((body.get("usage") or {}).get("total_tokens") or 0)

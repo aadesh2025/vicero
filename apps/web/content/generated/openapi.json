@@ -2317,7 +2317,7 @@
         "type": "object"
       },
       "ContactOut": {
-        "description": "The human on the other end — what the inbox needs to render a recognizable row.",
+        "description": "The human on the other end: what the inbox and conversation list need to render a recognizable row.",
         "properties": {
           "avatar_url": {
             "anyOf": [
@@ -2357,6 +2357,17 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
           }
         },
         "required": [
@@ -2377,6 +2388,27 @@
           "channel": {
             "title": "Channel",
             "type": "string"
+          },
+          "channel_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel User Id"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContactOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -2521,6 +2553,27 @@
           "channel": {
             "title": "Channel",
             "type": "string"
+          },
+          "channel_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel User Id"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContactOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -23382,6 +23435,18 @@
               ],
               "description": "Filter to one channel, e.g. `instagram`.",
               "title": "Channel"
+            }
+          },
+          {
+            "description": "Also list conversations the bot is handling (no handoff). Read-only triage; take-over is allowed.",
+            "in": "query",
+            "name": "include_bot",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list conversations the bot is handling (no handoff). Read-only triage; take-over is allowed.",
+              "title": "Include Bot",
+              "type": "boolean"
             }
           },
           {

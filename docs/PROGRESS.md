@@ -2175,3 +2175,10 @@ marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/
 - `fix/deploy-pull-always` is merged: `deploy.sh` runs `docker compose pull --policy always` (4 retries), so a moving `:master` tag can no longer leave stale images. First run on the server pulled new api digest `a8d8b6cf...`; migrations at head (`0031_automations`); `/readyz` ok.
 - Admin confirmed: the owner account exists in production with `is_staff = true` (no change needed).
 - Open: the local geoip-fallback commit `3b6f941` is not yet pushed or merged.
+
+## Meta latency, contact identity, Inbox "All chats" (2026-10-12)
+- **Latency (ADR-116):** L2/L3 guard calls are bounded as a whole (DNS included), fail open and loud, run concurrently with retrieval, and share one long-lived client; the inbound task runs on a persistent loop. One `meta_inbound_timing` log line per turn names every stage and the slowest. Docker DNS untouched.
+- **Contacts:** conversations API returns `contact` + `channel_user_id`; avatar/initials + name + `@username` in Conversations list/detail, dashboard panel and Inbox.
+- **Inbox:** "Needs a human" (default) / "All chats" toggle (`include_bot=true`); take-over on a bot-handled chat opens the handoff.
+- Tests: `tests/test_meta_latency.py`, `tests/test_inbox_all_chats.py`; vitest for avatar, inbox toggle/take-over, dashboard panel.
+- After deploy: read one real DM's `meta_inbound_timing` line (`docker logs vicero-prod-worker-1 | grep meta_inbound_timing`).

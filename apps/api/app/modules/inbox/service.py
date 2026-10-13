@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels import get_channel, whatsapp
 from app.chat import attention
+from app.chat.handoff import trigger_handoff
 from app.core import rbac
 from app.core.errors import AppError
 from app.core.logging import get_logger
@@ -29,7 +30,7 @@ from app.models import (
     WorkflowVersion,
 )
 from app.modules.conversations.schemas import MessageOut
-from app.modules.conversations.service import _message_out
+from app.modules.conversations.service import _message_out, contact_out
 from app.modules.inbox import schemas
 from app.modules.orgs.deps import OrgContext
 from app.realtime.hub import conv_topic, hub, inbox_topic
@@ -89,14 +90,7 @@ def _contact_out(
 ) -> schemas.ContactOut | None:
     """The name to show. A CRM link wins: a customer recognised by phone on a channel
     they've never used before should still appear as themselves, not as a raw handle."""
-    if contact is None:
-        return None
-    return schemas.ContactOut(
-        id=contact.id,
-        display_name=(person.display_name if person else None) or contact.display_name,
-        avatar_url=contact.avatar_url,
-        crm_contact_id=contact.crm_contact_id,
-    )
+    return contact_out(contact, person)
 
 
 async def _contacts_by_id(
@@ -142,6 +136,7 @@ async def list_conversations(
     ctx: OrgContext,
     status_filter: str | None,
     channel_filter: str | None = None,
+    include_bot: bool = False,
 ) -> list[schemas.InboxItemOut]:
     rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
     # The queue is conversations that have at least one handoff record — i.e. where the bot
@@ -151,18 +146,22 @@ async def list_conversations(
     # is never escalated, so it would be permanently invisible here while showing up under
     # Conversations, which reads as the inbox dropping messages. It is the operator's own
     # transcript and nobody is waiting on it, so it is listed for reading, not for triage.
+    #
+    # `include_bot` (the "All chats" toggle) drops the handoff rule so bot-handled chats show up too, for
+    # triage. It never widens the org scope: the same INBOX_HANDLE gate and organization filter apply.
     handoff_ids = select(Handoff.conversation_id).where(Handoff.organization_id == ctx.org.id)
     stmt = (
         select(Conversation)
-        .where(
-            Conversation.organization_id == ctx.org.id,
+        .where(Conversation.organization_id == ctx.org.id)
+        .order_by(func.coalesce(Conversation.last_message_at, Conversation.created_at).desc())
+    )
+    if not include_bot:
+        stmt = stmt.where(
             or_(
                 Conversation.id.in_(handoff_ids),
                 Conversation.channel == PLAYGROUND_CHANNEL,
-            ),
+            )
         )
-        .order_by(func.coalesce(Conversation.last_message_at, Conversation.created_at).desc())
-    )
     if status_filter:
         stmt = stmt.where(Conversation.status == status_filter)
     if channel_filter:
@@ -205,7 +204,11 @@ async def _publish_inbox(session: AsyncSession, ctx: OrgContext, conv: Conversat
 async def takeover(session: AsyncSession, ctx: OrgContext, cid: uuid.UUID) -> schemas.InboxItemOut:
     rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
     conv = await _get_conversation(session, ctx, cid)
-    handoff = await _require_open_handoff(session, conv)
+    handoff = await _latest_handoff(session, conv.id)
+    if handoff is None or handoff.status == "resolved":
+        # A bot-handled chat opened from "All chats": taking it over opens the handoff record itself,
+        # which also pauses the bot (trigger_handoff sets status=handoff).
+        handoff = await trigger_handoff(session, conv, requested_by="operator", reason="operator_takeover")
     handoff.status = "assigned"
     handoff.assigned_to = ctx.user.id
     conv.assigned_to = ctx.user.id

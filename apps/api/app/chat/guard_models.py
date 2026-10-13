@@ -28,6 +28,7 @@ import hashlib
 
 import httpx
 
+from app.chat import guard_http
 from app.chat.normalize import normalize_for_matching
 from app.core import metrics
 from app.core.config import settings
@@ -101,10 +102,17 @@ class _Cache:
     def __init__(self) -> None:
         self._redis: object | None = None
         self._tried = False
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     async def _client(self) -> object | None:
+        # An asyncio Redis client is bound to the loop that first used it; Celery runs each task on a
+        # fresh loop, so a client from an earlier loop would fail every later call. Start over per loop.
+        loop = asyncio.get_running_loop()
+        if self._redis is not None and self._loop is not loop:
+            self._redis, self._tried = None, False
         if self._redis is None and not self._tried:
             self._tried = True
+            self._loop = loop
             try:
                 from redis.asyncio import from_url
 
@@ -152,10 +160,13 @@ def _chunks(text: str) -> list[str]:
     ][:_MAX_CHUNKS]
 
 
-async def _score_chunk(client: httpx.AsyncClient, key: str, chunk: str) -> tuple[float, int]:
+async def _score_chunk(
+    client: httpx.AsyncClient, key: str, chunk: str, http_timeout: httpx.Timeout
+) -> tuple[float, int]:
     """One classification call. Returns (score, prompt_tokens). Raises on transport/HTTP error."""
     resp = await client.post(
         _GROQ_CHAT_URL,
+        timeout=http_timeout,
         headers={"Authorization": f"Bearer {key}"},
         json={
             "model": settings.guard_injection_model,
@@ -172,6 +183,12 @@ async def _score_chunk(client: httpx.AsyncClient, key: str, chunk: str) -> tuple
         return float(str(content).strip()), tokens
     except (TypeError, ValueError):
         raise ValueError(f"guard model returned a non-numeric score: {str(content)[:40]!r}") from None
+
+
+async def _score_all(
+    client: httpx.AsyncClient, key: str, chunks: list[str], http_timeout: httpx.Timeout
+) -> list[tuple[float, int]]:
+    return list(await asyncio.gather(*(_score_chunk(client, key, c, http_timeout) for c in chunks)))
 
 
 async def score_injection(
@@ -200,23 +217,30 @@ async def score_injection(
         metrics.observe_guard_call("cache_hit", 0)
         return cached
 
-    timeout = httpx.Timeout(settings.guard_injection_timeout_ms / 1000.0)
+    budget_ms = settings.guard_injection_timeout_ms
+    timeout = httpx.Timeout(budget_ms / 1000.0)
+    client, owned = guard_http.make_client(transport)
     try:
-        async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
-            results = await asyncio.gather(
-                *(_score_chunk(client, key, c) for c in chunks)
-            )
+        # `bounded` covers what httpx's own timeouts cannot (name resolution), so the whole call
+        # (DNS + connect + request) is capped, not just the socket phases.
+        results = await guard_http.bounded(
+            _score_all(client, key, chunks, timeout), budget_ms
+        )
     except Exception as exc:
         # FAIL OPEN. Availability beats enforcement here (ADR-051) — but loudly: a silent
         # guard failure is indistinguishable from a guard that found nothing.
         metrics.observe_guard_call("error", 0)
         log.warning(
             "guard_l2_unavailable",
-            error=str(exc)[:200],
+            error=guard_http.describe(exc, budget_ms),
             model=settings.guard_injection_model,
             impact="this turn ran unguarded by L2",
         )
         return None
+
+    finally:
+        if owned:
+            await client.aclose()
 
     score = max(s for s, _ in results)
     tokens = sum(t for _, t in results)

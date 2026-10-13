@@ -18,6 +18,20 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-116: Meta inbound latency: bounded, overlapped guard calls on one reused client; per-turn stage timings; contact identity and an "All chats" inbox view
+- **Date:** 2026-10-12
+- **Status:** accepted
+- **Context:** A 28 s reply to an Instagram "Hi". Measured: the LLM took 0.8-4.6 s and the embedding 1.3 s, but ~23 s passed between task start and `guard_l2_unavailable` with an empty error. Inside the worker container `getaddrinfo("api.groq.com")` costs ~4 s on every DNS-cache miss, and `httpx.Timeout` does not cover name resolution, so the "300 ms" L2 call could cost seconds. L2 (and L3) also ran serially in front of retrieval, each on a brand-new client (new DNS + TLS every turn).
+- **Decision:**
+  1. **Bound the whole call.** L2 and L3 wrap DNS + connect + request in `asyncio.wait_for(budget + 250 ms)` (`chat/guard_http.bounded`). Still fail-open (ADR-051) and still loud: `guard_l2_unavailable` now says `timed out after N ms` instead of an empty string. L1 is untouched (no network).
+  2. **Overlap, do not serialise.** After L1 passes, L2 and L3 start as tasks while retrieval runs on the session (they need neither the session nor each other). If L2 blocks, the retrieved context is discarded and L3's verdict dropped, so the model sees exactly what it saw before. Cost: one wasted embedding call on an L2-blocked turn. Pending guard tasks are cancelled if retrieval raises or the stream is cancelled.
+  3. **Reuse one client.** `guard_http.shared_client()` keeps one `httpx.AsyncClient` per thread *and event loop* (keep-alive 120 s), so the resolved address survives between turns. An httpx/Redis client is bound to its loop, and Celery ran `asyncio.run` per task, so the inbound task now runs on a persistent per-process loop (`tasks._run_persistent`; safe with NullPool). Other tasks are unchanged. The L2 Redis cache also re-binds when the loop changes (before, it silently failed after the first task).
+  4. **One timing line per turn.** `meta_inbound_timing` carries `webhook_to_task_ms`, `channel_load_ms`, `contact_ms` (incl. profile fetch), `guard_l1_ms`, `guard_l2_ms`, `guard_l3_ms`, `rag_ms`, `llm_ms`, `db_commit_ms`, `send_ms`, `total_ms`, `slowest`, `outcome`. Overlapped stages report their own duration, so they may sum to more than `total_ms`. Only names and millisecond counts are logged.
+  5. **Contact identity.** `GET /v1/conversations[/{id}]` now carries `contact` (name, avatar, `username` from `contacts.extra`, CRM link) and `channel_user_id`; the web app shows avatar (initials when none) + name + `@username` in the Conversations list/detail, the dashboard panel and the Inbox. Without a name the row shows the *tail* of the platform id (Meta ids share a long prefix).
+  6. **Inbox "All chats".** `GET /v1/inbox/conversations?include_bot=true` drops the handoff rule (same `INBOX_HANDLE` gate and org filter). Default stays the handoff queue. Taking over a chat that has no open handoff now opens one (`reason=operator_takeover`), which pauses the bot.
+- **Not changed:** Docker DNS (infra, handled separately); the webhook endpoint; the WhatsApp flow.
+- **Consequences:** The worst case for a turn's guard cost is now ~budget + 250 ms each, running alongside retrieval. A persistent worker loop means a leaked task would live on; the guard tasks are cancelled explicitly for that reason.
+
 ### ADR-115: Read-only `viewer` DB role over an SSH tunnel to a loopback-only Postgres port
 - **Date:** 2026-10-12
 - **Status:** accepted

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, MessagesSquare } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChannelBadge } from "@/components/shared/channel";
+import { ContactAvatar, contactHandle, contactLabel } from "@/components/inbox/contact-avatar";
 import { StatusPill } from "@/components/shared/status-pill";
 import { listConversations } from "@/lib/api/conversations";
 import { listAgents } from "@/lib/api/agents";
@@ -85,7 +86,24 @@ export function ConversationsPanel() {
               <li key={c.id}>
                 <Link href={href} className="flex flex-col gap-1.5 px-5 py-3.5 transition-colors hover:bg-surface-2">
                   <div className="flex items-center gap-2">
-                    <ChannelBadge channel={c.channel} size="sm" />
+                    {c.contact ? (
+                      <>
+                        <ContactAvatar
+                          channel={c.channel}
+                          name={contactLabel(c.contact, c.channel_user_id)}
+                          avatarUrl={c.contact.avatar_url}
+                          size="sm"
+                        />
+                        <span className="min-w-0 truncate text-sm font-bold text-text">
+                          {contactLabel(c.contact, c.channel_user_id)}
+                          {contactHandle(c.contact) && (
+                            <span className="ml-1.5 text-xs font-semibold text-muted">{contactHandle(c.contact)}</span>
+                          )}
+                        </span>
+                      </>
+                    ) : (
+                      <ChannelBadge channel={c.channel} size="sm" />
+                    )}
                     <StatusPill status={c.status} className="ml-auto shrink-0" />
                   </div>
                   <p className="line-clamp-1 text-sm font-semibold text-text">{c.title || "Untitled conversation"}</p>

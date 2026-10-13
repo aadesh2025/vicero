@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from app.modules.conversations.schemas import ContactOut as ContactOut
 from app.modules.conversations.schemas import MessageOut
 
 
@@ -21,16 +22,6 @@ class HandoffOut(BaseModel):
     tags: list[str]
     created_at: dt.datetime
     resolved_at: dt.datetime | None
-
-
-class ContactOut(BaseModel):
-    """The human on the other end — what the inbox needs to render a recognizable row."""
-
-    id: uuid.UUID
-    display_name: str | None
-    avatar_url: str | None
-    #: Set once this handle has been matched to a CRM person, so the UI can link there.
-    crm_contact_id: uuid.UUID | None = None
 
 
 class InboxItemOut(BaseModel):

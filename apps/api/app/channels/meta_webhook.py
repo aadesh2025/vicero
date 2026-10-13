@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels import service
-from app.chat import stage_timing
 from app.core.logging import get_logger
 from app.models import Channel
 
@@ -88,8 +87,7 @@ async def handle_inbound(session: Any, channel_id: uuid.UUID, payload: dict[str,
     """Run one routed event through the channel's adapter. Runs in the worker (or inline as a fallback)."""
     from app.channels import get_channel  # importing the package registers every adapter
 
-    with stage_timing.stage("channel_load"):
-        channel = await session.get(Channel, channel_id)
+    channel = await session.get(Channel, channel_id)
     adapter = get_channel(channel.type) if channel is not None else None
     if channel is None or adapter is None:
         return

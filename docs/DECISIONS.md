@@ -18,6 +18,18 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-118: The widget API is open to any website (no credentials); per-agent "Allowed websites"
+- **Date:** 2026-10-13
+- **Status:** accepted
+- **Context:** `widget.js` runs on customers' sites and calls `/v1/public/agents/{key}/config`, `/chat` and the `/subscribe` socket. The API's `CORSMiddleware` only accepts `CORS_ORIGINS` (the dashboard), so any other site got `400 Disallowed CORS origin` on the preflight and the browser blocked the widget.
+- **Decision:**
+  1. **A path-aware ASGI middleware** (`modules/public/cors.PublicCorsMiddleware`) sits *outside* `CORSMiddleware` and takes over `/v1/public/*` only. It echoes the request `Origin` (never `*` with credentials), answers preflights itself (`GET, POST, OPTIONS`, headers `*`), and never sends `Access-Control-Allow-Credentials`. The strict credentialed CORS stays for every other path (login still answers 400 to a foreign origin).
+  2. **No credentials on public routes:** `Cookie` and `Authorization` request headers are dropped before the app sees them, and the `Origin` header is hidden from the inner CORS layer so it cannot add its credentialed headers on top.
+  3. **Allowed websites:** stored in the widget config (`widget_configs.theme["allowedSites"]`, bare hostnames, no migration), edited in the builder's Channels/Widget tab. Empty or absent = any site. When set, `config`, `chat`, `ws` and `subscribe` answer **403** (`public.origin_not_allowed`, preflight, request and WebSocket handshake alike) to other origins and send no CORS headers to them. A listed host also covers its subdomains (dot-boundary match, so `evilcustomer.com` does not match `customer.com`). The list is never sent to the widget.
+  4. **Not blocked by the list:** the dashboard's own origins (`CORS_ORIGINS`), so the builder preview and playground keep working, and requests with no `Origin` header (not a cross-site browser call). The list is an embed control, not authentication: a non-browser client can send any `Origin`. Rate limits and the public-key lookup are the routes' own and unchanged.
+- **Alternatives considered:** `allow_origins=["*"]` on the whole app (rejected: with credentials it is invalid, without them it breaks the dashboard); a second `CORSMiddleware` per prefix (Starlette cannot scope one by path); a dedicated column or migration (the widget config already carries per-agent embed settings).
+- **Consequences:** One extra indexed query per gated request (preflight included) to read the list. No new env vars.
+
 ### ADR-117: PR #20 re-shipped: the Celery child died on a cancelled L3 task; L3 requests sized to Groq's TPM limit
 - **Date:** 2026-10-13
 - **Status:** accepted (amends ADR-116)

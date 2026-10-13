@@ -46,6 +46,7 @@ from app.modules.knowledge.router import router as knowledge_router
 from app.modules.macros.router import inbox_router as macros_inbox_router
 from app.modules.macros.router import router as macros_router
 from app.modules.orgs.router import router as orgs_router
+from app.modules.public.cors import PublicCorsMiddleware
 from app.modules.public.router import router as public_router
 from app.modules.workflow_tests.router import test_run_router as workflow_test_run_router
 from app.modules.workflow_tests.router import test_runs_by_workflow_router as workflow_test_runs_by_workflow_router
@@ -198,6 +199,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Outermost: takes over /v1/public/* (the embeddable widget) so it works on any website, without
+    # loosening the credentialed CORS above for the rest of the API.
+    app.add_middleware(PublicCorsMiddleware)
 
     register_exception_handlers(app)
     app.include_router(health.router)

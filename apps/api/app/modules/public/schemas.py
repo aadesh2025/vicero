@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.modules.public import origins
+
 _HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 WIDGET_STYLES = ("solid", "transparent")
 FONT_FAMILIES = ("system", "inter", "arial", "georgia", "courier")
@@ -69,6 +71,13 @@ class WidgetConfigIn(BaseModel):
     floatingButtonStyle: str | None = None
     floatingButtonColor: str | None = None
     inputBarButtons: list[str] | None = None
+    #: Websites allowed to embed this widget (hostnames). Empty/absent = any site. Never sent to the widget.
+    allowedSites: list[str] | None = None
+
+    @field_validator("allowedSites")
+    @classmethod
+    def _sites(cls, v: list[str] | None) -> list[str] | None:
+        return None if v is None else origins.normalize_sites(v)
 
     @field_validator(
         "primaryColor",

@@ -14,7 +14,7 @@ from typing import Any, NamedTuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.channels import service
+from app.channels import service, whatsapp
 from app.chat import stage_timing
 from app.core.logging import get_logger
 from app.models import Channel
@@ -53,6 +53,8 @@ def split_events(payload: dict[str, Any]) -> list[MetaEvent]:
                 if not phone_number_id:
                     continue
                 for message in _dicts(value.get("messages")):
+                    if whatsapp.is_group_message(message):
+                        continue  # 1:1 chats only; a group message never reaches the bot
                     sub = {
                         "object": obj,
                         "entry": [

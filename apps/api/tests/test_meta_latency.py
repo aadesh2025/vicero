@@ -269,3 +269,150 @@ async def test_an_l2_block_still_wins_and_the_retrieved_context_is_dropped(
 
     assert out["content"] == guardrails.INJECTION_REDIRECT
     assert seen_context == [""], "a blocked turn must not carry retrieved context to the model"
+
+
+# ── Regression: PR #20 killed the Celery child on any turn where L3 outlived L2 + retrieval ──────────
+
+
+async def test_a_turn_still_answers_when_l3_is_slower_than_l2_and_retrieval(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PR #20 cancelled L3 in a `finally` and then awaited it: CancelledError, no reply."""
+    monkeypatch.setattr(settings, "guard_distress_enabled", True)
+
+    async def fast_l2(text: str, **_: Any) -> tuple[bool, float | None]:
+        return False, 0.01
+
+    async def slow_l3(text: str, **_: Any) -> None:
+        await asyncio.sleep(0.3)
+        return None
+
+    monkeypatch.setattr("app.chat.inbound.guard_models.is_injection", fast_l2)
+    monkeypatch.setattr("app.chat.inbound.policy_guard.classify", slow_l3)
+    key = await _public_agent(client, "lat.slowl3@example.com")
+    out = await _chat(client, key, "hello there")
+    assert out["content"] == "echo: hello there"
+
+
+async def test_two_sequential_meta_inbound_tasks_both_reply(
+    client: Any, db_session: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The worker's job: two inbound DMs back to back in one process, L3 slower than the rest."""
+    import json
+
+    from app.channels import get_channel
+    from app.worker import tasks
+
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"id": "IG77", "name": "Pat", "username": "pat"})
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True})
+
+    adapter = get_channel("instagram")
+    assert adapter is not None
+    monkeypatch.setattr(adapter, "transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(settings, "guard_distress_enabled", True)
+
+    async def fast_l2(text: str, **_: Any) -> tuple[bool, float | None]:
+        return False, 0.01
+
+    async def slow_l3(text: str, **_: Any) -> None:
+        await asyncio.sleep(0.2)
+        return None
+
+    monkeypatch.setattr("app.chat.inbound.guard_models.is_injection", fast_l2)
+    monkeypatch.setattr("app.chat.inbound.policy_guard.classify", slow_l3)
+
+    signup = await client.post("/v1/auth/signup", json={"email": "twotasks@example.com", "password": "password123"})
+    token = signup.json()["access_token"]
+    org = await client.post("/v1/orgs", json={"name": "TwoTasks"}, headers={"Authorization": f"Bearer {token}"})
+    headers = {"Authorization": f"Bearer {token}", "X-Org-Id": org.json()["id"]}
+    agent = await client.post("/v1/agents", json={"name": "Two Bot"}, headers=headers)
+    aid = agent.json()["id"]
+    await client.patch(
+        f"/v1/agents/{aid}/versions/1",
+        json={
+            "model_config": {"provider": "fake", "model": "fake-1"},
+            "features": {"tools_enabled": False, "memory_enabled": True, "handoff_enabled": False},
+        },
+        headers=headers,
+    )
+    ch = await client.post(
+        "/v1/channels",
+        json={"agent_id": aid, "type": "instagram", "config": {"page_access_token": "t", "app_secret": "sec"}},
+        headers=headers,
+    )
+    cid = ch.json()["id"]
+    await client.post(f"/v1/channels/{cid}/enable", headers=headers)
+
+    class _Session:
+        """The test's transaction, so the task sees the seeded rows; commit becomes a flush."""
+
+        async def __aenter__(self) -> Any:
+            return db_session
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    monkeypatch.setattr(tasks, "SessionFactory", lambda: _Session())
+    monkeypatch.setattr(db_session, "commit", db_session.flush)
+
+    for text in ("Hi", "Can I get a ur owner number"):
+        event = {"sender": {"id": "IG77"}, "message": {"text": text}}
+        payload = {"object": "instagram", "entry": [{"id": "PAGE1", "messaging": [event]}]}
+        with structlog.testing.capture_logs() as logs:
+            await tasks._run_meta_inbound(cid, payload)
+        timing = [e for e in logs if e["event"] == "meta_inbound_timing"]
+        assert timing and timing[0]["outcome"] == "ok", timing
+
+    assert [m["recipient"]["id"] for m in sent] == ["IG77", "IG77"]
+    assert all(m["message"]["text"].strip() for m in sent)
+
+
+async def test_a_cancelled_turn_is_reported_as_a_plain_failure_not_a_dying_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CancelledError escaping the task makes billiard exit the child (WorkerLostError, exitcode 0)."""
+    from app.worker import tasks
+
+    class _Session:
+        async def __aenter__(self) -> _Session:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    async def cancelled(*args: Any, **kwargs: Any) -> None:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(tasks, "SessionFactory", lambda: _Session())
+    monkeypatch.setattr("app.channels.meta_webhook.handle_inbound", cancelled)
+    with structlog.testing.capture_logs() as logs, pytest.raises(RuntimeError):
+        await tasks._run_meta_inbound(str(uuid.uuid4()), {})
+    line = next(e for e in logs if e["event"] == "meta_inbound_timing")
+    assert line["outcome"] == "error" and line["error"] == "CancelledError"
+
+
+async def test_the_error_is_in_the_timing_line_without_message_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.worker import tasks
+
+    class _Session:
+        async def __aenter__(self) -> _Session:
+            return self
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    async def boom(*args: Any, **kwargs: Any) -> None:
+        raise ValueError("bad thing")
+
+    monkeypatch.setattr(tasks, "SessionFactory", lambda: _Session())
+    monkeypatch.setattr("app.channels.meta_webhook.handle_inbound", boom)
+    with structlog.testing.capture_logs() as logs, pytest.raises(ValueError):
+        await tasks._run_meta_inbound(str(uuid.uuid4()), {"message": {"text": "SECRET DM TEXT"}})
+    line = next(e for e in logs if e["event"] == "meta_inbound_timing")
+    assert line["error"] == "ValueError: bad thing"
+    assert "SECRET DM TEXT" not in str(line)

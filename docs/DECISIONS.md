@@ -18,6 +18,20 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-117: PR #20 re-shipped: the Celery child died on a cancelled L3 task; L3 requests sized to Groq's TPM limit
+- **Date:** 2026-10-13
+- **Status:** accepted (amends ADR-116)
+- **Context:** PR #20 was deployed and rolled back the same morning: an Instagram DM logged `meta_inbound_timing outcome=error`, then `WorkerLostError: Worker exited prematurely: exitcode 0`, and no reply went out. Reproduced locally with a real prefork worker (`--concurrency=2`, Redis + Postgres, the prod image) and four queued DMs: every task where L3 was still running when L2 and retrieval finished died the same way.
+- **Root cause:** not the persistent loop and not the shared client (both were fine; with the fix, eight queued DMs ran four per child, back to back on the persistent loop, with zero lost workers). `inbound.py` cancelled the pending L2/L3 tasks in a `finally` meant for the error path, but that `finally` also runs on the normal path, and L3 is awaited *after* it. A cancelled task raises `asyncio.CancelledError` when awaited. That is a `BaseException`, so it skipped every `except Exception`, left the task coroutine, and billiard read it as the child going away: exit code 0, `WorkerLostError`, no traceback, no reply. L3 (a ~600 ms reasoning call) usually outlives L2 and an empty retrieval, so it hit on nearly every turn; the unit tests only had L3 off or faster than the rest.
+- **Decision:**
+  1. **Cancel only on failure.** `except BaseException: cancel both; raise` replaces the `finally`. When L2 blocks, L3 is cancelled explicitly and never awaited (its verdict is dropped anyway).
+  2. **A cancelled turn is a failed turn, not a dead child.** `_run_meta_inbound` converts a `CancelledError` into `RuntimeError` so Celery logs it and the child lives on.
+  3. **`meta_inbound_timing` carries `error`** on `outcome=error`: exception type + first 120 chars of its message. Never the payload or message text.
+  4. **Lazy per-loop client, as before.** `guard_http.shared_client()` is created on first use inside the running loop, per thread and per loop; nothing is built at import time or in the Celery parent.
+  5. **L3 sized to the TPM limit (413).** `gpt-oss-safeguard-20b` on Groq's free tier allows 2000 tokens per minute *per request*, and Groq counts the completion it reserves. The policy prompt is ~1450 tokens, so a 27-character message asked for 2836 and got `413 rate_limit_exceeded` (measured from the prod worker). Now: `max_completion_tokens=300`, `reasoning_effort=low` (gpt-oss models only), and the customer text is windowed to what is left of `GUARD_POLICY_MAX_REQUEST_TOKENS` (head 60% + tail 40% kept, middle cut; earlier turns added newest-first only if they fit). Roughly 600 characters of message on the free tier. A paid tier raises the limit and the window grows with it. A 413 still fails open and loud (ADR-051).
+- **Alternatives considered:** Shrinking the policy documents (changes what L3 grades; its own review). Dropping L3 to a smaller model (separate eval). A retry on 413 (the same request fails again).
+- **Consequences:** Messages longer than the window are graded on their start and end. Raising the Groq tier lifts that. The regression is pinned by `test_two_sequential_meta_inbound_tasks_both_reply` and `test_a_turn_still_answers_when_l3_is_slower_than_l2_and_retrieval`, both of which fail on the PR #20 code.
+
 ### ADR-116: Meta inbound latency: bounded, overlapped guard calls on one reused client; per-turn stage timings; contact identity and an "All chats" inbox view
 - **Date:** 2026-10-12
 - **Status:** accepted

@@ -2182,3 +2182,14 @@ marketplace, SSO/SAML, fine-tuning UI, MCP tool bridge, Qdrant swap, Kubernetes/
 - **Inbox:** "Needs a human" (default) / "All chats" toggle (`include_bot=true`); take-over on a bot-handled chat opens the handoff.
 - Tests: `tests/test_meta_latency.py`, `tests/test_inbox_all_chats.py`; vitest for avatar, inbox toggle/take-over, dashboard panel.
 - After deploy: read one real DM's `meta_inbound_timing` line (`docker logs vicero-prod-worker-1 | grep meta_inbound_timing`).
+
+
+## Meta latency re-ship: worker crash fixed, L3 413 fixed (2026-10-13)
+
+PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixes the cause and keeps the speed-ups (ADR-117, amends ADR-116).
+
+- **Crash (WorkerLostError, exitcode 0):** reproduced with a real prefork Celery worker; cause was the pending-guard cancel running on the success path, so awaiting L3 raised `CancelledError` (a `BaseException`) and killed the child. Fixed (cancel only on failure) and a stray cancel now fails the task instead of the process. `meta_inbound_timing` now has an `error` field (type + message, no payload).
+- **L3 `413 Payload Too Large`:** Groq's 2000-token request limit for the safeguard model on the free tier; the policy prompt (~1450 tokens) plus the default completion reservation asked for 2836. The completion is capped and the message windowed to fit; new settings `GUARD_POLICY_MAX_REQUEST_TOKENS` / `GUARD_POLICY_MAX_COMPLETION_TOKENS`.
+- **Kept from #20:** L2/L3 hard-capped at budget + 250 ms (DNS included, fail-open, loud), one lazily-created client per loop, L2/L3 overlapped with retrieval, one `meta_inbound_timing` line per turn.
+- **Contact name/avatar and Inbox "All chats":** already in master from #20; unchanged here, plus a Playwright spec (`43-inbox-all-chats`) for the toggle and take-over.
+- **Tests:** four new API tests for the crash (two fail on the #20 code), five for the L3 request size, one e2e.

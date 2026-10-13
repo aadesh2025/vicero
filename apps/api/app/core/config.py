@@ -216,6 +216,13 @@ class Settings(BaseSettings):
     guard_policy_model: str = "openai/gpt-oss-safeguard-20b"
     # It is a reasoning model (~200-300ms observed), so the budget is wider than L2's.
     guard_policy_timeout_ms: int = 1200
+    # Groq rejects a request with 413 when prompt + the completion it reserves exceeds the model's
+    # tokens-per-minute limit, which is 2000 for this model on the free tier (measured on prod: the
+    # ~1450-token policy prompt plus the default completion reservation asked for 2836). The request is
+    # sized to fit this ceiling instead: the completion is capped, and the customer text is windowed to
+    # whatever room is left. Raise it on a paid tier.
+    guard_policy_max_request_tokens: int = 2000
+    guard_policy_max_completion_tokens: int = 300
     # Distress detection is a triage aid, never a clinical instrument. `crisis` suppresses the
     # bot's reply entirely, so it must stay rare; this switch exists to turn the whole layer
     # off for a client who has not agreed to watch the queue it fills (docs/11 §9).

@@ -448,6 +448,11 @@ to RRF ordering, logged, never an error and never an empty result set.
   distress classifier (docs/11 §4-L3). Grades every customer message against the markdown in
   `apps/api/app/chat/policies/`, which is **editable and hot-reloadable**: that wording *is* the
   taxonomy, so tuning it needs no deploy. Runs on the platform key (ADR-055).
+- `GUARD_POLICY_MAX_REQUEST_TOKENS` (default `2000`) / `GUARD_POLICY_MAX_COMPLETION_TOKENS` (default `300`) —
+  the size ceiling for one L3 request. Groq's free tier allows 2000 tokens per request for the safeguard
+  model and counts the completion it reserves, so an unbounded request answers `413`. The completion is
+  capped and the customer message is windowed (head + tail) to fit. Raise the first on a paid Groq tier
+  (ADR-117).
 - `GUARD_DISTRESS_ENABLED` (default `true`) — turns distress grading off entirely. Use it for a
   client who has **not agreed to watch the attention queue**: routing a person in real distress
   to a queue nobody monitors is worse than not detecting them (docs/11 §9).

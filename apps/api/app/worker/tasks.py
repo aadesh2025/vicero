@@ -103,16 +103,25 @@ async def _run_meta_inbound(channel_id: str, payload: dict[str, object], receive
 
     timings, token = stage_timing.begin(received_at)
     outcome = "ok"
+    error = ""
     try:
         async with SessionFactory() as session:
             await handle_inbound(session, uuid.UUID(channel_id), payload)
             with stage_timing.stage("db_commit"):
                 await session.commit()
-    except BaseException:
+    except asyncio.CancelledError as exc:
+        # A BaseException that billiard reads as "this child is going away": it exits with code 0 and
+        # the task is reported as WorkerLostError, with no traceback and no reply. Surface it as a
+        # plain failure so it is logged and the child lives on.
         outcome = "error"
+        error = "CancelledError"
+        raise RuntimeError("meta_inbound turn was cancelled") from exc
+    except BaseException as exc:
+        outcome = "error"
+        error = f"{type(exc).__name__}: {str(exc)[:120]}"  # type + message only, never the payload
         raise
     finally:
-        stage_timing.end(timings, token, channel_id=channel_id, outcome=outcome)
+        stage_timing.end(timings, token, channel_id=channel_id, outcome=outcome, error=error)
 
 
 @celery_app.task(name="channels.meta_inbound", bind=True, max_retries=0)  # type: ignore[untyped-decorator]

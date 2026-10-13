@@ -67,6 +67,27 @@ function LauncherIcon({ kind, cut }: { kind: LauncherOption["kind"]; cut: string
   return <WidgetChatIcon className="size-4" />;
 }
 
+/** Hostnames, one per line or comma-separated. Subdomains of a listed site are allowed too. */
+function AllowedSites({ value, onChange }: { value: string[]; onChange: (sites: string[]) => void }) {
+  const [text, setText] = useState(value.join(String.fromCharCode(10)));
+  return (
+    <Field label="Websites" description="One per line, e.g. customer.com. www.customer.com and other subdomains are included.">
+      <textarea
+        aria-label="Allowed websites"
+        value={text}
+        rows={3}
+        placeholder="customer.com"
+        spellCheck={false}
+        className="w-full rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-text outline-none focus:border-accent-strong"
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(e.target.value.split(/[\s,]+/).filter((t) => /^[\w*.:/-]+$/.test(t)));
+        }}
+      />
+    </Field>
+  );
+}
+
 /** Map the builder draft into the snake_case config the widget bundle expects. */
 function toPreviewConfig(draft: AgentDraft) {
   const w = draft.widget;
@@ -277,6 +298,13 @@ export function ChannelsTab() {
               </div>
               <Switch checked={w.branding} onCheckedChange={(v) => setW((x) => void (x.branding = v))} />
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Allowed websites"
+            description="Only these sites can show this widget. Leave empty to allow any website."
+          >
+            <AllowedSites value={w.allowedSites} onChange={(sites) => setW((x) => void (x.allowedSites = sites))} />
           </SectionCard>
 
           <SectionCard title="Embed snippet" description="Paste this before </body> on any page.">

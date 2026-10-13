@@ -77,6 +77,7 @@ export function versionToDraft(
       floatingButtonStyle: (w.floatingButtonStyle as AgentDraft["widget"]["floatingButtonStyle"]) ?? null,
       floatingButtonColor: (w.floatingButtonColor as string) ?? null,
       inputBarButtons: (w.inputBarButtons as AgentDraft["widget"]["inputBarButtons"]) ?? ["attachment"],
+      allowedSites: Array.isArray(w.allowedSites) ? (w.allowedSites as string[]) : [],
     },
   };
 }
@@ -144,5 +145,6 @@ export function draftToWidgetConfig(draft: AgentDraft): Record<string, unknown> 
     floatingButtonStyle: w.floatingButtonStyle,
     floatingButtonColor: w.floatingButtonColor,
     inputBarButtons: w.inputBarButtons,
+    allowedSites: w.allowedSites,
   };
 }

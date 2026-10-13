@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftToPatch, versionToDraft } from "./agent-mapping";
+import { draftToPatch, draftToWidgetConfig, versionToDraft } from "./agent-mapping";
 import type { ApiAgent, ApiVersion } from "./types";
 
 const agent = {
@@ -121,5 +121,14 @@ describe("draftToPatch", () => {
     const draft = versionToDraft(agent, version());
     expect(draft.persona.templateId).toBeNull();
     expect(draftToPatch(draft).persona as Record<string, unknown>).not.toHaveProperty("template_id");
+  });
+});
+
+describe("allowed websites", () => {
+  it("defaults to none (any site) and round-trips through the widget config", () => {
+    expect(versionToDraft(agent, version()).widget.allowedSites).toEqual([]);
+    const d = versionToDraft(agent, version(), { allowedSites: ["customer.com"] });
+    expect(d.widget.allowedSites).toEqual(["customer.com"]);
+    expect(draftToWidgetConfig(d).allowedSites).toEqual(["customer.com"]);
   });
 });

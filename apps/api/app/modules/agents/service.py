@@ -893,6 +893,11 @@ async def update_widget_config(
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
     agent = await _get_agent(session, ctx, agent_id)
     _validate_widget(config)
+    if "allowedSites" in config:
+        # Stored as bare hostnames, so the check at request time is a plain comparison. null clears it.
+        from app.modules.public.origins import normalize_sites
+
+        config = {**config, "allowedSites": normalize_sites(config["allowedSites"] or [])}
 
     row = (
         await session.execute(select(WidgetConfig).where(WidgetConfig.agent_id == agent.id))

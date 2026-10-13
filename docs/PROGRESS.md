@@ -2193,3 +2193,10 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - **Kept from #20:** L2/L3 hard-capped at budget + 250 ms (DNS included, fail-open, loud), one lazily-created client per loop, L2/L3 overlapped with retrieval, one `meta_inbound_timing` line per turn.
 - **Contact name/avatar and Inbox "All chats":** already in master from #20; unchanged here, plus a Playwright spec (`43-inbox-all-chats`) for the toggle and take-over.
 - **Tests:** four new API tests for the crash (two fail on the #20 code), five for the L3 request size, one e2e.
+
+
+## Widget CORS on customer websites, "Allowed websites" (2026-10-13)
+
+- `/v1/public/*` now answers any `Origin` (echoed, no credentials, `GET, POST, OPTIONS`, headers `*`); the rest of the API keeps the strict credentialed CORS. See ADR-118.
+- Per-agent **Allowed websites** in the builder's Channels/Widget tab (stored in the widget config, empty = any site). Other origins get 403 on `config`, `chat`, `ws` and `subscribe`; the dashboard origin always passes.
+- Tests: `tests/test_public_cors.py` (15), a mapping test in `agent-mapping.test.ts`.

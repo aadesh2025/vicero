@@ -75,6 +75,8 @@ export interface WidgetConfig {
   floatingButtonStyle: FloatingButtonStyle | null;
   floatingButtonColor: string | null;
   inputBarButtons: InputBarButton[];
+  /** Websites allowed to embed the widget (hostnames). Empty = any site. */
+  allowedSites: string[];
 }
 
 export interface AgentDraft {

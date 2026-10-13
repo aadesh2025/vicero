@@ -87,6 +87,7 @@ function seedDraft(providerName: string, model: string) {
         logoUrl: null,
         floatingButtonStyle: null,
         floatingButtonColor: null,
+        allowedSites: [],
         inputBarButtons: [],
       },
     },

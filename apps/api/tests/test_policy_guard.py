@@ -151,6 +151,72 @@ async def test_history_is_sent_because_distress_is_a_trajectory() -> None:
     assert "that was three days ago" in user_msg
 
 
+# ── The request fits Groq's tokens-per-minute ceiling (a 413 on a 27-character message) ──────────
+
+
+def _estimated_request_tokens(body: dict) -> float:
+    """Same yardstick the window uses: system ~4 chars/token (measured), customer text ~3."""
+    system, user = body["messages"][0]["content"], body["messages"][-1]["content"]
+    return len(system) / 4.0 + len(user) / 3.0 + body["max_completion_tokens"]
+
+
+async def test_the_completion_is_capped_so_groq_does_not_reserve_a_huge_one() -> None:
+    captured: list[httpx.Request] = []
+    await policy_guard.classify(
+        "Can I get a ur owner number", transport=_transport(_verdict_json("none"), capture=captured)
+    )
+    body = _json_mod.loads(captured[0].content)
+    assert body["max_completion_tokens"] == settings.guard_policy_max_completion_tokens
+    assert body["reasoning_effort"] == "low"
+    assert _estimated_request_tokens(body) <= settings.guard_policy_max_request_tokens
+
+
+async def test_a_short_message_keeps_its_history_and_is_not_truncated() -> None:
+    captured: list[httpx.Request] = []
+    await policy_guard.classify(
+        "still nothing",
+        history=["where is my order", "you said tomorrow"],
+        transport=_transport(_verdict_json("none"), capture=captured),
+    )
+    user_msg = _json_mod.loads(captured[0].content)["messages"][-1]["content"]
+    assert "still nothing" in user_msg and "you said tomorrow" in user_msg and "[...]" not in user_msg
+
+
+async def test_a_long_message_and_long_history_are_windowed_to_fit() -> None:
+    captured: list[httpx.Request] = []
+    huge = "start of the message " + ("blah " * 3000) + " the worst part is at the very end"
+    await policy_guard.classify(
+        huge,
+        history=["x" * 1000, "y" * 1000, "z" * 1000, "w" * 1000],
+        transport=_transport(_verdict_json("none"), capture=captured),
+    )
+    body = _json_mod.loads(captured[0].content)
+    user_msg = body["messages"][-1]["content"]
+    assert _estimated_request_tokens(body) <= settings.guard_policy_max_request_tokens
+    assert "start of the message" in user_msg and "the very end" in user_msg  # head and tail survive
+    assert "[...]" in user_msg and len(user_msg) < 1500
+
+
+async def test_a_larger_limit_gives_the_message_more_room(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "guard_policy_max_request_tokens", 8000)
+    captured: list[httpx.Request] = []
+    await policy_guard.classify("a" * 3000, transport=_transport(_verdict_json("none"), capture=captured))
+    user_msg = _json_mod.loads(captured[0].content)["messages"][-1]["content"]
+    assert "[...]" not in user_msg
+
+
+async def test_a_413_fails_open_and_is_logged_without_message_text() -> None:
+    import structlog
+
+    with structlog.testing.capture_logs() as logs:
+        out = await policy_guard.classify(
+            "private words", transport=_transport("", status=413)
+        )
+    assert out is None
+    event = next(e for e in logs if e["event"] == "guard_l3_unavailable")
+    assert "private words" not in str(event)
+
+
 # ── The policy documents ─────────────────────────────────────────────────────────────────
 
 

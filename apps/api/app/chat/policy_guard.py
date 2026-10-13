@@ -97,6 +97,46 @@ class PolicyVerdict:
         return self.distress == "crisis"
 
 
+#: The policy prompt is fixed English prose: 5744 chars measured as 1444 tokens on Groq (~4.0).
+_SYSTEM_CHARS_PER_TOKEN = 4.0
+#: Customer text is not: short chat messages, emoji and non-Latin scripts run denser, so assume less per token.
+_TEXT_CHARS_PER_TOKEN = 3.0
+#: Left unspent so a mis-estimate lands under the limit rather than over it.
+_SAFETY_TOKENS = 60
+#: The shortest message window worth classifying, even when the budget is tighter than that.
+_MIN_MESSAGE_CHARS = 120
+_MAX_MESSAGE_CHARS = 4000
+_MAX_HISTORY_LINE_CHARS = 200
+
+
+def _window(message: str, history: list[str] | None, system_chars: int) -> tuple[str, str]:
+    """`(context, message)` sized to fit `guard_policy_max_request_tokens` with the completion reserved.
+
+    The message is the thing being graded, so it gets the room first (head and tail kept, the middle cut:
+    a long message states its subject early and its worst part late). Whatever is left holds the most
+    recent earlier turns, newest first. A turn that does not fit is dropped whole.
+    """
+    reserved = settings.guard_policy_max_completion_tokens + _SAFETY_TOKENS + system_chars / _SYSTEM_CHARS_PER_TOKEN
+    room = max(int((settings.guard_policy_max_request_tokens - reserved) * _TEXT_CHARS_PER_TOKEN), 0)
+    msg_cap = min(_MAX_MESSAGE_CHARS, max(room, _MIN_MESSAGE_CHARS))
+    text = message
+    if len(text) > msg_cap:
+        head = int(msg_cap * 0.6)
+        text = f"{text[:head]}\n[...]\n{text[-(msg_cap - head):]}"
+    left = room - len(text)
+    lines: list[str] = []
+    for h in reversed((history or [])[-4:]):
+        line = f"- {h[:_MAX_HISTORY_LINE_CHARS]}"
+        if len(line) + 1 > left:
+            break
+        lines.append(line)
+        left -= len(line) + 1
+    if not lines:
+        return "", text
+    context = "Earlier messages from this customer, oldest first:\n" + "\n".join(reversed(lines)) + "\n\n"
+    return context, text
+
+
 @lru_cache(maxsize=1)
 def _policy_text() -> str:
     """The concatenated policy documents. Cached; `reload_policies()` clears it."""
@@ -188,10 +228,11 @@ async def classify(
             metrics.observe_policy_call("unavailable", 0)
         return None
 
-    context = ""
-    if history:
-        recent = "\n".join(f"- {h[:300]}" for h in history[-4:])
-        context = f"Earlier messages from this customer, oldest first:\n{recent}\n\n"
+    system = _SYSTEM_PREAMBLE + _policy_text()
+    context, text = _window(message, history, len(system))
+    extra: dict[str, Any] = {}
+    if settings.guard_policy_model.startswith("openai/gpt-oss"):
+        extra["reasoning_effort"] = "low"  # a reasoning model: keep it short, it only has to pick a level
 
     budget_ms = settings.guard_policy_timeout_ms
     timeout = httpx.Timeout(budget_ms / 1000.0)
@@ -205,9 +246,13 @@ async def classify(
                 json={
                     "model": settings.guard_policy_model,
                     "temperature": 0,
+                    # Groq counts the completion it reserves against the TPM limit, and a reasoning model's
+                    # default reservation is large. Cap it.
+                    "max_completion_tokens": settings.guard_policy_max_completion_tokens,
+                    **extra,
                     "messages": [
-                        {"role": "system", "content": _SYSTEM_PREAMBLE + _policy_text()},
-                        {"role": "user", "content": f"{context}Message to grade:\n{message[:4000]}"},
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": f"{context}Message to grade:\n{text}"},
                     ],
                 },
             ),

@@ -12,7 +12,7 @@ import datetime as dt
 import hashlib
 import time
 from collections.abc import AsyncIterator, Awaitable
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,6 +48,12 @@ _DEFAULT_REFUSAL = "I'm not able to help with that topic. Is there something els
 _DEFAULT_PROVIDER_FAILURE = (
     "Sorry — I'm having trouble responding right now. Please try again in a moment."
 )
+
+
+def _cancel(*tasks: asyncio.Task[Any] | None) -> None:
+    for task in tasks:
+        if task is not None and not task.done():
+            task.cancel()
 
 
 async def _timed(name: str, coro: Awaitable[_T]) -> _T:
@@ -207,11 +213,13 @@ class InboundTurn:
                     )
             if l2_task is not None:
                 l2_blocked, l2_score = await l2_task
-        finally:
+        except BaseException:
             # Retrieval raised or the stream was cancelled: do not leave the guard calls running.
-            for pending in (l2_task, l3_task):
-                if pending is not None and not pending.done():
-                    pending.cancel()
+            # Only on this path. L3 is awaited further down on the normal one, so cancelling it here
+            # unconditionally (as PR #20 did, in a `finally`) turned every turn where L3 was still in
+            # flight into a CancelledError, a BaseException that makes the Celery child exit.
+            _cancel(l2_task, l3_task)
+            raise
 
         if guard.blocked or l2_blocked:
             # Hash, never the payload: the raw text is an attack string and may carry PII.
@@ -226,6 +234,7 @@ class InboundTurn:
                 message_sha256=hashlib.sha256(self.message.encode("utf-8")).hexdigest()[:16],
             )
             context_block, citations = "", cast(list[Citation], [])
+            _cancel(l3_task)  # its verdict is dropped for a blocked message; stop paying for it
         # L3 policy/emotion grading (docs/11 §4-L3). Its verdict only counts for messages that got past
         # L1/L2, because a blocked injection is not a distressed customer.
         policy = None

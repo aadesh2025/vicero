@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import threading
+import time
 import uuid
 from collections.abc import Coroutine
 from typing import TypeVar
@@ -11,6 +13,7 @@ from typing import TypeVar
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.chat import stage_timing
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.rag.ingest import ingest_document
@@ -33,6 +36,24 @@ SessionFactory = async_sessionmaker(bind=_worker_engine, expire_on_commit=False,
 def _run(coro: Coroutine[object, object, _T]) -> _T:
     """Run one task coroutine on a fresh event loop (NullPool means no cross-loop reuse)."""
     return asyncio.run(coro)
+
+
+_persistent = threading.local()
+
+
+def _run_persistent(coro: Coroutine[object, object, _T]) -> _T:
+    """Like `_run`, but on one event loop kept for the life of the worker process.
+
+    The inbound-message task needs it: its guard calls reuse a long-lived HTTP client (keep-alive, so the
+    resolved address of api.groq.com survives between turns), and an `httpx`/Redis client is bound to the
+    loop it first ran on. Safe with NullPool for the same reason `_run` is: no pooled DB connection is
+    ever shared across turns.
+    """
+    loop: asyncio.AbstractEventLoop | None = getattr(_persistent, "loop", None)
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        _persistent.loop = loop
+    return loop.run_until_complete(coro)
 
 
 async def _run_ingest(document_id: uuid.UUID) -> str:
@@ -76,25 +97,39 @@ def enqueue_data_deletion(confirmation_code: str, user_id: str) -> None:
     data_deletion_task.delay(confirmation_code, user_id)
 
 
-async def _run_meta_inbound(channel_id: str, payload: dict[str, object]) -> None:
+async def _run_meta_inbound(channel_id: str, payload: dict[str, object], received_at: float | None = None) -> None:
     # Imported here: channels' router imports this module to enqueue, so a top-level import would be a cycle.
     from app.channels.meta_webhook import handle_inbound
 
-    async with SessionFactory() as session:
-        await handle_inbound(session, uuid.UUID(channel_id), payload)
-        await session.commit()
+    timings, token = stage_timing.begin(received_at)
+    outcome = "ok"
+    try:
+        async with SessionFactory() as session:
+            await handle_inbound(session, uuid.UUID(channel_id), payload)
+            with stage_timing.stage("db_commit"):
+                await session.commit()
+    except BaseException:
+        outcome = "error"
+        raise
+    finally:
+        stage_timing.end(timings, token, channel_id=channel_id, outcome=outcome)
 
 
 @celery_app.task(name="channels.meta_inbound", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
-def meta_inbound_task(self: object, channel_id: str, payload: dict[str, object]) -> None:
+def meta_inbound_task(
+    self: object, channel_id: str, payload: dict[str, object], received_at: float | None = None
+) -> None:
     """One inbound message from the shared Meta webhook. No retry: a replayed turn would answer twice."""
     log.info("meta_inbound_task_start", channel_id=channel_id)
-    _run(_run_meta_inbound(channel_id, payload))
+    _run_persistent(_run_meta_inbound(channel_id, payload, received_at))
 
 
 def enqueue_meta_inbound(channel_id: str, payload: dict[str, object]) -> None:
-    """Enqueue a routed Meta event. Indirection kept small so tests can stub it out."""
-    meta_inbound_task.delay(channel_id, payload)
+    """Enqueue a routed Meta event. Indirection kept small so tests can stub it out.
+
+    The enqueue time rides along so the worker can log how long the message waited for a free worker.
+    """
+    meta_inbound_task.delay(channel_id, payload, time.time())
 
 
 async def _run_meta_health() -> dict[str, int]:

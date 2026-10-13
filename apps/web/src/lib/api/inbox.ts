@@ -21,6 +21,8 @@ export interface ApiContact {
   id: string;
   display_name: string | null;
   avatar_url: string | null;
+  /** Platform handle without the "@" (Instagram), when known. */
+  username?: string | null;
   /** Set once this handle is matched to a CRM person — the link target for the name. */
   crm_contact_id: string | null;
 }
@@ -73,10 +75,12 @@ export interface ApiInboxDetail extends ApiInboxItem {
   send_window: ApiSendWindow | null;
 }
 
-export function listInbox(status?: string, channel?: string) {
+/** `includeBot` is the "All chats" view: also the conversations the bot is handling, for triage. */
+export function listInbox(status?: string, channel?: string, includeBot = false) {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (channel) params.set("channel", channel);
+  if (includeBot) params.set("include_bot", "true");
   const q = params.size ? `?${params}` : "";
   return api<ApiInboxItem[]>(`/v1/inbox/conversations${q}`, { orgScoped: true });
 }

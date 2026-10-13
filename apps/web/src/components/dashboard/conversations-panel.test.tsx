@@ -113,3 +113,26 @@ describe("ConversationsPanel", () => {
     await waitFor(() => expect(listConversations).not.toHaveBeenCalled());
   });
 });
+
+describe("ConversationsPanel contact identity", () => {
+  it("shows the contact's name and @username instead of just a channel badge", async () => {
+    listConversations.mockResolvedValue([
+      convo({
+        id: "c1",
+        channel: "instagram",
+        channel_user_id: "17841400000000000999",
+        contact: { id: "ct", display_name: "Aadesh", avatar_url: null, username: "_.aadesx._" },
+      }),
+    ]);
+    renderPanel();
+    expect(await screen.findByText("@_.aadesx._")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Aadesh/ })).toBeInTheDocument();
+    expect(screen.queryByText("Instagram")).toBeNull(); // the name replaces the bare channel label
+  });
+
+  it("still shows the channel badge for a chat with no contact", async () => {
+    listConversations.mockResolvedValue([convo({ id: "c1", channel: "telegram" })]);
+    renderPanel();
+    expect(await screen.findByText("Telegram")).toBeInTheDocument();
+  });
+});

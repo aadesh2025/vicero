@@ -26,7 +26,7 @@ import {
   isNewChannel,
   type InboxChannel,
 } from "@/lib/channel-meta";
-import { ContactAvatar, contactLabel } from "@/components/inbox/contact-avatar";
+import { ContactAvatar, contactHandle, contactLabel } from "@/components/inbox/contact-avatar";
 import { ChannelNotConnected } from "@/components/inbox/channel-not-connected";
 import { ReplyBox } from "@/components/inbox/reply-box";
 import { RunMacro } from "@/components/inbox/run-macro";
@@ -46,6 +46,8 @@ export function InboxView({ initialId }: { initialId?: string }) {
   const activeOrgId = useSession((s) => s.activeOrgId);
   const [filter, setFilter] = useState("");
   const [channel, setChannel] = useState(""); // "" = every channel
+  // Default is the handoff queue ("Needs a human"). "All chats" also lists what the bot is handling.
+  const [includeBot, setIncludeBot] = useState(false);
   const [activeCid, setActiveCid] = useState<string | null>(initialId ?? null);
 
   // Every channel gets a tab; this decides which of them are live vs still to set up.
@@ -59,8 +61,8 @@ export function InboxView({ initialId }: { initialId?: string }) {
   const selectedUnconnected = channel !== "" && !isChannelConnected(channels, channel as InboxChannel);
 
   const { data: items, isLoading } = useQuery({
-    queryKey: ["inbox", activeOrgId, filter, channel],
-    queryFn: () => listInbox(filter || undefined, channel || undefined),
+    queryKey: ["inbox", activeOrgId, filter, channel, includeBot],
+    queryFn: () => listInbox(filter || undefined, channel || undefined, includeBot),
     enabled: Boolean(activeOrgId),
   });
 
@@ -109,6 +111,26 @@ export function InboxView({ initialId }: { initialId?: string }) {
 
       <div className="grid min-h-0 flex-1 grid-cols-[340px_1fr] overflow-hidden">
         <div className="flex min-h-0 flex-col border-r border-border">
+          <div role="group" aria-label="Which chats" className="flex gap-1 border-b border-border p-2">
+            {[
+              { all: false, label: "Needs a human" },
+              { all: true, label: "All chats" },
+            ].map((o) => (
+              <button
+                key={o.label}
+                aria-pressed={includeBot === o.all}
+                onClick={() => {
+                  setIncludeBot(o.all);
+                  setActiveCid(null);
+                }}
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
+                  includeBot === o.all ? "bg-surface-3 text-text" : "text-muted hover:bg-surface-2"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-1 border-b border-border p-2">
             {STATUS_FILTERS.map((f) => (
               <button
@@ -128,7 +150,9 @@ export function InboxView({ initialId }: { initialId?: string }) {
             {selectedUnconnected && <ChannelNotConnected channel={channel as InboxChannel} compact />}
             {!selectedUnconnected && isLoading && <Skeleton className="m-3 h-16" />}
             {!selectedUnconnected && !isLoading && (items ?? []).length === 0 && (
-              <p className="p-6 text-center text-sm text-muted">Nothing in the inbox yet.</p>
+              <p className="p-6 text-center text-sm text-muted">
+                {includeBot ? "No chats yet." : "Nothing in the inbox yet."}
+              </p>
             )}
             {!selectedUnconnected &&
               (items ?? []).map((it) => (
@@ -151,6 +175,9 @@ export function InboxView({ initialId }: { initialId?: string }) {
                     </span>
                     <StatusPill status={it.status} className="ml-auto shrink-0" />
                   </div>
+                  {contactHandle(it.contact) && (
+                    <div className="truncate text-xs font-semibold text-muted">{contactHandle(it.contact)}</div>
+                  )}
                   <div className="truncate text-xs text-muted">{it.title || "Conversation"}</div>
                   <div className="flex items-center gap-2 text-xs text-faint">
                     <span>{it.message_count} msgs</span>
@@ -271,6 +298,7 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
   const handoff = detail?.handoff;
   const isHandoff = detail?.status === "handoff";
   const assigned = Boolean(handoff?.assigned_to);
+  const canTakeOverBotChat = Boolean(detail) && !isHandoff && detail?.status !== "closed" && detail?.channel !== "playground";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -307,6 +335,9 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
             ) : (
               (detail ? contactLabel(detail.contact, detail.channel_user_id) : "Conversation")
             )}
+            {contactHandle(detail?.contact) && (
+              <span className="ml-2 text-xs font-semibold text-muted">{contactHandle(detail?.contact)}</span>
+            )}
           </div>
           <div className="truncate text-xs font-medium text-faint">
             {detail ? `${channelMeta(detail.channel).label} · ${detail.status}` : ""}
@@ -314,6 +345,13 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
           </div>
         </div>
         {isHandoff && !assigned && (
+          <Button size="sm" variant="primary" onClick={() => doTakeover.mutate()} disabled={doTakeover.isPending}>
+            <Headphones className="size-4" /> Take over
+          </Button>
+        )}
+        {/* A bot-handled chat (from "All chats"): read-only until the operator takes it over, which
+            opens the handoff and pauses the bot. */}
+        {canTakeOverBotChat && (
           <Button size="sm" variant="primary" onClick={() => doTakeover.mutate()} disabled={doTakeover.isPending}>
             <Headphones className="size-4" /> Take over
           </Button>
@@ -367,7 +405,11 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
         <ReplyBox cid={cid} sendWindow={detail?.send_window ?? null} onSent={invalidate} />
       ) : (
         <div className="border-t border-border p-3 text-center text-xs font-semibold text-muted">
-          {isHandoff ? "Take over to reply." : "The assistant is handling this conversation."}
+          {isHandoff
+            ? "Take over to reply."
+            : canTakeOverBotChat
+              ? "The assistant is handling this conversation. Take over to reply."
+              : "The assistant is handling this conversation."}
         </div>
       )}
     </div>

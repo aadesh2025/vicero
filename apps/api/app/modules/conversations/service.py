@@ -7,7 +7,7 @@ import datetime as dt
 import hashlib
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, cast
 
 from sqlalchemy import func, select
@@ -29,7 +29,7 @@ from app.llm.fake import RefusalProvider
 from app.llm.registry import get_chat_provider, get_chat_provider_chain
 from app.llm.types import ChatRequest, StreamEvent
 from app.llm.types import Message as LLMMessage
-from app.models import Agent, AgentVersion, Conversation, Message
+from app.models import Agent, AgentVersion, Contact, Conversation, CrmContact, Message
 from app.modules.conversations import schemas
 from app.modules.orgs.deps import OrgContext
 from app.rag.agent_retrieval import retrieve_for_version
@@ -518,7 +518,45 @@ def _message_out(m: Message) -> schemas.MessageOut:
     )
 
 
-def _conversation_out(conv: Conversation, count: int) -> schemas.ConversationOut:
+def contact_out(contact: Contact | None, person: CrmContact | None = None) -> schemas.ContactOut | None:
+    """The name to show. A CRM link wins: a customer recognised by phone on a channel
+    they've never used before should still appear as themselves, not as a raw handle."""
+    if contact is None:
+        return None
+    username = (contact.extra or {}).get("username")
+    return schemas.ContactOut(
+        id=contact.id,
+        display_name=(person.display_name if person else None) or contact.display_name,
+        avatar_url=contact.avatar_url,
+        username=str(username).lstrip("@") if username else None,
+        crm_contact_id=contact.crm_contact_id,
+    )
+
+
+async def contacts_out_by_id(
+    session: AsyncSession, convs: Sequence[Conversation]
+) -> dict[uuid.UUID, schemas.ContactOut]:
+    """Contacts for a whole page of conversations in two queries, keyed by contact id."""
+    ids = {c.contact_id for c in convs if c.contact_id is not None}
+    if not ids:
+        return {}
+    contacts = (await session.execute(select(Contact).where(Contact.id.in_(ids)))).scalars().all()
+    person_ids = {c.crm_contact_id for c in contacts if c.crm_contact_id is not None}
+    people: dict[uuid.UUID, CrmContact] = {}
+    if person_ids:
+        found = (await session.execute(select(CrmContact).where(CrmContact.id.in_(person_ids)))).scalars().all()
+        people = {p.id: p for p in found}
+    out: dict[uuid.UUID, schemas.ContactOut] = {}
+    for c in contacts:
+        built = contact_out(c, people.get(c.crm_contact_id) if c.crm_contact_id else None)
+        if built is not None:
+            out[c.id] = built
+    return out
+
+
+def _conversation_out(
+    conv: Conversation, count: int, contact: schemas.ContactOut | None = None
+) -> schemas.ConversationOut:
     return schemas.ConversationOut(
         id=conv.id,
         agent_id=conv.agent_id,
@@ -529,6 +567,8 @@ def _conversation_out(conv: Conversation, count: int) -> schemas.ConversationOut
         last_message_at=conv.last_message_at,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
+        contact=contact,
+        channel_user_id=conv.channel_user_id,
     )
 
 
@@ -550,7 +590,11 @@ async def list_conversations(
     if agent_id is not None:
         stmt = stmt.where(Conversation.agent_id == agent_id)
     rows = (await session.execute(stmt)).all()
-    return [_conversation_out(conv, int(n)) for conv, n in rows]
+    contacts = await contacts_out_by_id(session, [conv for conv, _ in rows])
+    return [
+        _conversation_out(conv, int(n), contacts.get(conv.contact_id) if conv.contact_id else None)
+        for conv, n in rows
+    ]
 
 
 async def get_conversation(session: AsyncSession, ctx: OrgContext, cid: uuid.UUID) -> schemas.ConversationDetail:
@@ -558,7 +602,8 @@ async def get_conversation(session: AsyncSession, ctx: OrgContext, cid: uuid.UUI
     conv = await _get_conversation(session, ctx, cid)
     stmt = select(Message).where(Message.conversation_id == cid).order_by(Message.created_at.asc())
     msgs = list((await session.execute(stmt)).scalars().all())
-    base = _conversation_out(conv, len(msgs))
+    contacts = await contacts_out_by_id(session, [conv])
+    base = _conversation_out(conv, len(msgs), contacts.get(conv.contact_id) if conv.contact_id else None)
     return schemas.ConversationDetail(
         **base.model_dump(),
         memory_summary=conv.memory_summary,

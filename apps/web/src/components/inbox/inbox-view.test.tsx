@@ -14,11 +14,13 @@ const listAgents = vi.fn();
 vi.mock("@/lib/api/agents", () => ({ listAgents: () => listAgents() }));
 
 const listInbox = vi.fn();
+const getInboxDetail = vi.fn();
+const takeover = vi.fn();
 vi.mock("@/lib/api/inbox", () => ({
-  listInbox: () => listInbox(),
-  getInboxDetail: vi.fn(),
+  listInbox: (...a: unknown[]) => listInbox(...a),
+  getInboxDetail: (...a: unknown[]) => getInboxDetail(...a),
   openInboxSocket: () => null,
-  takeover: vi.fn(),
+  takeover: (...a: unknown[]) => takeover(...a),
   handback: vi.fn(),
   closeConversation: vi.fn(),
   replyInbox: vi.fn(),
@@ -210,5 +212,123 @@ describe("plan-limit handoffs", () => {
 
     await screen.findByText("Chat c");
     expect(screen.queryByText("plan limit")).toBeNull();
+  });
+});
+
+describe("contact identity on rows and header", () => {
+  const igItem = (over: Record<string, unknown> = {}) => ({
+    id: "ig1",
+    agent_id: "agent-1",
+    channel: "instagram",
+    status: "active",
+    title: "Hi",
+    channel_user_id: "17841400000000000999",
+    message_count: 2,
+    last_message_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    handoff: null,
+    attention_level: null,
+    contact: { id: "ct1", display_name: "Aadesh", avatar_url: null, username: "_.aadesx._", crm_contact_id: null },
+    ...over,
+  });
+
+  it("shows the name, the @username and initials when there is no photo", async () => {
+    listInbox.mockResolvedValue([igItem()]);
+    renderInbox();
+    expect(await screen.findByText("Aadesh")).toBeInTheDocument();
+    expect(screen.getByText("@_.aadesx._")).toBeInTheDocument();
+    expect(screen.getByText("A")).toBeInTheDocument(); // initials stand in for the missing avatar
+  });
+
+  it("shows the photo when the contact has one", async () => {
+    listInbox.mockResolvedValue([
+      igItem({ contact: { id: "ct1", display_name: "Aadesh", avatar_url: "https://cdn/x.jpg", username: null } }),
+    ]);
+    const { container } = renderInbox();
+    await screen.findByText("Aadesh");
+    expect(container.querySelector('img[src="https://cdn/x.jpg"]')).not.toBeNull();
+    expect(screen.queryByText(/^@/)).toBeNull(); // no username, no handle line
+  });
+
+  it("falls back to the tail of the platform id when there is no name", async () => {
+    listInbox.mockResolvedValue([igItem({ contact: null })]);
+    renderInbox();
+    expect(await screen.findByText("…00000999")).toBeInTheDocument();
+  });
+});
+
+describe("All chats toggle", () => {
+  beforeEach(() => {
+    Element.prototype.scrollTo = vi.fn(); // jsdom has no element scrolling; the thread scrolls itself to the bottom
+  });
+
+  it("defaults to the handoff queue and asks the API for bot chats only when switched on", async () => {
+    listInbox.mockResolvedValue([]);
+    renderInbox();
+    const group = await screen.findByRole("group", { name: "Which chats" });
+    expect(within(group).getByRole("button", { name: "Needs a human" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "All chats" })).toHaveAttribute("aria-pressed", "false");
+    await waitFor(() => expect(listInbox).toHaveBeenCalledWith(undefined, undefined, false));
+
+    fireEvent.click(within(group).getByRole("button", { name: "All chats" }));
+    await waitFor(() => expect(listInbox).toHaveBeenCalledWith(undefined, undefined, true));
+    expect(within(group).getByRole("button", { name: "All chats" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(within(group).getByRole("button", { name: "Needs a human" }));
+    await waitFor(() => expect(listInbox).toHaveBeenLastCalledWith(undefined, undefined, false));
+  });
+
+  it("opens a bot-handled chat read-only, with Take over, and takes it over", async () => {
+    const bot = {
+      id: "b1",
+      agent_id: "agent-1",
+      channel: "instagram",
+      status: "active",
+      title: "Hi",
+      channel_user_id: "IG42",
+      message_count: 2,
+      last_message_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      handoff: null,
+      attention_level: null,
+      contact: { id: "ct1", display_name: "Aadesh", avatar_url: null, username: "acme" },
+    };
+    listInbox.mockImplementation((_s: unknown, _c: unknown, includeBot: boolean) =>
+      Promise.resolve(includeBot ? [bot] : []),
+    );
+    getInboxDetail.mockResolvedValue({ ...bot, messages: [], send_window: null });
+    takeover.mockResolvedValue({ ...bot, status: "handoff" });
+    renderInbox();
+
+    fireEvent.click(await screen.findByRole("button", { name: "All chats" }));
+    fireEvent.click(await screen.findByText("Aadesh"));
+
+    expect(await screen.findByText("The assistant is handling this conversation. Take over to reply.")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull(); // read-only: no reply box
+    fireEvent.click(await screen.findByRole("button", { name: /take over/i }));
+    await waitFor(() => expect(takeover).toHaveBeenCalledWith("b1"));
+  });
+
+  it("offers no take-over on a closed chat", async () => {
+    const closed = {
+      id: "z1",
+      agent_id: "agent-1",
+      channel: "instagram",
+      status: "closed",
+      title: "Old",
+      channel_user_id: "IG1",
+      message_count: 1,
+      last_message_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      handoff: null,
+      attention_level: null,
+      contact: { id: "c", display_name: "Done Dee", avatar_url: null },
+    };
+    listInbox.mockResolvedValue([closed]);
+    getInboxDetail.mockResolvedValue({ ...closed, messages: [], send_window: null });
+    renderInbox();
+    fireEvent.click(await screen.findByText("Done Dee"));
+    await screen.findByText("The assistant is handling this conversation.");
+    expect(screen.queryByRole("button", { name: /take over/i })).toBeNull();
   });
 });

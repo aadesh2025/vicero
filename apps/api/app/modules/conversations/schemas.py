@@ -32,6 +32,18 @@ class MessageOut(BaseModel):
     created_at: dt.datetime
 
 
+class ContactOut(BaseModel):
+    """The human on the other end: what the inbox and conversation list need to render a recognizable row."""
+
+    id: uuid.UUID
+    display_name: str | None
+    avatar_url: str | None
+    #: The platform handle without the "@" (Instagram), from `contacts.extra`. Null where there is none.
+    username: str | None = None
+    #: Set once this handle has been matched to a CRM person, so the UI can link there.
+    crm_contact_id: uuid.UUID | None = None
+
+
 class ConversationOut(BaseModel):
     id: uuid.UUID
     agent_id: uuid.UUID
@@ -42,6 +54,9 @@ class ConversationOut(BaseModel):
     last_message_at: dt.datetime | None
     created_at: dt.datetime
     updated_at: dt.datetime
+    #: Null for widget/playground chats and threads that predate contact resolution.
+    contact: ContactOut | None = None
+    channel_user_id: str | None = None
 
 
 class ConversationDetail(ConversationOut):

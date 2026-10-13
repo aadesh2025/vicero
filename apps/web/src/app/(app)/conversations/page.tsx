@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChannelBadge } from "@/components/shared/channel";
+import { ContactAvatar, contactHandle, contactLabel } from "@/components/inbox/contact-avatar";
 import { listAgents } from "@/lib/api/agents";
 import {
   chatStream,
@@ -160,14 +161,29 @@ export default function ConversationsPage() {
                   activeCid === c.id && live === null ? "bg-surface-2" : ""
                 }`}
               >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ai-soft text-ai">
-                  <MessagesSquare className="size-4" />
-                </span>
+                {c.contact ? (
+                  <ContactAvatar
+                    channel={c.channel}
+                    name={contactLabel(c.contact, c.channel_user_id)}
+                    avatarUrl={c.contact.avatar_url}
+                  />
+                ) : (
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ai-soft text-ai">
+                    <MessagesSquare className="size-4" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="truncate text-sm font-bold text-text">{c.title || "Untitled chat"}</div>
-                    <ChannelBadge channel={c.channel} size="sm" className="ml-auto shrink-0" />
+                    <div className="truncate text-sm font-bold text-text">
+                      {c.contact ? contactLabel(c.contact, c.channel_user_id) : c.title || "Untitled chat"}
+                    </div>
+                    {!c.contact && <ChannelBadge channel={c.channel} size="sm" className="ml-auto shrink-0" />}
                   </div>
+                  {c.contact && (
+                    <div className="truncate text-xs font-semibold text-muted">
+                      {contactHandle(c.contact) ?? c.title ?? ""}
+                    </div>
+                  )}
                   <div className="mt-0.5 flex items-center gap-2 text-xs font-medium text-faint">
                     <span className="truncate">{agentName(c.agent_id)}</span>
                     <span>·</span>
@@ -192,11 +208,34 @@ export default function ConversationsPage() {
           ) : (
             <>
               <div className="flex items-center justify-between border-b border-border p-4">
-                <div className="flex items-center gap-2">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-ai-soft text-ai">
-                    <Bot className="size-4" />
-                  </span>
-                  <span className="text-sm font-bold text-text">{agentId ? agentName(agentId) : "Agent"}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  {detail?.contact && live === null ? (
+                    <>
+                      <ContactAvatar
+                        channel={detail.channel}
+                        name={contactLabel(detail.contact, detail.channel_user_id)}
+                        avatarUrl={detail.contact.avatar_url}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-text">
+                          {contactLabel(detail.contact, detail.channel_user_id)}
+                          {contactHandle(detail.contact) && (
+                            <span className="ml-2 text-xs font-semibold text-muted">{contactHandle(detail.contact)}</span>
+                          )}
+                        </div>
+                        <div className="truncate text-xs font-medium text-faint">
+                          with {agentId ? agentName(agentId) : "Agent"}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-ai-soft text-ai">
+                        <Bot className="size-4" />
+                      </span>
+                      <span className="text-sm font-bold text-text">{agentId ? agentName(agentId) : "Agent"}</span>
+                    </>
+                  )}
                   {detail?.memory_summary && <Badge variant="ai">memory</Badge>}
                 </div>
                 {activeCid && (

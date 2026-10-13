@@ -11,13 +11,13 @@ import asyncio
 import datetime as dt
 import hashlib
 import time
-from collections.abc import AsyncIterator
-from typing import cast
+from collections.abc import AsyncIterator, Awaitable
+from typing import TypeVar, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
-from app.chat import attention, guard_models, guardrails, policy_guard, variables
+from app.chat import attention, guard_models, guardrails, policy_guard, stage_timing, variables
 from app.chat.assembly import build_messages, compose_system_prompt
 from app.chat.budget import agentic_loop_enabled, turn_budget
 from app.chat.handoff import (
@@ -40,12 +40,20 @@ from app.rag.retrieval import Citation
 
 log = get_logger("chat.inbound")
 
+_T = TypeVar("_T")
+
 _DEFAULT_REFUSAL = "I'm not able to help with that topic. Is there something else I can do for you?"
 # Said to a visitor when the provider itself fails and the agent has no fallback line of its
 # own. Never surfaces the provider error: that text can carry key fragments and account details.
 _DEFAULT_PROVIDER_FAILURE = (
     "Sorry — I'm having trouble responding right now. Please try again in a moment."
 )
+
+
+async def _timed(name: str, coro: Awaitable[_T]) -> _T:
+    """Await `coro`, reporting its own duration as stage `name` (these run concurrently with retrieval)."""
+    with stage_timing.stage(name):
+        return await coro
 
 
 class InboundTurn:
@@ -150,25 +158,60 @@ class InboundTurn:
         # this is the half of the threat model that was missing, and the fix for the live
         # "ignore all previous instructions" / "developer mode" failures. Screened before
         # retrieval so an attack doesn't spend an embedding call.
-        guard = (
-            guardrails.screen_user_message(
-                self.message, max_chars=settings.max_user_message_chars
+        with stage_timing.stage("guard_l1"):
+            guard = (
+                guardrails.screen_user_message(
+                    self.message, max_chars=settings.max_user_message_chars
+                )
+                if settings.guard_input_enabled
+                else guardrails.InputVerdict()
             )
-            if settings.guard_input_enabled
-            else guardrails.InputVerdict()
-        )
-        # L2 classifier (docs/11 §4-L2). Runs only when L1 let the message through, so a
-        # regex-obvious attack costs no tokens; it exists for what L1 structurally cannot see
-        # — paraphrase, and every language other than English.
-        l2_score: float | None = None
+        # L2 classifier (docs/11 §4-L2) and L3 grader (§4-L3) are network calls that need neither the
+        # DB session nor each other, so they start now and run *while retrieval runs* instead of in
+        # front of it (ADR-115). L1 still gates all three: a regex-obvious attack starts none of them.
+        # Nothing the model sees changes: if L2 blocks, the retrieved context is discarded below and
+        # L3's verdict is dropped, exactly as if they had never run. The only cost is a wasted
+        # embedding call on a turn L2 blocks.
+        l2_task: asyncio.Task[tuple[bool, float | None]] | None = None
+        l3_task: asyncio.Task[policy_guard.PolicyVerdict | None] | None = None
         if not guard.blocked:
             org = await self._org()
-            l2_blocked, l2_score = await guard_models.is_injection(
-                self.message,
-                org_enabled=org.guard_injection_enabled if org else None,
+            l2_task = asyncio.create_task(
+                _timed(
+                    "guard_l2",
+                    guard_models.is_injection(
+                        self.message,
+                        org_enabled=org.guard_injection_enabled if org else None,
+                    ),
+                )
             )
-        else:
-            l2_blocked = False
+            if settings.guard_distress_enabled:
+                l3_task = asyncio.create_task(
+                    _timed(
+                        "guard_l3",
+                        policy_guard.classify(
+                            self.message,
+                            history=[m.content for m in history if m.role == "user" and m.content],
+                            org_enabled=org.guard_injection_enabled if org else None,
+                        ),
+                    )
+                )
+
+        l2_blocked, l2_score = False, None
+        context_block, citations = "", cast(list[Citation], [])
+        try:
+            if not guard.blocked:
+                with stage_timing.stage("rag"):
+                    context_block, citations = await retrieve_for_version(
+                        session, org_id, self.version, self.message
+                    )
+            if l2_task is not None:
+                l2_blocked, l2_score = await l2_task
+        finally:
+            # Retrieval raised or the stream was cancelled: do not leave the guard calls running.
+            for pending in (l2_task, l3_task):
+                if pending is not None and not pending.done():
+                    pending.cancel()
 
         if guard.blocked or l2_blocked:
             # Hash, never the payload: the raw text is an attack string and may carry PII.
@@ -183,20 +226,11 @@ class InboundTurn:
                 message_sha256=hashlib.sha256(self.message.encode("utf-8")).hexdigest()[:16],
             )
             context_block, citations = "", cast(list[Citation], [])
-        else:
-            context_block, citations = await retrieve_for_version(
-                session, org_id, self.version, self.message
-            )
-        # L3 policy/emotion grading (docs/11 §4-L3). Runs on messages that got past L1/L2,
-        # because a blocked injection is not a distressed customer and grading it wastes a call.
+        # L3 policy/emotion grading (docs/11 §4-L3). Its verdict only counts for messages that got past
+        # L1/L2, because a blocked injection is not a distressed customer.
         policy = None
-        if not (guard.blocked or l2_blocked) and settings.guard_distress_enabled:
-            org = await self._org()
-            policy = await policy_guard.classify(
-                self.message,
-                history=[m.content for m in history if m.role == "user" and m.content],
-                org_enabled=org.guard_injection_enabled if org else None,
-            )
+        if l3_task is not None and not (guard.blocked or l2_blocked):
+            policy = await l3_task
         if policy is not None:
             await attention.apply_policy_verdict(session, conv, policy)
 
@@ -308,6 +342,7 @@ class InboundTurn:
             ):
                 yield ev
             latency_ms = int((time.perf_counter() - t0) * 1000)
+            stage_timing.add("llm", latency_ms)
             self.assistant_message = await _finalize_turn(session, conv, self.result, latency_ms, self.message)
             if reserved and self.result.error:
                 # The model never produced the reply we reserved for (the visitor got the

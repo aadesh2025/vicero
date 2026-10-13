@@ -25,10 +25,14 @@ router = APIRouter(prefix="/v1/inbox", tags=["inbox"])
 async def list_conversations(
     status: str | None = Query(default=None),
     channel: str | None = Query(default=None, description="Filter to one channel, e.g. `instagram`."),
+    include_bot: bool = Query(
+        default=False,
+        description="Also list conversations the bot is handling (no handoff). Read-only triage; take-over is allowed.",
+    ),
     session: AsyncSession = Depends(get_session),
     ctx: OrgContext = Depends(current_org),
 ) -> list[schemas.InboxItemOut]:
-    return await service.list_conversations(session, ctx, status, channel)
+    return await service.list_conversations(session, ctx, status, channel, include_bot)
 
 
 @router.get("/conversations/{cid}", response_model=schemas.InboxDetail)

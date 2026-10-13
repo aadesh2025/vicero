@@ -9,6 +9,7 @@ describe("contactLabel", () => {
 
   it("falls back to the end of the channel id when there's no contact yet", () => {
     expect(contactLabel(null, "178414000000000000999")).toBe("…00000999");
+    expect(contactLabel(null, "visitor-0123456789abcdef-xyz")).toBe("visitor-0123456789…"); // not numeric: head
     expect(contactLabel(null, "17841400000000000")).toBe("17841400000000000"); // exactly at the limit
     expect(contactLabel(null, "55")).toBe("55");
     expect(contactLabel(null, null)).toBe("Unknown contact");

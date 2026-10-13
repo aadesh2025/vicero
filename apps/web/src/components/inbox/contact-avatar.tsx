@@ -81,9 +81,10 @@ export function contactLabel(
 ): string {
   if (contact?.display_name) return contact.display_name;
   if (channelUserId) {
-    // Raw platform ids are long and meaningless, and Instagram/Messenger ids share a long prefix:
-    // the tail is the part that tells two rows apart.
-    return channelUserId.length > 18 ? `…${channelUserId.slice(-8)}` : channelUserId;
+    if (channelUserId.length <= 18) return channelUserId;
+    // Meta ids (Instagram/Messenger/WhatsApp) are long numbers sharing one prefix: the tail is what
+    // tells two rows apart. Other ids (widget visitors) keep their readable head.
+    return /^\d+$/.test(channelUserId) ? `…${channelUserId.slice(-8)}` : `${channelUserId.slice(0, 18)}…`;
   }
   return "Unknown contact";
 }

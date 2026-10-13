@@ -45,7 +45,9 @@ class _Graph:
         )
         if request.url.path.endswith("/subscribed_apps"):
             if self.subscribe_status != 200:
-                return httpx.Response(self.subscribe_status, json={"error": {"message": "Invalid OAuth token", "code": 190}})
+                return httpx.Response(
+                    self.subscribe_status, json={"error": {"message": "Invalid OAuth token", "code": 190}}
+                )
             return httpx.Response(200, json={"success": True})
         return httpx.Response(404, json={"error": {"message": "no route", "code": 1}})
 
@@ -56,6 +58,11 @@ def graph() -> Iterator[_Graph]:
     meta_graph.transport = httpx.MockTransport(fake.handler)
     yield fake
     meta_graph.transport = None
+
+
+@pytest.fixture
+def queued(_meta_settings: list[tuple[str, dict[str, Any]]]) -> list[tuple[str, dict[str, Any]]]:  # noqa: F811
+    return _meta_settings
 
 
 @pytest.fixture(autouse=True)
@@ -106,13 +113,17 @@ async def test_it_is_idempotent_and_a_rerun_refreshes_the_token(
     second, created_again = await _add(db_session, agent_id, token="EAAnew-token")
 
     assert created and not created_again and second.id == first.id
-    rows = (await db_session.execute(select(func.count()).select_from(Channel).where(Channel.external_id == PN))).scalar_one()
+    rows = (
+        await db_session.execute(select(func.count()).select_from(Channel).where(Channel.external_id == PN))
+    ).scalar_one()
     assert rows == 1
     assert decrypt(second.config["access_token"]) == "EAAnew-token"
     assert second.status == "active" and second.enabled
 
 
-async def test_a_dead_channel_is_revived_by_a_rerun(client: AsyncClient, db_session: AsyncSession, graph: _Graph) -> None:
+async def test_a_dead_channel_is_revived_by_a_rerun(
+    client: AsyncClient, db_session: AsyncSession, graph: _Graph
+) -> None:
     agent_id, _ = await _agent(client, "wat3@example.com")
     channel, _ = await _add(db_session, agent_id)
     channel.status, channel.enabled = "needs_reconnect", False
@@ -140,7 +151,9 @@ async def test_a_rejected_subscribe_saves_nothing(client: AsyncClient, db_sessio
     agent_id, _ = await _agent(client, "wat5@example.com")
     with pytest.raises(AppError):
         await _add(db_session, agent_id)
-    count = (await db_session.execute(select(func.count()).select_from(Channel).where(Channel.external_id == PN))).scalar_one()
+    count = (
+        await db_session.execute(select(func.count()).select_from(Channel).where(Channel.external_id == PN))
+    ).scalar_one()
     assert count == 0
 
 
@@ -163,7 +176,7 @@ async def test_unknown_agent_and_another_workspaces_number_are_refused(
 
 
 async def test_an_inbound_message_reaches_the_channel_and_a_reply_is_sent(
-    client: AsyncClient, db_session: AsyncSession, graph: _Graph, _meta_settings: list[tuple[str, dict[str, Any]]]
+    client: AsyncClient, db_session: AsyncSession, graph: _Graph, queued: list[tuple[str, dict[str, Any]]]
 ) -> None:
     agent_id, _ = await _agent(client, "wat8@example.com")
     channel, _ = await _add(db_session, agent_id)
@@ -171,7 +184,6 @@ async def test_an_inbound_message_reaches_the_channel_and_a_reply_is_sent(
     # 1. The shared webhook resolves the test number's phone_number_id to this channel.
     r = await _post_webhook(client, _wa_payload(PN, _wa_msg("what are your hours")))
     assert r.status_code == 200
-    queued = _meta_settings
     assert [cid for cid, _ in queued] == [str(channel.id)]
 
     # 2. The worker's unchanged path runs the turn and sends the reply with this token.
@@ -179,7 +191,11 @@ async def test_an_inbound_message_reaches_the_channel_and_a_reply_is_sent(
 
     def handler(request: httpx.Request) -> httpx.Response:
         sent.append(
-            {"path": request.url.path, "auth": request.headers.get("authorization", ""), "body": json.loads(request.content)}
+            {
+                "path": request.url.path,
+                "auth": request.headers.get("authorization", ""),
+                "body": json.loads(request.content),
+            }
         )
         return httpx.Response(200, json={"ok": True})
 
@@ -194,7 +210,7 @@ async def test_an_inbound_message_reaches_the_channel_and_a_reply_is_sent(
 
 
 async def test_group_messages_are_ignored(
-    client: AsyncClient, db_session: AsyncSession, graph: _Graph, _meta_settings: list[tuple[str, dict[str, Any]]]
+    client: AsyncClient, db_session: AsyncSession, graph: _Graph, queued: list[tuple[str, dict[str, Any]]]
 ) -> None:
     agent_id, _ = await _agent(client, "wat9@example.com")
     channel, _ = await _add(db_session, agent_id)
@@ -203,11 +219,13 @@ async def test_group_messages_are_ignored(
     # Never queued...
     assert meta_webhook.split_events(_wa_payload(PN, group)) == []
     r = await _post_webhook(client, _wa_payload(PN, group))
-    assert r.status_code == 200 and _meta_settings == []
+    assert r.status_code == 200 and queued == []
     # ...and if one reaches the adapter anyway, it is not parsed and nothing is sent.
     assert get_channel("whatsapp").parse_inbound(channel, _wa_payload(PN, group)) is None
     sent: list[Any] = []
-    get_channel("whatsapp").transport = httpx.MockTransport(lambda req: sent.append(req) or httpx.Response(200, json={}))
+    get_channel("whatsapp").transport = httpx.MockTransport(
+        lambda req: sent.append(req) or httpx.Response(200, json={})
+    )
     await meta_webhook.handle_inbound(db_session, channel.id, _wa_payload(PN, group))
     assert sent == []
 

@@ -51,9 +51,7 @@ async def add_test_channel(
         raise AppError("whatsapp_test.agent_not_found", f"No agent with id {agent_id}.", 404)
 
     channel = (
-        await session.execute(
-            select(Channel).where(Channel.type == "whatsapp", Channel.external_id == phone_number_id)
-        )
+        await session.execute(select(Channel).where(Channel.type == "whatsapp", Channel.external_id == phone_number_id))
     ).scalar_one_or_none()
     if channel is not None and channel.organization_id != agent.organization_id:
         raise AppError(

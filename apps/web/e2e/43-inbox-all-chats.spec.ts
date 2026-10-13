@@ -58,8 +58,8 @@ test("inbox: 'All chats' shows bot-handled conversations; taking over hands them
   // UI: default is "Needs a human" and the bot chat is not in it.
   await authenticateBrowser(context, account);
   await page.goto("/inbox");
-  const needs = page.getByRole("button", { name: "Needs a human" });
-  const everything = page.getByRole("button", { name: "All chats" });
+  const needs = page.getByRole("button", { name: "Needs a human", exact: true });
+  const everything = page.getByRole("button", { name: "All chats", exact: true });
   await expect(needs).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: /Priya N on Telegram/ })).toHaveCount(0);
 

@@ -70,6 +70,16 @@ def configured_templates(channel: Any) -> list[str]:
     return []
 
 
+def is_group_message(message: dict[str, Any]) -> bool:
+    """A message sent in a WhatsApp group. The bot answers 1:1 chats only.
+
+    The Cloud API marks group traffic with a `group_id` on the message (and group ids end in `@g.us`).
+    """
+    if message.get("group_id") or message.get("group"):
+        return True
+    return any(str(message.get(k) or "").endswith("@g.us") for k in ("from", "to", "recipient_id"))
+
+
 class WhatsAppChannel(BaseChannel):
     type = "whatsapp"
     secret_fields = ("access_token", "app_secret", "registration_pin")
@@ -87,6 +97,8 @@ class WhatsAppChannel(BaseChannel):
         try:
             value = payload["entry"][0]["changes"][0]["value"]
             msg = value["messages"][0]
+            if is_group_message(msg):
+                return None
             sender = msg["from"]
             text = msg["text"]["body"]
         except (KeyError, IndexError, TypeError):

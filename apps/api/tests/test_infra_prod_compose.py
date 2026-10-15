@@ -317,3 +317,19 @@ def test_only_caddy_and_the_loopback_db_port_are_published(compose: dict[str, An
     assert set(published.pop("caddy")) == {"80:80", "443:443"}
     leaked = {name: ports for name, ports in published.items() if ports}
     assert not leaked, f"unexpected published ports: {leaked}"
+
+
+# ── DNS (ADR-119) ────────────────────────────────────────────────────────────────────
+
+#: 1.1.1.1 and 8.8.8.8 time out on UDP/53 from the Hetzner network; each uncached lookup then cost ~4 s.
+_DNS_SERVICES = ("api", "worker", "beat")
+_GOOD_RESOLVERS = ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
+_BAD_RESOLVERS = {"1.1.1.1", "8.8.8.8"}
+
+
+@pytest.mark.parametrize("name", _DNS_SERVICES)
+def test_outbound_services_use_resolvers_that_answer(compose: dict[str, Any], name: str) -> None:
+    svc = _services(compose)[name]
+    assert svc.get("dns") == _GOOD_RESOLVERS
+    assert not _BAD_RESOLVERS & set(svc["dns"])
+    assert svc.get("dns_opt") == ["timeout:1", "attempts:2"]

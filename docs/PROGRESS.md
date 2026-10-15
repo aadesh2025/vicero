@@ -2206,3 +2206,7 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - `apps/api/scripts/add_whatsapp_test_channel.py` creates or updates a WhatsApp channel from Meta's free test number without Embedded Signup: same row and token encryption as one-click connect, `connection_source=manual`, `token_expires_at` = now + 24 h, and `POST /{waba}/subscribed_apps`. Token comes from stdin or `WHATSAPP_TEST_TOKEN`, never argv, and is never printed or logged. Idempotent (re-run to refresh the 24 h token).
 - The bot now answers 1:1 chats only: WhatsApp group messages (`group_id` / `@g.us`) are dropped at the webhook and in the adapter.
 - Tests: `tests/test_whatsapp_test_channel.py` (11).
+
+## Container DNS fix (2026-10-15)
+
+- `api`, `worker`, `beat` resolve through 9.9.9.9 / 1.0.0.1 / 213.133.98.98 with `timeout:1 attempts:2` (the host's 1.1.1.1 and 8.8.8.8 time out here). ADR-119, runbook §14, pinned in `test_infra_prod_compose.py`.

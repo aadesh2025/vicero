@@ -36,7 +36,9 @@ def test_the_demo_content_covers_what_the_assistant_is_asked() -> None:
     # The agent is told to stay inside the knowledge and to hand over when unsure.
     assert "ONLY from the knowledge base" in prompt
     assert "Hand over to a human" in prompt
-    assert "name" in prompt and "email" in prompt and "preferred day and time" in prompt
+    assert "name" in prompt and "email" in prompt
+    for tool in ("check_availability", "book_appointment", "get_customer"):
+        assert tool in prompt, tool
 
 
 async def _agent(client: AsyncClient, email: str) -> uuid.UUID:

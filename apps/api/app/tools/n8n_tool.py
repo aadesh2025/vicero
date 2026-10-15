@@ -87,10 +87,11 @@ async def execute_n8n_tool(config: dict[str, Any], args: dict[str, Any], ctx: To
         "run_id": str(ctx.run_id) if ctx.run_id else None,
         "conversation_id": str(ctx.conversation_id) if ctx.conversation_id else None,
     }
+    # Per-run token, bound to THIS run in THIS org (R2 callback binding). An async workflow echoes it in its
+    # callback; a sync one can present it to Vicero's internal tool API (ADR-120) to act inside this run only.
+    payload["callback_token"] = callback_token(ctx.run_id, ctx.org_id)
     if mode == "async":
         payload["callback_url"] = f"{settings.api_base_url.rstrip('/')}/v1/tools/n8n/callback"
-        # The workflow must echo this back; it only works for THIS run in THIS org (R2 callback binding).
-        payload["callback_token"] = callback_token(ctx.run_id, ctx.org_id)
 
     client = get_client()
     try:

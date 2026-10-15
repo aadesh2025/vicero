@@ -150,6 +150,11 @@ services:
     env_file: ../.env
     environment: *api-env
     restart: unless-stopped
+    # Resolver for outbound lookups (api.groq.com, graph.facebook.com). The host's 1.1.1.1 and 8.8.8.8 time
+    # out on UDP/53 from this Hetzner network, and Docker's embedded resolver forwards to them first, so
+    # every uncached lookup cost ~4 s. These three answer in <200 ms. ADR-119; runbook §14.
+    dns: ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
+    dns_opt: ["timeout:1", "attempts:2"]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     volumes:
       # docs/15 PROD-1. The api writes an upload here and the worker reads it back to ingest it;
@@ -189,6 +194,11 @@ services:
     env_file: ../.env
     environment: *api-env
     restart: unless-stopped
+    # Resolver for outbound lookups (api.groq.com, graph.facebook.com). The host's 1.1.1.1 and 8.8.8.8 time
+    # out on UDP/53 from this Hetzner network, and Docker's embedded resolver forwards to them first, so
+    # every uncached lookup cost ~4 s. These three answer in <200 ms. ADR-119; runbook §14.
+    dns: ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
+    dns_opt: ["timeout:1", "attempts:2"]
     command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
     volumes:
       # The same volume as `api`, at the same path. This is the other half of PROD-1: the
@@ -221,6 +231,11 @@ services:
     env_file: ../.env
     environment: *api-env
     restart: unless-stopped
+    # Resolver for outbound lookups (api.groq.com, graph.facebook.com). The host's 1.1.1.1 and 8.8.8.8 time
+    # out on UDP/53 from this Hetzner network, and Docker's embedded resolver forwards to them first, so
+    # every uncached lookup cost ~4 s. These three answer in <200 ms. ADR-119; runbook §14.
+    dns: ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
+    dns_opt: ["timeout:1", "attempts:2"]
     command: ["celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info"]
     deploy:
       resources:

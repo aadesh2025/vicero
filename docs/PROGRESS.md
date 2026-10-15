@@ -2211,3 +2211,7 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 
 - `docs/demo-knowledge/*.md` (company overview, what Vicero is, services, DEMO pricing, hours and booking policy, FAQ, escalation) plus `agent-system-prompt.txt`, loaded by `apps/api/scripts/seed_demo_knowledge.py`: it goes through the same service layer as the dashboard (a knowledge base, text documents queued for the worker's ingestion, an agent version with RAG on and the new prompt, optional publish). Idempotent (documents with the same filename are replaced). All figures are marked DEMO.
 - Run: copy the folder into the api container and run the script (steps in docs/demo-knowledge/README.md). Tests: `tests/test_demo_knowledge.py`.
+
+## Container DNS fix (2026-10-15)
+
+- `api`, `worker`, `beat` resolve through 9.9.9.9 / 1.0.0.1 / 213.133.98.98 with `timeout:1 attempts:2` (the host's 1.1.1.1 and 8.8.8.8 time out here). ADR-119, runbook §14, pinned in `test_infra_prod_compose.py`.

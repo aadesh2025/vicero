@@ -2206,3 +2206,8 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - `apps/api/scripts/add_whatsapp_test_channel.py` creates or updates a WhatsApp channel from Meta's free test number without Embedded Signup: same row and token encryption as one-click connect, `connection_source=manual`, `token_expires_at` = now + 24 h, and `POST /{waba}/subscribed_apps`. Token comes from stdin or `WHATSAPP_TEST_TOKEN`, never argv, and is never printed or logged. Idempotent (re-run to refresh the 24 h token).
 - The bot now answers 1:1 chats only: WhatsApp group messages (`group_id` / `@g.us`) are dropped at the webhook and in the adapter.
 - Tests: `tests/test_whatsapp_test_channel.py` (11).
+
+## Demo knowledge for the test agent (2026-10-15)
+
+- `docs/demo-knowledge/*.md` (company overview, what Vicero is, services, DEMO pricing, hours and booking policy, FAQ, escalation) plus `agent-system-prompt.txt`, loaded by `apps/api/scripts/seed_demo_knowledge.py`: it goes through the same service layer as the dashboard (a knowledge base, text documents queued for the worker's ingestion, an agent version with RAG on and the new prompt, optional publish). Idempotent (documents with the same filename are replaced). All figures are marked DEMO.
+- Run: copy the folder into the api container and run the script (steps in docs/demo-knowledge/README.md). Tests: `tests/test_demo_knowledge.py`.

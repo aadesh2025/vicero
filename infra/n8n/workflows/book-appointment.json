@@ -83,7 +83,7 @@
       "typeVersion": 1,
       "position": [
         780,
-        420
+        360
       ]
     },
     {
@@ -169,8 +169,8 @@
       }
     },
     {
-      "id": "2d2a4b93-9095-5e1f-8bb7-d00c503f0f9e",
-      "name": "Book in Vicero",
+      "id": "8fae080a-1601-5a14-9c59-ee1b51d33f2d",
+      "name": "Call Vicero",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -208,182 +208,17 @@
       }
     },
     {
-      "id": "9fed006c-ce8b-518c-bd31-53a85a69a302",
-      "name": "New booking?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1820,
-        0
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "n1",
-              "leftValue": "={{ $json.ok === true && $json.duplicate === false }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "64ee1af9-8eaa-5137-bb48-fa2109188620",
-      "name": "Create Google Calendar event",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.3,
-      "position": [
-        2080,
-        -120
-      ],
-      "parameters": {
-        "calendar": {
-          "__rl": true,
-          "value": "primary",
-          "mode": "id"
-        },
-        "start": "={{ $('Book in Vicero').first().json.start_iso }}",
-        "end": "={{ new Date(new Date($('Book in Vicero').first().json.start_iso).getTime() + $('Book in Vicero').first().json.duration_minutes * 60000).toISOString() }}",
-        "additionalFields": {
-          "summary": "={{ 'Appointment: ' + $('Webhook').first().json.body.args.name }}",
-          "description": "={{ 'Contact: ' + $('Webhook').first().json.body.args.contact + ' | Ref ' + $('Book in Vicero').first().json.reference + ' | ' + ($('Webhook').first().json.body.args.notes || '') }}"
-        }
-      },
-      "disabled": true,
-      "onError": "continueRegularOutput"
-    },
-    {
-      "id": "e5530546-cb63-5659-956d-23feb8dfa7a6",
-      "name": "Event created?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2340,
-        -120
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "e1",
-              "leftValue": "={{ typeof $json.id === 'string' && $json.id.length > 0 && $json.booking_id === undefined }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
-      "id": "c75ac21f-e512-5b4b-bc5a-e876e741a482",
-      "name": "Prepare event report",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2600,
-        -240
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// Report the calendar event this workflow just created back to Vicero (so the row can be mirrored/cancelled later).\nconst call = $('Webhook').first().json.body || {};\nconst booked = $('Book in Vicero').first().json;\nconst ts = String(Math.floor(Date.now() / 1000));\nconst body = JSON.stringify({ run_id: call.run_id, callback_token: call.callback_token, booking_id: booked.booking_id, event_id: String($json.id) });\nreturn [{ json: { ts, body } }];\n"
-      }
-    },
-    {
-      "id": "3df03787-88a4-5baa-b23b-1b1ee1334d99",
-      "name": "Sign event report",
-      "type": "n8n-nodes-base.crypto",
-      "typeVersion": 1,
-      "position": [
-        2860,
-        -240
-      ],
-      "parameters": {
-        "action": "hmac",
-        "type": "SHA256",
-        "value": "={{ $json.ts }}.{{ $json.body }}",
-        "dataPropertyName": "signature",
-        "secret": "={{ $env.AUTOMATION_REPORT_SECRET }}",
-        "encoding": "hex"
-      }
-    },
-    {
-      "id": "4ae61aca-eed2-581d-9512-cf7932d57602",
-      "name": "Attach event in Vicero",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3120,
-        -240
-      ],
-      "parameters": {
-        "method": "POST",
-        "url": "={{ ($env.VICERO_API_INTERNAL_URL || 'http://api:8000') + '/internal/tools/attach-event' }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-Vicero-Timestamp",
-              "value": "={{ $json.ts }}"
-            },
-            {
-              "name": "X-Vicero-Signature",
-              "value": "={{ $json.signature }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ $json.body }}",
-        "options": {
-          "timeout": 15000,
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
-      }
-    },
-    {
       "id": "8fccd95e-c361-50b5-b574-b81c1f00b9b9",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        3380,
+        1820,
         0
       ],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $('Book in Vicero').first().json }}",
+        "responseBody": "={{ $json }}",
         "options": {}
       }
     }
@@ -462,94 +297,14 @@
       "main": [
         [
           {
-            "node": "Book in Vicero",
+            "node": "Call Vicero",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Book in Vicero": {
-      "main": [
-        [
-          {
-            "node": "New booking?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "New booking?": {
-      "main": [
-        [
-          {
-            "node": "Create Google Calendar event",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Create Google Calendar event": {
-      "main": [
-        [
-          {
-            "node": "Event created?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Event created?": {
-      "main": [
-        [
-          {
-            "node": "Prepare event report",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare event report": {
-      "main": [
-        [
-          {
-            "node": "Sign event report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sign event report": {
-      "main": [
-        [
-          {
-            "node": "Attach event in Vicero",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Attach event in Vicero": {
+    "Call Vicero": {
       "main": [
         [
           {

@@ -277,7 +277,7 @@ upstreams.
 
 ## 15. Booking tools (n8n) (ADR-120, docs/27)
 
-Install for an agent, verify it, and connect Google Calendar: see `docs/27-BOOKING-TOOLS.md`. Short form:
+Install for an agent and verify it: see `docs/27-BOOKING-TOOLS.md`. Google Calendar is connected from the dashboard (Tools tab); the redirect URI to register in Google Cloud is `https://viceroai-api.duckdns.org/api/google/callback`. Short form:
 ```
 ssh vicero "cd /opt/vicero && git pull -q --ff-only && docker cp infra/n8n/workflows vicero-prod-api-1:/tmp/n8n-workflows"
 ssh vicero "docker exec vicero-prod-api-1 python scripts/install_booking_tools.py --agent-id <AGENT_UUID> --dir /tmp/n8n-workflows --publish"

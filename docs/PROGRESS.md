@@ -2222,3 +2222,11 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - `book_appointment`, `check_availability`, `get_customer` as typed n8n tools on a Vicero `bookings` table (migration 0034), signed `/internal/tools/*` API, run-bound tokens, idempotent booking, per-contact rate limit, confirmation on the customer's channel, privacy-scoped customer lookup. ADR-120, docs/27.
 - Workflows built by `infra/n8n/build_booking_workflows.py` into `infra/n8n/workflows/`; installer `scripts/install_booking_tools.py`, manual check `scripts/test_booking_tools.py`. Run end to end against n8n 2.43.1 locally (8/8, including a mocked calendar step).
 - Needs from you: a Google Calendar OAuth credential in n8n (docs/27). Until then bookings are stored and confirmed, not mirrored.
+
+
+## Native Google Calendar connect (2026-10-15)
+
+- Dashboard: **Connect Google Calendar** on the agent's Tools tab (Connected / Disconnect / Reconnect states). API: `GET /v1/integrations/google-calendar[/connect]`, `DELETE ...`, `GET /api/google/callback`. Refresh token stored encrypted per organisation (migration 0035). ADR-121, docs/27.
+- `book_appointment` now creates the event itself when the organisation is connected (token refreshed when expired, idempotent by booking id), and never fails the booking when Google errors. The n8n Google node and `attach-event` are gone.
+- Also fixed: `seed_demo_knowledge.py` queued ingestion before its transaction committed (the worker saw "Document not found"); it now queues after the commit.
+- **Redirect URI to register in Google Cloud:** `https://viceroai-api.duckdns.org/api/google/callback` (and enable the Google Calendar API).

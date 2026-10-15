@@ -30,6 +30,7 @@ from app.models.identity import (
     User,
 )
 from app.models.inbox import Handoff
+from app.models.integrations import GoogleCalendarConnection
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.models.macros import Macro
 from app.models.mcp_servers import MCPServer
@@ -79,6 +80,7 @@ __all__ = [
     "Document",
     "EmailVerificationToken",
     "FeatureFlag",
+    "GoogleCalendarConnection",
     "Handoff",
     "HelpArticle",
     "Invitation",

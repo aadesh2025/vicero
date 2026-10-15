@@ -109,10 +109,3 @@ async def availability(request: Request, session: AsyncSession = Depends(get_ses
 @internal_router.post("/customer")
 async def customer(request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     return await _tool(request, session, schemas.CustomerArgs, service.get_customer)
-
-
-@internal_router.post("/attach-event")
-async def attach_event(request: Request, session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    call = _model(schemas.AttachEvent, await _signed_json(request))
-    run = await service.resolve_run(session, call.run_id, call.callback_token)
-    return await service.attach_event(session, run, call.booking_id, call.event_id)

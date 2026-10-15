@@ -13,10 +13,10 @@ Three agent tools, built on the existing agentic runtime (docs/17) and the n8n i
 ```
 customer ── agent (LLM) ── tool call ──► Vicero  ── signed webhook ──► n8n workflow  ── signed call ──► Vicero /internal/tools/*
                                                        (run id + per-run token)   verify, validate,            (data lives here)
-                                                                                  optional calendar mirror
+                                                                                  (Vicero adds the calendar event itself)
 ```
 
-- **n8n is the orchestration layer.** Each workflow: `Webhook (raw body)` → `Verify Vicero signature` → input check → sign → `POST /internal/tools/<x>` on Vicero → answer. It carries no data and no secret. `book_appointment` has one more step, a Google Calendar node, which **ships disabled** (below).
+- **n8n is the orchestration layer.** Each workflow: `Webhook (raw body)` → `Verify Vicero signature` → input check → sign → `POST /internal/tools/<x>` on Vicero → answer. It carries no data and no secret. The calendar is not in n8n: Vicero creates the Google event itself (below).
 - **Vicero owns the data** (`bookings` table, migration 0034). A booking row is the source of truth for idempotency and availability; a calendar event is a mirror.
 - **Tools run only with the agent's own credentials.** The internal API acts inside the organisation, agent and conversation of the tool run named in the call, proven by the per-run token Vicero issued when it called the workflow (`callback_token`, bound to run and org, valid 10 minutes). A workflow cannot book for another org or agent. Each organisation gets its own workflow copies (`ORG-<org id> | Booking | <tool>`, webhook path `<org slug>-<tool>`) and its own Google credential in n8n.
 - **Private.** The workflows listen on n8n's internal webhook URL (compose network). Caddy answers 404 for public `/webhook/*` and `/webhook-test/*`. The internal API is not in the OpenAPI schema and rejects anything without a valid HMAC (`AUTOMATION_REPORT_SECRET`, fail closed when unset).
@@ -54,17 +54,22 @@ ssh vicero "docker exec vicero-prod-api-1 python scripts/test_booking_tools.py -
 
 Goes through the real path (signed webhook, n8n, Vicero), with a throwaway contact, then deletes everything it made. Expect `8/8 steps passed`.
 
-## Google Calendar (needs your OAuth credential)
+## Google Calendar (native connect, ADR-121)
 
-Nothing here can be done by the code: a Google account has to grant access. Until it is done, bookings are stored in Vicero and confirmed to the customer; they simply do not appear in a calendar.
+No n8n credential. One Google account per workspace, connected from the dashboard: agent -> **Tools** tab -> **Connect Google Calendar**. From then on every booking the agent makes also appears in that account's primary calendar (event id = booking id, so a retry never creates a second event). Disconnect removes the stored token and asks Google to revoke it. If Google ends the grant the card shows **Needs reconnect**; bookings keep working without events.
 
-1. n8n editor (`https://<N8N_DOMAIN>`, staff gate) → **Credentials** → New → *Google Calendar OAuth2 API*. The redirect URL it shows must be added to the Google Cloud OAuth client (Calendar API enabled). Name it `ORG-<org id> | Google Calendar`.
-2. Open the workflow `ORG-<org id> | Booking | book_appointment` → node **Create Google Calendar event** → choose that credential, set the calendar (default `primary`), switch the node **on** (it ships disabled), save.
-3. Run the verify script: the line `info  calendar:` should now say `event <id>`.
+**One-time setup in Google Cloud** (the project that owns `GOOGLE_CLIENT_ID`; the same OAuth client as Google sign-in is reused):
 
-The node keeps `On error: continue`, so a Google outage never fails a booking. Not verified against a live Google account in this repo's tests (the n8n side was exercised with a mocked calendar step): check the first real event in the calendar.
+1. **APIs & Services -> Library -> Google Calendar API -> Enable.**
+2. **Credentials -> your OAuth 2.0 Client ID -> Authorized redirect URIs -> add exactly**
+   `https://viceroai-api.duckdns.org/api/google/callback`
+   (it is `API_BASE_URL` + `/api/google/callback`; the dashboard API also returns it from `GET /v1/integrations/google-calendar`). For local dev also add `http://localhost:8000/api/google/callback`.
+3. **OAuth consent screen -> Data access / Scopes:** add `.../auth/calendar.events` (plus `openid` and `email`, already used by sign-in).
+4. **While the app is in "Testing":** add the Google accounts that will connect as *Test users*, and know that Google expires refresh tokens after **7 days** in that mode (the card then asks to reconnect). To lift both limits, publish the app; `calendar.events` is a sensitive scope, so Google will ask for verification (privacy policy URL, a short demo video).
 
-**Known limit:** availability comes from Vicero's own bookings. Events created by hand in the Google calendar do not block slots yet.
+Check: connect, run `scripts/test_booking_tools.py`; the line `info  calendar:` should read `event <id>`, and the event should be in the calendar.
+
+**Known limits:** availability comes from Vicero's own bookings (events made by hand in Google do not block slots yet); only the primary calendar is used; a booking whose Google call failed gets its event the next time the same tool call is retried, not later on its own.
 
 ## Files
 

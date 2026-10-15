@@ -53,15 +53,13 @@ def test_no_secret_and_no_credential_is_stored_in_the_json(path: Path) -> None:
     assert len(names) == len(set(names))
 
 
-def test_the_google_calendar_mirror_ships_disabled_and_cannot_fail_the_booking() -> None:
-    wf = _load(WF_DIR / "book-appointment.json")
-    node = next(n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.googleCalendar")
-    assert node["disabled"] is True
-    assert node["onError"] == "continueRegularOutput"
-    # Both outcomes of the booking step reach the answer, so the model always gets Vicero's reply.
-    conns = wf["connections"]
-    assert "Respond" in {c["node"] for b in conns["New booking?"]["main"] for c in b}
-    assert "Respond" in {c["node"] for b in conns["Event created?"]["main"] for c in b}
+def test_no_calendar_or_credential_lives_in_n8n() -> None:
+    """Google Calendar is Vicero's own connection (ADR-121); the workflows never touch it."""
+    for path in FILES:
+        wf = _load(path)
+        assert not [n for n in wf["nodes"] if "google" in n["type"].lower()], path.name
+    book = _load(WF_DIR / "book-appointment.json")
+    assert any(n["name"] == "Call Vicero" for n in book["nodes"])
 
 
 def test_the_committed_json_is_what_the_builder_produces() -> None:

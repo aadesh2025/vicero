@@ -58,10 +58,16 @@ async def seed(session: AsyncSession, agent_id: uuid.UUID, directory: Path, publ
         return 1
     org = await session.get(Organization, agent.organization_id)
     owner = (
-        await session.execute(
-            select(Membership).where(Membership.organization_id == agent.organization_id, Membership.role == "owner")
+        (
+            await session.execute(
+                select(Membership).where(
+                    Membership.organization_id == agent.organization_id, Membership.role == "owner"
+                )
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     user = await session.get(User, owner.user_id) if owner else None
     if org is None or owner is None or user is None:
         print("error: the agent's workspace has no owner", file=sys.stderr)
@@ -69,8 +75,12 @@ async def seed(session: AsyncSession, agent_id: uuid.UUID, directory: Path, publ
     ctx = OrgContext(org=org, membership=owner, user=user)
 
     kbs = [k for k in await kb.list_kbs(session, ctx) if k.name == KB_NAME]
-    kb_out = kbs[0] if kbs else await kb.create_kb(
-        session, ctx, kb_schemas.CreateKBRequest(name=KB_NAME, description="Demo content, not a real offer.")
+    kb_out = (
+        kbs[0]
+        if kbs
+        else await kb.create_kb(
+            session, ctx, kb_schemas.CreateKBRequest(name=KB_NAME, description="Demo content, not a real offer.")
+        )
     )
     existing = {d.filename: d for d in await kb.list_documents(session, ctx, kb_out.id)}
     for filename, text in docs:
@@ -106,12 +116,24 @@ async def seed(session: AsyncSession, agent_id: uuid.UUID, directory: Path, publ
 
 async def run(agent_id: uuid.UUID, directory: Path, publish: bool) -> int:
     from app.db.session import SessionFactory
+    from app.modules.knowledge import service as kb
 
-    async with SessionFactory() as session:
-        code = await seed(session, agent_id, directory, publish)
-        if code == 0:
-            await session.commit()
-        return code
+    # The service queues ingestion as soon as a document row exists; the worker can then look for a row this
+    # session has not committed yet ("Document not found"). Hold the queueing until after the commit.
+    real_enqueue = kb.enqueue_document_ingestion
+    pending: list[uuid.UUID] = []
+    kb.enqueue_document_ingestion = pending.append
+    try:
+        async with SessionFactory() as session:
+            code = await seed(session, agent_id, directory, publish)
+            if code == 0:
+                await session.commit()
+    finally:
+        kb.enqueue_document_ingestion = real_enqueue
+    if code == 0:
+        for document_id in pending:
+            real_enqueue(document_id)
+    return code
 
 
 def main(argv: list[str] | None = None) -> int:

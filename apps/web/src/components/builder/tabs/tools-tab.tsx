@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LockedRegion } from "@/components/plan/locked";
+import { GoogleCalendarCard } from "@/components/builder/google-calendar-card";
 import { useBuilder } from "@/lib/store/builder";
 import {
   createTool,
@@ -24,10 +25,14 @@ import {
 
 /** Custom tools, built-ins and MCP servers are a paid feature; on a trial they are shown, locked. */
 export function ToolsTab() {
+  const agentId = useBuilder((s) => s.agentId);
   return (
-    <LockedRegion feature="tool_calling" label="Tools and MCP servers">
-      <ToolsTabInner />
-    </LockedRegion>
+    <div className="space-y-6">
+      <GoogleCalendarCard agentId={agentId} />
+      <LockedRegion feature="tool_calling" label="Tools and MCP servers">
+        <ToolsTabInner />
+      </LockedRegion>
+    </div>
   );
 }
 

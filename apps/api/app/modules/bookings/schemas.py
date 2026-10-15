@@ -103,15 +103,6 @@ class ToolCall(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
-class AttachEvent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    run_id: uuid.UUID
-    callback_token: str = Field(min_length=16, max_length=128)
-    booking_id: uuid.UUID
-    event_id: str = Field(min_length=1, max_length=255)
-
-
 # ── what the model is shown ───────────────────────────────────────────────────────────
 
 TOOL_SPECS: list[dict[str, Any]] = [

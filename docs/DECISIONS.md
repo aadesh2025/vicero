@@ -18,6 +18,19 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-121: Google Calendar is a native Vicero connection (supersedes the n8n calendar node of ADR-120)
+- **Date:** 2026-10-15
+- **Status:** accepted
+- **Context:** The booking tools (ADR-120) mirrored bookings to Google through a Google Calendar node inside n8n, which needs a credential created and attached by hand in the n8n editor, per organisation. The owner wants a one-click connect in the dashboard and no Google credential in n8n.
+- **Decision:**
+  1. **Server-side OAuth code flow, per organisation.** `GET /v1/integrations/google-calendar/connect` (needs `tools:manage`) returns the Google URL (`scope=calendar.events openid email`, `access_type=offline`, `prompt=consent`). `GET /api/google/callback` trades the code, stores the **refresh token encrypted** (`app.core.crypto`, table `google_calendar_connections`, one row per organisation) and redirects to the agent's Tools tab. `GET /v1/integrations/google-calendar` reports status and `DELETE` disconnects (and asks Google to revoke). Tokens are never returned or logged.
+  2. **Signed, stateless `state`** (HMAC with `SECRET_KEY`, 10 minutes: organisation, user, return agent, nonce): it works across the API's two workers, cannot attach a Google account to another organisation, and the user's `tools:manage` membership is re-checked at the callback.
+  3. **Vicero creates the event.** After the booking row is saved, `google_calendar.mirror_booking` creates the event with the organisation's token, refreshing it when expired. The event id is the booking id (hex), so a retry gets 409 and is treated as success: one booking, one event. It is bounded to 8 seconds and **never raises**: Google being down, a revoked grant (the connection becomes `needs_reconnect`) or no connection at all leaves the booking saved and confirmed. A retried tool call re-attempts the calendar for a booking that has no event yet.
+  4. **n8n loses its calendar node and the `attach-event` endpoint.** The booking workflows are now Verify, Validate, Sign, Call Vicero, Respond. No Google credential exists anywhere in n8n.
+  5. **Uses the existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`** (the same OAuth client as Google sign-in). The redirect URI to register is `<API_BASE_URL>/api/google/callback`; the Calendar API must be enabled in the same Google Cloud project.
+- **Alternatives considered:** keeping the n8n node (per-org credential by hand); storing the token in n8n (a second place for secrets, no revocation from the dashboard); the full `calendar` scope (more than needed: `calendar.events` is enough to create events).
+- **Consequences:** `calendar.events` is a *sensitive* scope: while the Google consent screen is in "Testing" only listed test users can connect and refresh tokens expire after 7 days (the connection then shows "Needs reconnect"); publishing the app needs Google verification. Availability still comes from Vicero bookings; events made by hand in Google do not block slots yet. Only the primary calendar is used.
+
 ### ADR-120: Booking tools: typed n8n tools over a Vicero-owned `bookings` table
 - **Date:** 2026-10-15
 - **Status:** accepted

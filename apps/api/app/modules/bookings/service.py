@@ -8,7 +8,8 @@ workflow can only act inside the organisation, agent and conversation of the run
                     contact, and sends the confirmation on the channel the customer used.
 * `free_slots`      the day's open slots (business hours minus existing bookings).
 * `get_customer`    only the person in the current conversation (never someone else's data).
-* `attach_event`    n8n reports the calendar event it created, so the row can be mirrored/cancelled later.
+* calendar         when the organisation has connected Google Calendar (ADR-121), Vicero itself creates the event
+                    after saving the booking; a failure there never affects the booking.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from app.core.ratelimit import limiter
 from app.integrations.n8n_client import valid_callback_token
 from app.models import Booking, Channel, Contact, Conversation, CrmContact, Message, Tool, ToolRun
 from app.modules.bookings import schemas
+from app.modules.integrations import google_calendar
 
 log = get_logger("bookings")
 
@@ -203,6 +205,9 @@ async def book(session: AsyncSession, run: RunContext, args: schemas.BookArgs) -
     key = (args.idempotency_key or str(run.run_id)).strip()[:128]
     existing = await _existing(session, run.org_id, key, run.agent_id, args.contact, start)
     if existing is not None:
+        if existing.external_event_id is None:
+            # An earlier attempt may have saved the booking but not reached Google: try the calendar again.
+            await google_calendar.mirror_booking(session, existing)
         return _booking_out(existing, duplicate=True)
 
     if start.astimezone(dt.UTC) in await _taken(
@@ -242,6 +247,7 @@ async def book(session: AsyncSession, run: RunContext, args: schemas.BookArgs) -
         return _booking_out(winner, duplicate=True)
 
     booking.confirmation_sent = await _confirm(session, booking, conv)
+    await google_calendar.mirror_booking(session, booking)  # never raises; the booking is already saved
     log.info(
         "booking_created",
         booking_id=str(booking.id),
@@ -301,6 +307,7 @@ def _booking_out(booking: Booking, *, duplicate: bool) -> dict[str, Any]:
         "duration_minutes": booking.duration_minutes,
         "duplicate": duplicate,
         "confirmation_sent": booking.confirmation_sent,
+        "calendar_event": booking.external_event_id is not None,
         "confirmation": (
             "A confirmation message was already sent to the customer on this channel. Do not repeat the details."
             if booking.confirmation_sent
@@ -430,12 +437,3 @@ async def get_customer(session: AsyncSession, run: RunContext, args: schemas.Cus
 
 def _short(b: Booking) -> dict[str, Any]:
     return {"booking_id": str(b.id), "when": _label(b.start_at), "status": b.status, "notes": b.notes}
-
-
-async def attach_event(session: AsyncSession, run: RunContext, booking_id: uuid.UUID, event_id: str) -> dict[str, Any]:
-    booking = await session.get(Booking, booking_id)
-    if booking is None or booking.organization_id != run.org_id or booking.agent_id != run.agent_id:
-        raise AppError("bookings.not_found", "No such booking.", 404)
-    if booking.external_event_id is None:
-        booking.external_event_id = event_id
-    return {"ok": True, "booking_id": str(booking.id), "event_id": booking.external_event_id}

@@ -43,6 +43,8 @@ from app.modules.conversations.router import router as conversations_router
 from app.modules.credentials.router import router as credentials_router
 from app.modules.help_articles.router import router as help_articles_router
 from app.modules.inbox.router import router as inbox_router
+from app.modules.integrations.router import callback_router as google_callback_router
+from app.modules.integrations.router import router as integrations_router
 from app.modules.knowledge.router import router as knowledge_router
 from app.modules.macros.router import inbox_router as macros_inbox_router
 from app.modules.macros.router import router as macros_router
@@ -246,6 +248,8 @@ def create_app() -> FastAPI:
     app.include_router(automations_staff_router)
     app.include_router(automations_internal_router)
     app.include_router(bookings_internal_router)
+    app.include_router(integrations_router)
+    app.include_router(google_callback_router)
 
     return app
 

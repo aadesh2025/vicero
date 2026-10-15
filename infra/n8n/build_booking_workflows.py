@@ -6,9 +6,8 @@ Each is `Webhook (raw body) -> Verify Vicero signature -> Signature valid? -> Pr
 Sign -> POST /internal/tools/<x> on Vicero -> Respond`. The shipped verify chain is copied from
 `template-starter-automation.json`, so the signature lint (`app.integrations.n8n_signature`) passes.
 
-`book_appointment` adds an optional calendar mirror after the booking: a Google Calendar node that is **disabled** until
-someone attaches a Google credential to it in the n8n editor (no secret is ever in this JSON). With it off, the booking
-is still written to Vicero's `bookings` table and confirmed to the customer; with it on, the event id is reported back.
+The calendar is not touched here: when the organisation has connected Google Calendar in Vicero (ADR-121), Vicero
+itself creates the event after saving the booking. No Google credential ever lives in n8n.
 
 Secrets stay in the n8n environment (`AUTOMATION_REPORT_SECRET`, `N8N_WEBHOOK_SIGNING_SECRET`); the Vicero URL is
 `VICERO_API_INTERNAL_URL` (compose network only). Node ids are derived from names so a rebuild is a no-diff.
@@ -178,16 +177,7 @@ if (!contact) errors.contact = 'required';
 const clean = { contact };
 """ + _TAIL
 
-ATTACH_JS = """// Report the calendar event this workflow just created back to Vicero (so the row can be mirrored/cancelled later).
-const call = $('Webhook').first().json.body || {};
-const booked = $('Book in Vicero').first().json;
-const ts = String(Math.floor(Date.now() / 1000));
-const body = JSON.stringify({ run_id: call.run_id, callback_token: call.callback_token, booking_id: booked.booking_id, event_id: String($json.id) });
-return [{ json: { ts, body } }];
-"""
-
 INVALID_EXPR = "={{ { ok: false, error: 'invalid_input', fields: $json.errors } }}"
-VICERO_EXPR = "={{ $('%s').first().json }}"
 
 
 def simple(slug: str, endpoint: str, js: str) -> dict[str, Any]:
@@ -215,103 +205,8 @@ def simple(slug: str, endpoint: str, js: str) -> dict[str, Any]:
     return {"nodes": nodes, "connections": conns}
 
 
-def book() -> dict[str, Any]:
-    nodes = [
-        webhook("template-book-appointment"),
-        _copy("Verify Vicero signature", [260, 0]),
-        _copy("Signature valid?", [520, 0]),
-        _copy("Reject 401", [780, 420]),
-        prepare(BOOK_JS, [780, 0]),
-        valid_if([1040, 0]),
-        respond("Respond invalid input", INVALID_EXPR, [1300, 200]),
-        sign("Sign request", [1300, 0]),
-        post("Book in Vicero", "book", [1560, 0]),
-        node(
-            "New booking?",
-            "n8n-nodes-base.if",
-            2.2,
-            {
-                "conditions": {
-                    "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
-                    "conditions": [
-                        {
-                            "id": "n1",
-                            "leftValue": "={{ $json.ok === true && $json.duplicate === false }}",
-                            "rightValue": True,
-                            "operator": {"type": "boolean", "operation": "true", "singleValue": True},
-                        }
-                    ],
-                    "combinator": "and",
-                },
-                "options": {},
-            },
-            [1820, 0],
-        ),
-        # Off by default: enable it and pick a Google Calendar credential in the n8n editor. Until then the booking
-        # lives in Vicero only. A failure here never fails the booking (continueRegularOutput).
-        node(
-            "Create Google Calendar event",
-            "n8n-nodes-base.googleCalendar",
-            1.3,
-            {
-                "calendar": {"__rl": True, "value": "primary", "mode": "id"},
-                "start": "={{ $('Book in Vicero').first().json.start_iso }}",
-                "end": "={{ new Date(new Date($('Book in Vicero').first().json.start_iso).getTime() + $('Book in Vicero').first().json.duration_minutes * 60000).toISOString() }}",
-                "additionalFields": {
-                    "summary": "={{ 'Appointment: ' + $('Webhook').first().json.body.args.name }}",
-                    "description": "={{ 'Contact: ' + $('Webhook').first().json.body.args.contact + ' | Ref ' + $('Book in Vicero').first().json.reference + ' | ' + ($('Webhook').first().json.body.args.notes || '') }}",
-                },
-            },
-            [2080, -120],
-            disabled=True,
-            onError="continueRegularOutput",
-        ),
-        node(
-            "Event created?",
-            "n8n-nodes-base.if",
-            2.2,
-            {
-                "conditions": {
-                    "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2},
-                    "conditions": [
-                        {
-                            "id": "e1",
-                            "leftValue": "={{ typeof $json.id === 'string' && $json.id.length > 0 && $json.booking_id === undefined }}",
-                            "rightValue": True,
-                            "operator": {"type": "boolean", "operation": "true", "singleValue": True},
-                        }
-                    ],
-                    "combinator": "and",
-                },
-                "options": {},
-            },
-            [2340, -120],
-        ),
-        prepare(ATTACH_JS, [2600, -240], "Prepare event report"),
-        sign("Sign event report", [2860, -240]),
-        post("Attach event in Vicero", "attach-event", [3120, -240]),
-        respond("Respond", VICERO_EXPR % "Book in Vicero", [3380, 0]),
-    ]
-    conns = {
-        "Webhook": link("Verify Vicero signature"),
-        "Verify Vicero signature": link("Signature valid?"),
-        "Signature valid?": link("Prepare request", "Reject 401"),
-        "Prepare request": link("Input valid?"),
-        "Input valid?": link("Sign request", "Respond invalid input"),
-        "Sign request": link("Book in Vicero"),
-        "Book in Vicero": link("New booking?"),
-        "New booking?": link("Create Google Calendar event", "Respond"),
-        "Create Google Calendar event": link("Event created?"),
-        "Event created?": link("Prepare event report", "Respond"),
-        "Prepare event report": link("Sign event report"),
-        "Sign event report": link("Attach event in Vicero"),
-        "Attach event in Vicero": link("Respond"),
-    }
-    return {"nodes": nodes, "connections": conns}
-
-
 WORKFLOWS: dict[str, dict[str, Any]] = {
-    "book-appointment": {"title": "book_appointment", **book()},
+    "book-appointment": {"title": "book_appointment", **simple("book-appointment", "book", BOOK_JS)},
     "check-availability": {"title": "check_availability", **simple("check-availability", "availability", AVAILABILITY_JS)},
     "get-customer": {"title": "get_customer", **simple("get-customer", "customer", CUSTOMER_JS)},
 }

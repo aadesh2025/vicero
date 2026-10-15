@@ -506,39 +506,6 @@ async def test_other_customers_bookings_never_leak_across_contacts_or_orgs(
     assert (await a.call("customer", {"contact": "alice@example.com"})).json()["found"] is False
 
 
-# ── the calendar mirror (mocked) ─────────────────────────────────────────────────────
-
-
-async def test_booking_then_calendar_event_end_to_end(client: AsyncClient, db_session: AsyncSession) -> None:
-    """What the book_appointment workflow does: book in Vicero, create the calendar event, report its id back."""
-    w = await _world(client, db_session, "bk_cal@example.com")
-    calendar: list[dict[str, Any]] = []
-
-    def create_event(booking: dict[str, Any]) -> str:  # the mocked Google Calendar node
-        calendar.append(booking)
-        return f"evt_{len(calendar)}"
-
-    run = await w.run()
-    booked = (await w.call("book", _book_args(_next(2, 13, 0)), run=run)).json()
-    assert booked["ok"] and not booked["duplicate"]
-    event_id = create_event(booked)
-    attached = await w.call("attach-event", None, run=run, booking_id=booked["booking_id"], event_id=event_id)
-    assert attached.status_code == 200 and attached.json()["event_id"] == "evt_1"
-    assert (await w.bookings())[0].external_event_id == "evt_1"
-    # A repeated attach (n8n retry) keeps the first event id.
-    second = await w.call("attach-event", None, run=run, booking_id=booked["booking_id"], event_id="evt_other")
-    assert second.json()["event_id"] == "evt_1"
-
-
-async def test_attach_event_is_scoped_to_the_run_org(client: AsyncClient, db_session: AsyncSession) -> None:
-    a = await _world(client, db_session, "bk_att_a@example.com")
-    b = await _world(client, db_session, "bk_att_b@example.com")
-    booked = (await a.call("book", _book_args(_next(2, 13, 30)))).json()
-    r = await b.call("attach-event", None, booking_id=booked["booking_id"], event_id="evt_x")
-    assert r.status_code == 404
-    assert (await a.bookings())[0].external_event_id is None
-
-
 async def test_bookings_table_counts(client: AsyncClient, db_session: AsyncSession) -> None:
     w = await _world(client, db_session, "bk_count@example.com")
     await w.call("book", _book_args(_next(1, 10, 0)))

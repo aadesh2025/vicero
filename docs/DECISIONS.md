@@ -18,6 +18,13 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-119: Containers that call out use resolvers that answer (per-service `dns:`)
+- **Date:** 2026-10-15
+- **Status:** accepted
+- **Context:** From the Hetzner host `1.1.1.1` and `8.8.8.8` time out on UDP/53 for A queries; `9.9.9.9`, `1.0.0.1` and `213.133.98.98` answer in <200 ms. Docker's embedded resolver forwards to the first, so every uncached lookup in api/worker/beat cost ~4 s (`getaddrinfo` is outside httpx's timeouts), which is what made the 300 ms L2 guard call time out (ADR-116).
+- **Decision:** `dns: [9.9.9.9, 1.0.0.1, 213.133.98.98]` and `dns_opt: [timeout:1, attempts:2]` on `api`, `worker` and `beat` in `docker-compose.prod.yml`; pinned by `test_infra_prod_compose.py`. The host-wide `/etc/docker/daemon.json` equivalent is documented (runbook §14) but not applied: it needs a daemon restart.
+- **Consequences:** n8n, caddy and ollama keep the host's resolvers (they make few outbound lookups). If those three resolvers degrade, change them in one place.
+
 ### ADR-118: The widget API is open to any website (no credentials); per-agent "Allowed websites"
 - **Date:** 2026-10-13
 - **Status:** accepted

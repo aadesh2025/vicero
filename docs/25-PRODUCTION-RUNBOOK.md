@@ -249,3 +249,27 @@ after every migration (no-op if the role does not exist); a table added later is
 **Check it is not public** (from any other computer): `nmap -Pn -p 5432,5433 87.232.72.3` must show both closed/filtered, and on the
 server `ss -ltn | grep 5433` must show `127.0.0.1:5433` and nothing else. `tests/test_infra_prod_compose.py` fails if compose publishes
 anything but Caddy and that loopback port.
+
+## 14. DNS for the containers (ADR-119)
+
+From the Hetzner network `1.1.1.1` and `8.8.8.8` time out on UDP/53, while `9.9.9.9`, `1.0.0.1` and `213.133.98.98` answer in
+under 200 ms. Docker's embedded resolver forwards to the host's resolvers in order, so every uncached lookup
+(`api.groq.com`, `graph.facebook.com`) cost about 4 s and made the L2/L3 guard calls time out. `docker-compose.prod.yml` now
+gives `api`, `worker` and `beat` their own `dns:` (those three, in that order) and `dns_opt: ["timeout:1", "attempts:2"]`.
+Applied by `deploy.sh` (it recreates the three containers); no daemon restart.
+
+**Check** (the first lookup of each host must be under 0.5 s):
+```
+ssh vicero "docker exec vicero-prod-worker-1 python scripts/dns_check.py"
+ssh vicero "docker exec vicero-prod-worker-1 cat /etc/resolv.conf"   # 127.0.0.11 inside Docker; the upstreams are the three above
+```
+
+**Host-wide (optional, later).** To fix the same for every container (n8n, caddy, ollama) put this in `/etc/docker/daemon.json`
+(merge with what is there; do not overwrite other keys):
+```
+{ "dns": ["9.9.9.9", "1.0.0.1", "213.133.98.98"] }
+```
+It only takes effect when the Docker daemon restarts, which restarts or stops every container. Do it in a maintenance window
+(`systemctl restart docker`, or `live-restore` if enabled), never as part of a deploy. Until then the per-service setting above
+is the fix. User-defined compose networks use Docker's embedded resolver, which honours the service-level `dns:` for its
+upstreams.

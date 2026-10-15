@@ -273,3 +273,14 @@ It only takes effect when the Docker daemon restarts, which restarts or stops ev
 (`systemctl restart docker`, or `live-restore` if enabled), never as part of a deploy. Until then the per-service setting above
 is the fix. User-defined compose networks use Docker's embedded resolver, which honours the service-level `dns:` for its
 upstreams.
+
+
+## 15. Booking tools (n8n) (ADR-120, docs/27)
+
+Install for an agent, verify it, and connect Google Calendar: see `docs/27-BOOKING-TOOLS.md`. Short form:
+```
+ssh vicero "cd /opt/vicero && git pull -q --ff-only && docker cp infra/n8n/workflows vicero-prod-api-1:/tmp/n8n-workflows"
+ssh vicero "docker exec vicero-prod-api-1 python scripts/install_booking_tools.py --agent-id <AGENT_UUID> --dir /tmp/n8n-workflows --publish"
+ssh vicero "docker exec vicero-prod-api-1 python scripts/test_booking_tools.py --agent-id <AGENT_UUID>"
+```
+Rollback: deactivate the three `ORG-<id> | Booking | ...` workflows in n8n (or disable the tools in the agent). The `bookings` table is additive and can stay.

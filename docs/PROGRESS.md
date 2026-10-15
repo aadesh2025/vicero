@@ -2215,3 +2215,10 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 ## Container DNS fix (2026-10-15)
 
 - `api`, `worker`, `beat` resolve through 9.9.9.9 / 1.0.0.1 / 213.133.98.98 with `timeout:1 attempts:2` (the host's 1.1.1.1 and 8.8.8.8 time out here). ADR-119, runbook §14, pinned in `test_infra_prod_compose.py`.
+
+
+## n8n booking tools (2026-10-15)
+
+- `book_appointment`, `check_availability`, `get_customer` as typed n8n tools on a Vicero `bookings` table (migration 0034), signed `/internal/tools/*` API, run-bound tokens, idempotent booking, per-contact rate limit, confirmation on the customer's channel, privacy-scoped customer lookup. ADR-120, docs/27.
+- Workflows built by `infra/n8n/build_booking_workflows.py` into `infra/n8n/workflows/`; installer `scripts/install_booking_tools.py`, manual check `scripts/test_booking_tools.py`. Run end to end against n8n 2.43.1 locally (8/8, including a mocked calendar step).
+- Needs from you: a Google Calendar OAuth credential in n8n (docs/27). Until then bookings are stored and confirmed, not mirrored.

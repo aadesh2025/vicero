@@ -288,6 +288,8 @@ class Settings(BaseSettings):
     # POST /internal/automations/runs (HMAC-SHA256 over "<timestamp>.<raw body>"). Unset = that endpoint answers
     # 503 and nothing is recorded: it never falls back to another secret.
     automation_report_secret: str | None = None
+    # Appointment booking tools (ADR-120): the business timezone for opening hours and the times shown to customers.
+    booking_timezone: str = "Asia/Kolkata"
     # An n8n tool may be bound to / run a webhook only if it belongs to a registered, Active automation of the
     # same org (and agent). Off only for keyless CI and dev, where no registry exists.
     n8n_require_registered_automation: bool = True

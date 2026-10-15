@@ -18,6 +18,18 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-120: Booking tools: typed n8n tools over a Vicero-owned `bookings` table
+- **Date:** 2026-10-15
+- **Status:** accepted
+- **Context:** The demo agent needs to book appointments, check free slots and recognise a returning customer, through n8n (docs/17, docs/26) without putting data or secrets in n8n, without double bookings on a retried webhook, and without one customer's data reaching another.
+- **Decision:**
+  1. **Typed tools, not a free-form `args` blob.** Three n8n tools bound with JSON Schemas (`book_appointment`, `check_availability`, `get_customer`); Vicero re-validates everything.
+  2. **Vicero owns the data.** New `bookings` table (migration 0034, unique `(organization_id, idempotency_key)`). n8n workflows verify the signature, check the input and call Vicero's signed `/internal/tools/*` API. The calendar (Google, a node that ships **disabled**) is a mirror; with no credential the booking still works and is confirmed.
+  3. **Run-bound authority.** Every internal call names the tool run and carries that run's per-run token (the existing `callback_token`, now sent on sync calls too). The org, agent and conversation come from the run, never from the request.
+  4. **Idempotency** by tool-run id, plus same customer and start time across runs. **Confirmation** sent once on the customer's channel through its adapter. **Rate limit** per contact in Redis. **Privacy**: `get_customer` only answers for the current conversation's customer and never returns staff notes.
+- **Alternatives considered:** a Postgres node in n8n against Vicero's database (secrets and tenant isolation in the wrong place); a built-in (non-n8n) tool (does not exercise the n8n path the platform sells); Google as the source of truth (no idempotency or availability without a credential).
+- **Consequences:** Availability ignores events made by hand in Google until a free/busy step is added. Business hours are constants. `neverError` plus `responseFormat: json` together on n8n's HTTP node crashed n8n 2.36 and 2.43 (V8 fatal) in testing, so only `neverError` is used; the builder carries a comment.
+
 ### ADR-119: Containers that call out use resolvers that answer (per-service `dns:`)
 - **Date:** 2026-10-15
 - **Status:** accepted

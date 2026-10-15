@@ -1,0 +1,567 @@
+{
+  "name": "TEMPLATE | Booking | book_appointment",
+  "nodes": [
+    {
+      "id": "61a71f28-d594-518e-a9f0-a39418006e40",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "template-book-appointment",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "webhookId": "template-book-appointment"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Vicero signs every call: hex HMAC-SHA256 over \"<timestamp>.\" + the raw body, using\n// N8N_WEBHOOK_SIGNING_SECRET (apps/api/app/integrations/n8n_client.py sign()/verify_callback()).\n// Fails CLOSED: no secret configured, missing headers, stale timestamp or bad MAC => rejected.\nconst crypto = require('crypto');\nconst item = $input.first();\nconst reject = (reason) => [{ json: { verified: false, reason } }];\nconst secret = $env['N8N_WEBHOOK_SIGNING_SECRET'] || '';\nif (!secret) return reject('signing secret is not configured on this n8n');\nconst h = item.json.headers || {};\nconst sig = String(h['x-vicero-signature'] || '');\nconst ts = String(h['x-vicero-timestamp'] || '');\nif (!sig || !ts) return reject('missing signature headers');\nif (!/^\\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return reject('stale or malformed timestamp');\nif (!item.binary || !item.binary.data) return reject('raw body unavailable (Webhook option rawBody must be on)');\nconst raw = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst expected = crypto.createHmac('sha256', secret).update(ts + '.').update(raw).digest('hex');\nconst a = Buffer.from(expected, 'utf8');\nconst b = Buffer.from(sig, 'utf8');\nif (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return reject('bad signature');\nreturn [{ json: { ...item.json, verified: true } }];"
+      },
+      "id": "c7f58bb8-3e89-581a-870c-1d9f52167705",
+      "name": "Verify Vicero signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.verified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9f280a36-44cb-5aba-94f9-43130d641ece",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'unauthorized' } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "2fef7158-db47-5e78-ac63-5cb4e0911a27",
+      "name": "Reject 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        420
+      ]
+    },
+    {
+      "id": "c6c040e9-d0c7-5256-a3e9-967a3c21f851",
+      "name": "Prepare request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// The call Vicero made: { args, run_id, callback_token, mode, conversation_id }. No secrets are read here.\nconst call = $input.first().json.body || {};\nconst a = (call.args && typeof call.args === 'object') ? call.args : {};\nconst errors = {};\nconst text = (v, max) => (typeof v === 'string' ? v.replace(/[\\u0000-\\u0008\\u000b-\\u001f\\u007f]/g, '').trim() : '');\nconst EMAIL = /^[^@\\s]{1,64}@[^@\\s]{1,255}\\.[^@\\s]{2,}$/;\nconst PHONE = /^\\+?\\d{7,15}$/;\nif (typeof call.run_id !== 'string' || typeof call.callback_token !== 'string') errors.run = 'missing run context';\n\nconst name = text(a.name, 120);\nconst contact = text(a.contact, 255);\nconst startIso = text(a.start_iso, 40);\nconst notes = text(a.notes, 500);\nif (!name || name.length > 120) errors.name = 'required, at most 120 characters';\nif (!(EMAIL.test(contact) || PHONE.test(contact.replace(/[\\s().-]/g, '')))) errors.contact = 'must be an email address or a phone number';\nif (!startIso || Number.isNaN(Date.parse(startIso))) errors.start_iso = 'must be an ISO 8601 date and time, e.g. 2026-10-20T15:00:00+05:30';\nif (notes.length > 500) errors.notes = 'at most 500 characters';\nconst clean = { name, contact, start_iso: startIso, notes: notes || undefined };\n\nconst valid = Object.keys(errors).length === 0;\nconst ts = String(Math.floor(Date.now() / 1000));\nconst body = JSON.stringify({ run_id: call.run_id, callback_token: call.callback_token, args: clean });\nreturn [{ json: { valid, errors, ts, body } }];\n"
+      }
+    },
+    {
+      "id": "11b6abc7-9d99-5f4b-b9b4-c1a438a90456",
+      "name": "Input valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b3eeb4cc-7c7f-54b6-88dc-74e0e2d657c5",
+      "name": "Respond invalid input",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1300,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, error: 'invalid_input', fields: $json.errors } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "56de2418-9ddf-5cfc-bc56-71ac396a35e8",
+      "name": "Sign request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        0
+      ],
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.ts }}.{{ $json.body }}",
+        "dataPropertyName": "signature",
+        "secret": "={{ $env.AUTOMATION_REPORT_SECRET }}",
+        "encoding": "hex"
+      }
+    },
+    {
+      "id": "2d2a4b93-9095-5e1f-8bb7-d00c503f0f9e",
+      "name": "Book in Vicero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.VICERO_API_INTERNAL_URL || 'http://api:8000') + '/internal/tools/book' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Vicero-Timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "X-Vicero-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "9fed006c-ce8b-518c-bd31-53a85a69a302",
+      "name": "New booking?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1820,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "n1",
+              "leftValue": "={{ $json.ok === true && $json.duplicate === false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "64ee1af9-8eaa-5137-bb48-fa2109188620",
+      "name": "Create Google Calendar event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2080,
+        -120
+      ],
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "id"
+        },
+        "start": "={{ $('Book in Vicero').first().json.start_iso }}",
+        "end": "={{ new Date(new Date($('Book in Vicero').first().json.start_iso).getTime() + $('Book in Vicero').first().json.duration_minutes * 60000).toISOString() }}",
+        "additionalFields": {
+          "summary": "={{ 'Appointment: ' + $('Webhook').first().json.body.args.name }}",
+          "description": "={{ 'Contact: ' + $('Webhook').first().json.body.args.contact + ' | Ref ' + $('Book in Vicero').first().json.reference + ' | ' + ($('Webhook').first().json.body.args.notes || '') }}"
+        }
+      },
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "e5530546-cb63-5659-956d-23feb8dfa7a6",
+      "name": "Event created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2340,
+        -120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1",
+              "leftValue": "={{ typeof $json.id === 'string' && $json.id.length > 0 && $json.booking_id === undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c75ac21f-e512-5b4b-bc5a-e876e741a482",
+      "name": "Prepare event report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        -240
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Report the calendar event this workflow just created back to Vicero (so the row can be mirrored/cancelled later).\nconst call = $('Webhook').first().json.body || {};\nconst booked = $('Book in Vicero').first().json;\nconst ts = String(Math.floor(Date.now() / 1000));\nconst body = JSON.stringify({ run_id: call.run_id, callback_token: call.callback_token, booking_id: booked.booking_id, event_id: String($json.id) });\nreturn [{ json: { ts, body } }];\n"
+      }
+    },
+    {
+      "id": "3df03787-88a4-5baa-b23b-1b1ee1334d99",
+      "name": "Sign event report",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        -240
+      ],
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.ts }}.{{ $json.body }}",
+        "dataPropertyName": "signature",
+        "secret": "={{ $env.AUTOMATION_REPORT_SECRET }}",
+        "encoding": "hex"
+      }
+    },
+    {
+      "id": "4ae61aca-eed2-581d-9512-cf7932d57602",
+      "name": "Attach event in Vicero",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        -240
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.VICERO_API_INTERNAL_URL || 'http://api:8000') + '/internal/tools/attach-event' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Vicero-Timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "X-Vicero-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8fccd95e-c361-50b5-b574-b81c1f00b9b9",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3380,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Book in Vicero').first().json }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify Vicero signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Vicero signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Prepare request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare request": {
+      "main": [
+        [
+          {
+            "node": "Input valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input valid?": {
+      "main": [
+        [
+          {
+            "node": "Sign request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond invalid input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign request": {
+      "main": [
+        [
+          {
+            "node": "Book in Vicero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Book in Vicero": {
+      "main": [
+        [
+          {
+            "node": "New booking?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New booking?": {
+      "main": [
+        [
+          {
+            "node": "Create Google Calendar event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Google Calendar event": {
+      "main": [
+        [
+          {
+            "node": "Event created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Event created?": {
+      "main": [
+        [
+          {
+            "node": "Prepare event report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare event report": {
+      "main": [
+        [
+          {
+            "node": "Sign event report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign event report": {
+      "main": [
+        [
+          {
+            "node": "Attach event in Vicero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach event in Vicero": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

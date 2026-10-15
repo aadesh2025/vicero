@@ -35,6 +35,7 @@ from app.modules.automations.router import internal_router as automations_intern
 from app.modules.automations.router import router as automations_router
 from app.modules.automations.router import staff_router as automations_staff_router
 from app.modules.billing.router import router as billing_router
+from app.modules.bookings.router import internal_router as bookings_internal_router
 from app.modules.campaigns.router import router as campaigns_router
 from app.modules.canned_responses.router import router as canned_responses_router
 from app.modules.contacts.router import router as contacts_router
@@ -244,6 +245,7 @@ def create_app() -> FastAPI:
     app.include_router(automations_router)
     app.include_router(automations_staff_router)
     app.include_router(automations_internal_router)
+    app.include_router(bookings_internal_router)
 
     return app
 

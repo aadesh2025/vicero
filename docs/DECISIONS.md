@@ -18,6 +18,14 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-123: Model fallback within one provider; failed model calls are logged
+- **Date:** 2026-10-16
+- **Status:** accepted
+- **Context:** On the Groq free tier a turn (system prompt, knowledge-base text, three tool definitions, two model calls) used ~6,000 of the 8,000 tokens-per-minute allowed for `openai/gpt-oss-120b`, so a second message inside the minute got `429` and the visitor saw the agent's fallback line. Fallback chains skipped any entry with the primary's provider name, so a second Groq model could not be configured, and nothing in the logs said why the fallback line was sent (the error was only stored on the message).
+- **Decision:** (1) `get_chat_provider_chain` accepts a fallback entry with the primary's provider when it names a different model (Groq rate-limits per model); an entry with the same provider and the same or no model is still skipped. (2) `run_turn` logs `llm_call_failed` (provider, model, status, kind, retryable) for every failed model call; the provider's own text is included only for rate limits, outages and network errors, never for a 400, which can echo customer text.
+- **Alternatives considered:** a second provider (no other key is configured); shrinking the context (weaker answers); a paid Groq tier (owner is doing this too; the fallback stays useful).
+- **Consequences:** a fallback model can behave differently from the primary (tool use, grounding); the agent's model tab does not list same-provider models yet, so the chain is set through the API.
+
 ### ADR-122: Tool runs are committed before n8n is called; cold-start warm-up; L3 resilience; rejected tokens flag the channel
 - **Date:** 2026-10-15
 - **Status:** accepted

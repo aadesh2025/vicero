@@ -270,6 +270,16 @@ for prod; local default in dev.
 
 - `UPLOAD_DIR` (default `./var/uploads`) — filesystem path where ingested document files are
   stored under the local backend. Created on demand; gitignored.
+- `MEDIA_FEATURE_ENABLED` (default `true`) — rollback switch for images + product catalog (docs/26). Off: inbound
+  photos get a polite canned reply and the catalog tools are not offered.
+- `MEDIA_DIR` (default `./var/media`) — local media store root (customer + product photos). Back it up.
+- `MEDIA_URL_SIGNING_KEY` (default empty → `SECRET_KEY`) — HMAC key for the signed public image URLs Meta fetches.
+  **Set a dedicated value in production.**
+- `MEDIA_PUBLIC_URL_TTL_SECONDS` (default `3600`) — lifetime of a signed image URL.
+- `MEDIA_MAX_UPLOAD_BYTES` (default `10485760`) — raw size cap for any image (upload or download).
+- `INBOUND_MEDIA_RETENTION_DAYS` (default `30`) — customer photos are deleted after this long.
+- `VISION_PROVIDER` / `VISION_MODEL` (default `gemini` / `gemini-2.5-flash`) — model that describes customer photos.
+- `MAX_IMAGES_PER_REPLY` (default `3`) — product photos sent after one bot reply.
 - `RAG_CONTEXT_CHAR_BUDGET` (default `8000`) — ceiling on characters of retrieved context
   injected into a prompt (token budgeting; oldest/lowest-ranked citations are trimmed first).
 - `RAG_RRF_FTS_WEIGHT` (default `0.05`) — weight of the keyword (Postgres FTS) list in the

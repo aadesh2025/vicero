@@ -75,6 +75,22 @@ class Settings(BaseSettings):
     # --- Knowledge base / RAG ---
     # Directory for uploaded/ingested document files (created on demand).
     upload_dir: str = "./var/uploads"
+    # --- Media: images on WhatsApp / Instagram / Messenger + product catalog (docs/26, ADR-124) ---
+    # Rollback switch. Off: inbound photos get the polite canned reply and catalog tools are not offered.
+    media_feature_enabled: bool = True
+    # Root of the local media store (customer photos + product photos). Back this volume up.
+    media_dir: str = "./var/media"
+    # HMAC key for the signed public image URLs Meta downloads from. Falls back to `secret_key`
+    # when empty; set a dedicated value in production.
+    media_url_signing_key: str = ""
+    media_public_url_ttl_seconds: int = 3600
+    media_max_upload_bytes: int = 10 * 1024 * 1024
+    # Customer photos are deleted after this many days (privacy: IDs and faces are common in support chats).
+    inbound_media_retention_days: int = 30
+    # Vision model that writes the text description of a customer photo (describe-first, ADR-124).
+    vision_provider: str = "gemini"
+    vision_model: str = "gemini-2.5-flash"
+    max_images_per_reply: int = 3
     # Ceiling on characters of retrieved context injected into a prompt (token budgeting).
     rag_context_char_budget: int = 8000
     # Weight of the keyword (Postgres FTS) list in the hybrid RRF fusion; the dense list is

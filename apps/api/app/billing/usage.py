@@ -416,6 +416,39 @@ async def require_document_slot(session: AsyncSession, org: Organization, size_b
             )
 
 
+async def require_storage_bytes(session: AsyncSession, org: Organization, size_bytes: int) -> None:
+    """Storage hard cap for non-document files (product photos, docs/26). Same counter and message as
+    `require_document_slot`; customer photos never come through here (they are not billed)."""
+    from app.models import OrgStorageUsage
+
+    ent = await load_entitlements(session, org)
+    storage_limit = ent.limit_for("storage")
+    if storage_limit is None:
+        return
+    used = (
+        await session.execute(select(OrgStorageUsage.bytes_used).where(OrgStorageUsage.organization_id == org.id))
+    ).scalar_one_or_none()
+    if int(used or 0) + size_bytes > storage_limit:
+        mb = storage_limit // (1024 * 1024)
+        raise plan_limit(
+            "storage", f"{_plan_title(org.plan)} plan includes {mb} MB of storage. Upgrade for more space."
+        )
+
+
+async def adjust_storage_bytes(session: AsyncSession, org_id: uuid.UUID, delta: int) -> None:
+    """Add (or, when negative, remove) bytes on `org_storage_usage` without touching the document count."""
+    from app.models import OrgStorageUsage
+
+    await session.execute(
+        pg_insert(OrgStorageUsage)
+        .values(organization_id=org_id, bytes_used=max(delta, 0), documents_count=0)
+        .on_conflict_do_update(
+            index_elements=[OrgStorageUsage.organization_id],
+            set_={"bytes_used": func.greatest(OrgStorageUsage.bytes_used + delta, 0)},
+        )
+    )
+
+
 async def record_document_stored(session: AsyncSession, org_id: uuid.UUID, size_bytes: int) -> None:
     """Keep `org_storage_usage` live going forward — A1's migration only ever backfilled it
     once. On the same session as the document write, so both commit or roll back together."""

@@ -383,10 +383,15 @@ async def classify(
                 retryable=retryable,
                 error=guard_http.describe(exc, settings.guard_policy_timeout_ms),
             )
-            if not retryable:
-                # The same request fails the same way again; only the fallback model can differ.
+            timed_out = isinstance(exc, (TimeoutError, httpx.TimeoutException))
+            if not retryable or timed_out:
+                # The same request fails the same way again (413/400), or just spent the whole per-call budget
+                # (timeout): only the fallback model can differ.
                 queue = [m for m in queue if m != model]
-            if not queue or (time.monotonic() - started) * 1000 >= settings.guard_policy_retry_budget_ms:
+            remaining_ms = settings.guard_policy_retry_budget_ms - (time.monotonic() - started) * 1000
+            # A slow failure must leave room for another full call, or the turn waits on L3 for several seconds.
+            needed_ms = settings.guard_policy_timeout_ms + guard_http.BOUND_MARGIN_SECONDS * 1000 if timed_out else 0
+            if not queue or remaining_ms <= needed_ms:
                 break
             if queue[0] == model:
                 await asyncio.sleep(_retry_delay(attempt, exc))

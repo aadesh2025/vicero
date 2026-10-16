@@ -34,6 +34,7 @@ from app.models.integrations import GoogleCalendarConnection
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.models.macros import Macro
 from app.models.mcp_servers import MCPServer
+from app.models.media import MediaAsset, Product, ProductImage
 from app.models.platform import (
     ApiKey,
     AuditLog,
@@ -88,6 +89,7 @@ __all__ = [
     "MCPServer",
     "Macro",
     "MagicLinkToken",
+    "MediaAsset",
     "Membership",
     "Message",
     "OAuthAccount",
@@ -96,6 +98,8 @@ __all__ = [
     "Organization",
     "PasswordResetToken",
     "PlanGrant",
+    "Product",
+    "ProductImage",
     "ProviderCredential",
     "Quota",
     "Session",

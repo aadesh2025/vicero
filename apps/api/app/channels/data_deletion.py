@@ -81,6 +81,11 @@ async def delete_user_data(session: AsyncSession, user_id: str) -> int:
     contact_ids = [c.id for c in contacts]
     crm_ids = {c.crm_contact_id for c in contacts if c.crm_contact_id}
 
+    # Customer photos are files on disk; the contact FK only nulls the row, so remove them first.
+    from app.media.service import delete_contact_media
+
+    await delete_contact_media(session, contact_ids)
+
     convo_filter = Conversation.channel_user_id == user_id
     if contact_ids:
         convo_filter = or_(convo_filter, Conversation.contact_id.in_(contact_ids))

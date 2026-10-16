@@ -406,3 +406,18 @@ async def _run_automation_retention() -> int:
 def purge_automation_runs_task() -> int:
     """Daily (Celery beat): delete automation runs older than 30 days. Vicero keeps its own log; n8n prunes at ~7."""
     return _run(_run_automation_retention())
+
+
+async def _run_media_retention() -> int:
+    from app.media.service import purge_expired
+
+    async with SessionFactory() as session:
+        removed = await purge_expired(session)
+        await session.commit()
+        return removed
+
+
+@celery_app.task(name="media.retention")  # type: ignore[untyped-decorator]
+def purge_inbound_media_task() -> int:
+    """Daily (Celery beat): delete customer photos past INBOUND_MEDIA_RETENTION_DAYS (docs/26 section 3.4)."""
+    return _run(_run_media_retention())

@@ -70,6 +70,8 @@ class Message(Base, UUIDPrimaryKey):
     tool_calls: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     tool_call_id: Mapped[str | None] = mapped_column(String(255))
     citations: Mapped[list[Any]] = mapped_column(JSONB, default=list, nullable=False)
+    #: Images on this message: `[{"media_id", "kind": "image", "direction": "in"|"out", "description"}]`.
+    attachments: Mapped[list[Any]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
     provider: Mapped[str | None] = mapped_column(String(32))
     model: Mapped[str | None] = mapped_column(String(128))
     tokens_prompt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

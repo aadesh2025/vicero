@@ -46,6 +46,11 @@ celery_app.conf.update(
             "task": "automations.retention",
             "schedule": 86400.0,
         },
+        "media-retention": {
+            # Customer photos older than INBOUND_MEDIA_RETENTION_DAYS are deleted (docs/26).
+            "task": "media.retention",
+            "schedule": 86400.0,
+        },
         "meta-token-health": {
             # One-click Meta channels: is each stored token still valid? (channels/meta_health.py)
             "task": "channels.meta_health",

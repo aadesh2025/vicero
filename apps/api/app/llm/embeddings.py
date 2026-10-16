@@ -48,7 +48,10 @@ class OllamaEmbeddingProvider:
             base_url=self.base_url, timeout=self._timeout, transport=self._transport
         ) as client:
             try:
-                resp = await client.post("/api/embed", json={"model": self.model, "input": texts})
+                resp = await client.post(
+                    "/api/embed",
+                    json={"model": self.model, "input": texts, "keep_alive": settings.ollama_keep_alive},
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"embedding network error: {exc}") from exc
             if resp.status_code >= 400:

@@ -111,4 +111,26 @@ async def execute_n8n_tool(config: dict[str, Any], args: dict[str, Any], ctx: To
 
     if status_code >= 400:
         return ToolResult(output={"response": data}, status="error", error=f"n8n returned {status_code}")
+    failure = workflow_error(data)
+    if failure is not None:
+        # A 200 whose body carries an error object (`{"error": {"code": ...}}`) is a failed run, not a success:
+        # the model still gets the output to read, but the run log and the dashboard say "error".
+        return ToolResult(output={"response": data}, status="error", error=failure)
     return ToolResult(output={"response": data}, status="success")
+
+
+def workflow_error(data: Any) -> str | None:
+    """`code: message` when a workflow's response carries an error object, else `None`.
+
+    Only the typed envelope (`{"error": {"code": ..., "message": ...}}`, what Vicero's own API and n8n return for
+    a failed call) counts. A tool's normal "no" (`{"ok": false, "error": "slot_taken"}`, a plain string) is an
+    outcome the model should explain to the customer, not a failed run.
+    """
+    if not isinstance(data, dict):
+        return None
+    err = data.get("error")
+    if not isinstance(err, dict) or not err:
+        return None
+    code = str(err.get("code") or "error")
+    message = str(err.get("message") or "")
+    return f"{code}: {message}"[:300] if message else code[:300]

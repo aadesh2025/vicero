@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
 from app.channels import schemas
-from app.channels.base import BaseChannel, InboundMessage, get_channel
+from app.channels.base import BaseChannel, ChannelAuthRejected, InboundMessage, get_channel
+from app.channels.reconnect import flag_token_rejected
 from app.chat import stage_timing
 from app.chat.inbound import InboundTurn
 from app.contacts import resolve_contact
@@ -188,6 +189,11 @@ async def update_channel(
                     await ensure_external_id_free(session, channel.type, external_id, exclude_id=channel.id)
                 channel.external_id = external_id
         channel.config = _encrypt_secrets(adapter, merged)
+        if channel.status == "needs_reconnect" and channel.connection_source == "manual" and any(
+            k in adapter.secret_fields and isinstance(v, str) and v and not v.startswith("••••")
+            for k, v in data.config.items()
+        ):
+            channel.status = "active"  # a new token was saved: try again; a still-bad one is flagged on the next send
     return _channel_out(channel, adapter)
 
 
@@ -304,6 +310,9 @@ async def run_and_send(session: AsyncSession, channel: Channel, adapter: BaseCha
         try:
             with stage_timing.stage("send"):
                 await adapter.send(channel, msg.external_user_id, reply)
+        except ChannelAuthRejected:
+            # Dead token: say so on the dashboard instead of failing silently. The customer's message is saved.
+            await flag_token_rejected(session, channel)
         except Exception as exc:
             # The inbound is already persisted; a provider-delivery failure must not
             # 500 the webhook (that makes Telegram/Meta re-deliver → duplicate turns).

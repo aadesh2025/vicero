@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any
 
@@ -9,10 +10,21 @@ from pydantic import BaseModel
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.chat import stage_timing
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.llm.base import EmbeddingProvider
 from app.models import Chunk
 from app.rag import fts, rerank
+
+log = get_logger("rag.retrieval")
+
+def _note_cold(stage: str, t0: float) -> None:
+    """A retrieval stage that took seconds is the cold one: say which, so the log answers "why 8 s?"."""
+    ms = int((time.perf_counter() - t0) * 1000)
+    if ms >= settings.warmup_cold_ms:
+        log.warning("rag_stage_cold", stage=stage, ms=ms, threshold_ms=settings.warmup_cold_ms)
+
 
 # Reciprocal-rank-fusion constant (standard default).
 _RRF_K = 60
@@ -157,15 +169,24 @@ async def search(
         return []
 
     reranking = reranker is not None and not isinstance(reranker, rerank.NoOpReranker)
-    query_vec = (await embedder.embed([query]))[0]
+    t0 = time.perf_counter()
+    with stage_timing.stage("rag_embed"):
+        query_vec = (await embedder.embed([query]))[0]
+    _note_cold("embed", t0)
     fetch = max(settings.rerank_candidate_k, top_k) if reranking else max(top_k * 4, top_k)
-    vector_hits = await _vector_hits(session, org_id, kb_ids, query_vec, fetch)
+    t0 = time.perf_counter()
+    with stage_timing.stage("rag_vector"):
+        vector_hits = await _vector_hits(session, org_id, kb_ids, query_vec, fetch)
+    _note_cold("vector", t0)
     vector_hits = [(c, s) for c, s in vector_hits if s >= score_threshold]
 
     if not hybrid:
         return await _finish(reranker, query, list(vector_hits), top_k)
 
-    fts_hits = await _fts_hits(session, org_id, kb_ids, query, fetch, fts_config)
+    t0 = time.perf_counter()
+    with stage_timing.stage("rag_fts"):
+        fts_hits = await _fts_hits(session, org_id, kb_ids, query, fetch, fts_config)
+    _note_cold("fts", t0)
     weight = settings.rag_rrf_fts_weight if fts_weight is None else fts_weight
 
     # WEIGHTED reciprocal rank fusion. Textbook RRF weights each list equally, which assumes

@@ -25,6 +25,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.base import ChannelAuthRejected
+from app.channels.reconnect import flag_token_rejected
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import get_logger
@@ -346,6 +348,10 @@ async def _confirm(session: AsyncSession, booking: Booking, conv: Conversation |
     )
     try:
         await adapter.send(channel, conv.channel_user_id, text)
+    except ChannelAuthRejected:
+        await flag_token_rejected(session, channel)
+        log.warning("booking_confirmation_failed", booking_id=str(booking.id), error="ChannelAuthRejected")
+        return False
     except Exception as exc:
         log.warning("booking_confirmation_failed", booking_id=str(booking.id), error=type(exc).__name__)
         return False

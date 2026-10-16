@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     # couple of seconds, never fails startup. Off in the test suite — a diagnostic must not be
     # the thing that makes the suite do network I/O.
     embedding_probe_enabled: bool = True
+    # How long Ollama keeps the embedding model loaded after a call. Its own default is 5 minutes, after
+    # which the next customer message paid ~8 s to load it again (ADR-122).
+    ollama_keep_alive: str = "24h"
+    # Warm-up on worker start + every `warmup_interval_seconds` (beat): embedding model, database, and the
+    # DNS/TLS to Groq and Meta. A stage slower than `warmup_cold_ms` is logged as `warmup_stage_cold`.
+    warmup_enabled: bool = True
+    warmup_interval_seconds: float = 240.0
+    warmup_cold_ms: int = 1500
 
     # --- Knowledge base / RAG ---
     # Directory for uploaded/ingested document files (created on demand).
@@ -223,6 +231,19 @@ class Settings(BaseSettings):
     # whatever room is left. Raise it on a paid tier.
     guard_policy_max_request_tokens: int = 2000
     guard_policy_max_completion_tokens: int = 300
+    # Resilience (ADR-122). A 429/5xx/timeout is retried on the same model with backoff (up to
+    # `retries` more times, never past `retry_budget_ms` in total), then tried once on the fallback model,
+    # which has its own rate limit on Groq. Empty fallback disables that step.
+    guard_policy_retries: int = 2
+    guard_policy_retry_backoff_ms: int = 250
+    guard_policy_retry_budget_ms: int = 2500
+    guard_policy_fallback_model: str = "openai/gpt-oss-20b"
+    # When no attempt works, reuse this conversation's last elevated-or-worse verdict for this long
+    # instead of silently treating the message as calm.
+    guard_policy_sticky_ttl_seconds: int = 600
+    # `guard_l3_unavailable_repeated` (error level, once per window) when this many calls end ungraded.
+    guard_policy_alert_threshold: int = 5
+    guard_policy_alert_window_seconds: int = 300
     # Distress detection is a triage aid, never a clinical instrument. `crisis` suppresses the
     # bot's reply entirely, so it must stay rare; this switch exists to turn the whole layer
     # off for a client who has not agreed to watch the queue it fills (docs/11 §9).

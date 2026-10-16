@@ -350,6 +350,10 @@ services:
       VICERO_API_INTERNAL_URL: http://api:8000
     expose:
       - "5678"
+    # Same resolvers as api/worker/beat (ADR-119): n8n's outbound lookups (Google, Meta, any HTTP node) hit the
+    # same slow default resolver. Service names (api, postgres) still resolve through Docker's embedded DNS.
+    dns: ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
+    dns_opt: ["timeout:1", "attempts:2"]
     volumes:
       - n8ndata:/home/node/.n8n
     healthcheck:

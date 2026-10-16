@@ -16,7 +16,14 @@ from typing import Any
 
 import httpx
 
-from app.channels.base import BaseChannel, ContactProfile, InboundMessage, register
+from app.channels.base import (
+    META_TOKEN_REJECTED_CODE,
+    BaseChannel,
+    ChannelAuthRejected,
+    ContactProfile,
+    InboundMessage,
+    register,
+)
 from app.channels.meta_graph import graph_base
 from app.channels.meta_signature import verify_challenge, verify_signature
 from app.core.errors import AppError
@@ -209,6 +216,8 @@ class WhatsAppChannel(BaseChannel):
             code=code,
             message=str(error.get("message", ""))[:200],
         )
+        if code == META_TOKEN_REJECTED_CODE:
+            raise ChannelAuthRejected(code)
 
 
 register(WhatsAppChannel())

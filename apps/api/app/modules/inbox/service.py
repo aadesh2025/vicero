@@ -11,6 +11,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels import get_channel, whatsapp
+from app.channels.base import ChannelAuthRejected
+from app.channels.reconnect import flag_token_rejected
 from app.chat import attention
 from app.chat.handoff import trigger_handoff
 from app.core import rbac
@@ -363,6 +365,8 @@ async def _deliver_to_user(session: AsyncSession, conv: Conversation, text: str)
         return
     try:
         await adapter.send(channel, conv.channel_user_id, text)
+    except ChannelAuthRejected:
+        await flag_token_rejected(session, channel)
     except AppError:
         # A typed refusal (e.g. Meta closed the window under us) is the operator's
         # problem to see, not a transport hiccup to log and forget.
@@ -399,7 +403,16 @@ async def send_template(
     if not conv.channel_user_id:
         raise AppError("inbox.no_recipient", "This conversation has no WhatsApp recipient.", 400)
 
-    await adapter.send_template(channel, conv.channel_user_id, template, params)
+    try:
+        await adapter.send_template(channel, conv.channel_user_id, template, params)
+    except ChannelAuthRejected as exc:
+        await flag_token_rejected(session, channel)
+        await session.commit()  # keep the flag: the AppError below rolls the request back
+        raise AppError(
+            "channel_needs_reconnect",
+            "WhatsApp rejected this channel's access token. Save a new token on the Channels tab, then send again.",
+            409,
+        ) from exc
 
     # Recorded as an operator message so the transcript shows what the customer received.
     body = f"[template: {template}]" + (f" {' · '.join(params)}" if params else "")

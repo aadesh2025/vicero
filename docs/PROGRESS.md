@@ -2230,3 +2230,11 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - `book_appointment` now creates the event itself when the organisation is connected (token refreshed when expired, idempotent by booking id), and never fails the booking when Google errors. The n8n Google node and `attach-event` are gone.
 - Also fixed: `seed_demo_knowledge.py` queued ingestion before its transaction committed (the worker saw "Document not found"); it now queues after the commit.
 - **Redirect URI to register in Google Cloud:** `https://viceroai-api.duckdns.org/api/google/callback` (and enable the Google Calendar API).
+
+
+## Tool-run commit, warm-up, L3 resilience, reconnect (2026-10-15, ADR-122)
+
+- **Fix:** real chat tool calls failed at the n8n callback (`bookings.bad_run`, 401) because the `tool_runs` row was not committed when n8n called back. `execute_tool_call` now commits before dispatching an n8n tool; a 200 response with an error object marks the run `error`; regression tests use separate connections; `scripts/test_booking_tools.py` starts with a step on the real agent path; `dns` on the n8n service.
+- **Warm-up:** Ollama `keep_alive` 24h, `warmup.keep_warm` on worker start and every 240 s, cold stages named in the logs.
+- **L3:** retry with backoff, fallback model, last elevated verdict reused, repeated-failure alert (`guard_l3_unavailable_repeated`).
+- **Channels:** Meta code 190 on a send flips the channel to `needs_reconnect`; the Channels tab shows it with an Update token button.

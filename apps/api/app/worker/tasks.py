@@ -17,6 +17,7 @@ from app.chat import stage_timing
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.rag.ingest import ingest_document
+from app.rag.warmup import warm
 from app.worker.celery_app import celery_app
 from app.worker.rollup import rollup_org
 
@@ -148,6 +149,12 @@ async def _run_meta_health() -> dict[str, int]:
         result = await run_health_check(session)
         await session.commit()
         return result
+
+
+@celery_app.task(name="warmup.keep_warm", max_retries=0)  # type: ignore[untyped-decorator]
+def keep_warm_task() -> dict[str, int]:
+    """Every few minutes: touch the stages that go cold when idle (embedding model, DB, Groq/Meta connections)."""
+    return _run_persistent(warm(SessionFactory))
 
 
 @celery_app.task(name="channels.meta_health", max_retries=0)  # type: ignore[untyped-decorator]

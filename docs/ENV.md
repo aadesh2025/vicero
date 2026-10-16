@@ -480,3 +480,18 @@ to RRF ordering, logged, never an error and never an empty result set.
 > is found. `--apply` backfills `documents.pii_flags` for documents ingested before migration
 > 0015; it never edits document text — removing PII from a client's corpus is an operator
 > decision (ADR-054).
+
+### Warm-up and L3 resilience (ADR-122)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OLLAMA_KEEP_ALIVE` | `24h` | How long Ollama keeps the embedding model loaded after a call |
+| `WARMUP_ENABLED` | `true` | Warm the embedding model, DB and Groq/Meta connections on worker start and on a schedule |
+| `WARMUP_INTERVAL_SECONDS` | `240` | Keep-warm period (beat) |
+| `WARMUP_COLD_MS` | `1500` | A stage slower than this is logged `warmup_stage_cold` / `rag_stage_cold` |
+| `GUARD_POLICY_RETRIES` | `2` | Extra tries of the L3 model on 429/5xx/timeout |
+| `GUARD_POLICY_RETRY_BACKOFF_MS` | `250` | First backoff (doubles; `Retry-After` is used when short) |
+| `GUARD_POLICY_RETRY_BUDGET_MS` | `2500` | Total time L3 may spend retrying |
+| `GUARD_POLICY_FALLBACK_MODEL` | `openai/gpt-oss-20b` | Tried once after the retries; empty disables |
+| `GUARD_POLICY_STICKY_TTL_SECONDS` | `600` | A conversation's last elevated verdict is reused this long when L3 is down |
+| `GUARD_POLICY_ALERT_THRESHOLD` / `GUARD_POLICY_ALERT_WINDOW_SECONDS` | `5` / `300` | `guard_l3_unavailable_repeated` (error level) when this many calls end ungraded in the window |

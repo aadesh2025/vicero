@@ -12,7 +12,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.channels.base import BaseChannel, ContactProfile, InboundMessage
+from app.channels.base import (
+    META_TOKEN_REJECTED_CODE,
+    BaseChannel,
+    ChannelAuthRejected,
+    ContactProfile,
+    InboundMessage,
+    meta_error_code,
+)
 from app.channels.meta_graph import graph_base
 from app.channels.meta_signature import verify_challenge, verify_signature
 from app.core.logging import get_logger
@@ -72,7 +79,7 @@ class MetaMessagingChannel(BaseChannel):
             log.warning("meta_send_skipped_no_token", channel_type=self.type, channel=str(channel.id))
             return
         async with self._client(base_url=graph_base()) as client:
-            await client.post(
+            resp = await client.post(
                 "/me/messages",
                 headers={"Authorization": f"Bearer {token}"},
                 json={
@@ -81,6 +88,18 @@ class MetaMessagingChannel(BaseChannel):
                     "message": {"text": text},
                 },
             )
+        if resp.status_code >= 400:
+            code, message = meta_error_code(resp)
+            log.warning(
+                "meta_send_rejected",
+                channel_type=self.type,
+                channel=str(channel.id),
+                status=resp.status_code,
+                code=code,
+                message=message,
+            )
+            if code == META_TOKEN_REJECTED_CODE:
+                raise ChannelAuthRejected(code)
 
     # ── identity ─────────────────────────────────────────────────────────────
     async def fetch_profile(self, channel: Any, external_id: str) -> ContactProfile | None:

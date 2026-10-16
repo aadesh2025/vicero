@@ -22,6 +22,9 @@ def _enable(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "guard_policy_enabled", True)
     monkeypatch.setattr(settings, "guard_distress_enabled", True)
     monkeypatch.setattr(settings, "groq_api_key", "gsk_test_platform_key")
+    monkeypatch.setattr(settings, "guard_policy_retry_backoff_ms", 0)  # retries are tested in test_resilience_adr122
+    policy_guard._sticky.clear()
+    policy_guard._failures.clear()
     yield
 
 

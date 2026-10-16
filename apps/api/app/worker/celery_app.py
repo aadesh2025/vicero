@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.core.config import settings
 
@@ -50,6 +51,11 @@ celery_app.conf.update(
             "task": "channels.meta_health",
             "schedule": 86400.0,
         },
+        "keep-warm": {
+            # Embedding model, DB and the Groq/Meta connections stay loaded between customer messages (ADR-122).
+            "task": "warmup.keep_warm",
+            "schedule": settings.warmup_interval_seconds,
+        },
         "trial-lifecycle-sweep": {
             # Free-trial emails (3 days / 1 day left, ended, 80% / 100% of messages). Idempotent:
             # each is claimed atomically per workspace, so running more often is harmless.
@@ -58,3 +64,11 @@ celery_app.conf.update(
         },
     },
 )
+
+
+@worker_ready.connect  # type: ignore[untyped-decorator]
+def _warm_on_start(**_: object) -> None:
+    """Load the embedding model and open the connections before the first customer message arrives."""
+    if settings.celery_task_always_eager or not settings.warmup_enabled:
+        return
+    celery_app.send_task("warmup.keep_warm")

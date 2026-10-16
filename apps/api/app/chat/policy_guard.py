@@ -21,8 +21,12 @@ failure as `none` would quietly stop the queue filling while looking healthy.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import random
 import re
+import time
+from collections import deque
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -208,11 +212,138 @@ def _parse(content: str) -> PolicyVerdict | None:
     )
 
 
+# --- resilience (ADR-122): retry, fallback model, last-verdict reuse, repeated-failure alert -------------------
+
+_sticky: dict[str, tuple[float, PolicyVerdict]] = {}  # conversation -> (monotonic time, last elevated+ verdict)
+_STICKY_MAX = 2000
+_failures: deque[float] = deque(maxlen=200)  # monotonic times of calls that ended with no verdict
+_last_alert = -1e9
+
+
+def _attempt_models() -> list[str]:
+    """The primary model (1 + retries times), then the fallback model once (its rate limit is its own)."""
+    models = [settings.guard_policy_model] * (1 + max(0, settings.guard_policy_retries))
+    fallback = settings.guard_policy_fallback_model.strip()
+    if fallback and fallback != settings.guard_policy_model:
+        models.append(fallback)
+    return models
+
+
+def _retryable(exc: BaseException) -> bool:
+    """Rate limit (429), server error (5xx), timeout, or a network error. A 413/400/401 will fail again."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 429 or exc.response.status_code >= 500
+    return isinstance(exc, (TimeoutError, httpx.TransportError))
+
+
+def _retry_delay(attempt: int, exc: BaseException) -> float:
+    """Seconds to wait: the server's `Retry-After` when it is short, otherwise exponential backoff + jitter."""
+    base = max(0, settings.guard_policy_retry_backoff_ms) / 1000.0
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            hinted = float(exc.response.headers.get("retry-after", ""))
+        except ValueError:
+            hinted = 0.0
+        if 0 < hinted <= settings.guard_policy_retry_budget_ms / 1000.0:
+            return hinted
+    jitter: float = 0.75 + random.random() * 0.5
+    return float(base * (2**attempt) * jitter)
+
+
+async def _post_once(
+    model: str,
+    system: str,
+    context: str,
+    text: str,
+    key: str,
+    transport: httpx.AsyncBaseTransport | None,
+) -> dict[str, Any]:
+    extra: dict[str, Any] = {}
+    if model.startswith("openai/gpt-oss"):
+        extra["reasoning_effort"] = "low"  # a reasoning model: keep it short, it only has to pick a level
+    budget_ms = settings.guard_policy_timeout_ms
+    client, owned = guard_http.make_client(transport)
+    try:
+        resp = await guard_http.bounded(
+            client.post(
+                _GROQ_CHAT_URL,
+                timeout=httpx.Timeout(budget_ms / 1000.0),
+                headers={"Authorization": f"Bearer {key}"},
+                json={
+                    "model": model,
+                    "temperature": 0,
+                    # Groq counts the completion it reserves against the TPM limit, and a reasoning model's
+                    # default reservation is large. Cap it.
+                    "max_completion_tokens": settings.guard_policy_max_completion_tokens,
+                    **extra,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": f"{context}Message to grade:\n{text}"},
+                    ],
+                },
+            ),
+            budget_ms,
+        )
+        resp.raise_for_status()
+        body: dict[str, Any] = resp.json()
+        return body
+    finally:
+        if owned:
+            await client.aclose()
+
+
+def _remember(cache_key: str | None, verdict: PolicyVerdict) -> None:
+    """Keep the last elevated-or-worse verdict per conversation; a calm one clears it."""
+    if not cache_key:
+        return
+    if verdict.needs_attention or verdict.suppresses_generation:
+        if len(_sticky) >= _STICKY_MAX:
+            _sticky.pop(next(iter(_sticky)))
+        _sticky[cache_key] = (time.monotonic(), verdict)
+    else:
+        _sticky.pop(cache_key, None)
+
+
+def _unavailable(cache_key: str | None, exc: BaseException | None) -> PolicyVerdict | None:
+    """Every attempt failed. Reuse a recent elevated verdict for this conversation (the safe side); else not graded."""
+    global _last_alert
+    now = time.monotonic()
+    _failures.append(now)
+    window = settings.guard_policy_alert_window_seconds
+    recent = sum(1 for t in _failures if now - t <= window)
+    if recent >= settings.guard_policy_alert_threshold and now - _last_alert > window:
+        _last_alert = now
+        metrics.observe_policy_call("alert", 0)
+        log.error(
+            "guard_l3_unavailable_repeated",
+            failures=recent,
+            window_seconds=window,
+            model=settings.guard_policy_model,
+            fallback=settings.guard_policy_fallback_model,
+            impact="conversations are not being graded for distress; the attention queue is blind",
+            fix="check GROQ_API_KEY and the Groq rate limit / status page; raise the plan or change GUARD_POLICY_MODEL",
+        )
+    sticky = _sticky.get(cache_key or "")
+    if sticky is not None and now - sticky[0] <= settings.guard_policy_sticky_ttl_seconds:
+        metrics.observe_policy_call("sticky", 0)
+        log.warning("guard_l3_sticky_verdict", level=sticky[1].distress, age_seconds=int(now - sticky[0]))
+        return sticky[1]
+    log.warning(
+        "guard_l3_unavailable",
+        error=guard_http.describe(exc, settings.guard_policy_timeout_ms) if exc else "unknown",
+        model=settings.guard_policy_model,
+        impact="this turn was not graded for distress; no alert was raised",
+    )
+    return None
+
+
+
 async def classify(
     message: str,
     *,
     history: list[str] | None = None,
     org_enabled: bool | None = None,
+    cache_key: str | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> PolicyVerdict | None:
     """Grade one message. `None` means **not graded** — never treat it as `none`.
@@ -230,48 +361,47 @@ async def classify(
 
     system = _SYSTEM_PREAMBLE + _policy_text()
     context, text = _window(message, history, len(system))
-    extra: dict[str, Any] = {}
-    if settings.guard_policy_model.startswith("openai/gpt-oss"):
-        extra["reasoning_effort"] = "low"  # a reasoning model: keep it short, it only has to pick a level
-
-    budget_ms = settings.guard_policy_timeout_ms
-    timeout = httpx.Timeout(budget_ms / 1000.0)
-    client, owned = guard_http.make_client(transport)
-    try:
-        resp = await guard_http.bounded(
-            client.post(
-                _GROQ_CHAT_URL,
-                timeout=timeout,
-                headers={"Authorization": f"Bearer {key}"},
-                json={
-                    "model": settings.guard_policy_model,
-                    "temperature": 0,
-                    # Groq counts the completion it reserves against the TPM limit, and a reasoning model's
-                    # default reservation is large. Cap it.
-                    "max_completion_tokens": settings.guard_policy_max_completion_tokens,
-                    **extra,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": f"{context}Message to grade:\n{text}"},
-                    ],
-                },
-            ),
-            budget_ms,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-    except Exception as exc:
-        metrics.observe_policy_call("error", 0)
-        log.warning(
-            "guard_l3_unavailable",
-            error=guard_http.describe(exc, budget_ms),
-            model=settings.guard_policy_model,
-            impact="this turn was not graded for distress; no alert was raised",
-        )
-        return None
-    finally:
-        if owned:
-            await client.aclose()
+    queue = _attempt_models()
+    started = time.monotonic()
+    body: dict[str, Any] | None = None
+    last_exc: BaseException | None = None
+    model = settings.guard_policy_model
+    attempt = 0
+    while queue:
+        model = queue.pop(0)
+        try:
+            body = await _post_once(model, system, context, text, key, transport)
+            break
+        except Exception as exc:
+            last_exc = exc
+            metrics.observe_policy_call("error", 0)
+            retryable = _retryable(exc)
+            log.info(
+                "guard_l3_attempt_failed",
+                attempt=attempt + 1,
+                model=model,
+                retryable=retryable,
+                error=guard_http.describe(exc, settings.guard_policy_timeout_ms),
+            )
+            timed_out = isinstance(exc, (TimeoutError, httpx.TimeoutException))
+            if not retryable or timed_out:
+                # The same request fails the same way again (413/400), or just spent the whole per-call budget
+                # (timeout): only the fallback model can differ.
+                queue = [m for m in queue if m != model]
+            remaining_ms = settings.guard_policy_retry_budget_ms - (time.monotonic() - started) * 1000
+            # A slow failure must leave room for another full call, or the turn waits on L3 for several seconds.
+            needed_ms = settings.guard_policy_timeout_ms + guard_http.BOUND_MARGIN_SECONDS * 1000 if timed_out else 0
+            if not queue or remaining_ms <= needed_ms:
+                break
+            if queue[0] == model:
+                await asyncio.sleep(_retry_delay(attempt, exc))
+            attempt += 1
+            metrics.observe_policy_call("retry", 0)
+    if body is None:
+        return _unavailable(cache_key, last_exc)
+    if model != settings.guard_policy_model:
+        metrics.observe_policy_call("fallback_ok", 0)
+        log.info("guard_l3_fallback_used", model=model)
 
     content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
     tokens = int((body.get("usage") or {}).get("total_tokens") or 0)
@@ -281,6 +411,7 @@ async def classify(
         log.warning("guard_l3_unparseable", model=settings.guard_policy_model)
         return None
     metrics.observe_policy_call(f"level_{verdict.distress}", tokens)
+    _remember(cache_key, verdict)
     return verdict
 
 

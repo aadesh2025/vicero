@@ -199,6 +199,7 @@ class InboundTurn:
                             self.message,
                             history=[m.content for m in history if m.role == "user" and m.content],
                             org_enabled=org.guard_injection_enabled if org else None,
+                            cache_key=str(conv.id),
                         ),
                     )
                 )

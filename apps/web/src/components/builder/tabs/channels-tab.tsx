@@ -29,6 +29,7 @@ import {
   disableChannel,
   enableChannel,
   listChannels,
+  updateChannel,
   type ApiChannel,
   type ChannelType,
 } from "@/lib/api/channels";
@@ -598,6 +599,8 @@ const CHANNEL_SPECS: Record<
 function MessagingChannels({ agentId }: { agentId: string }) {
   const qc = useQueryClient();
   const [connecting, setConnecting] = useState<ChannelType | null>(null);
+  // Set when the dialog replaces the token of a channel Meta rejected (status needs_reconnect).
+  const [renewing, setRenewing] = useState<string | null>(null);
 
   // The Inbox links here with `?connect=<type>` when an operator picks an unconnected
   // channel tab, so the credential form they came for is already open on arrival. The
@@ -652,10 +655,17 @@ function MessagingChannels({ agentId }: { agentId: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text">{spec.label}</span>
-                    {ch && !oneClick && (
+                    {ch && !oneClick && ch.status === "needs_reconnect" && <Badge variant="warn">Needs reconnect</Badge>}
+                    {ch && !oneClick && ch.status !== "needs_reconnect" && (
                       <Badge variant={ch.enabled ? "success" : "default"}>{ch.enabled ? "Live" : "Connected"}</Badge>
                     )}
                   </div>
+                  {ch && !oneClick && ch.status === "needs_reconnect" && (
+                    <p role="alert" className="mt-0.5 text-xs text-warn-text">
+                      {spec.label} rejected this channel&apos;s access token, so replies are not being delivered. Save a
+                      new token to resume.
+                    </p>
+                  )}
                   {oneClick && ch?.name && <p className="truncate text-xs text-faint">{ch.name}</p>}
                 </div>
                 {oneClickRow && isMetaType(type) ? (
@@ -667,6 +677,18 @@ function MessagingChannels({ agentId }: { agentId: string }) {
                   />
                 ) : ch ? (
                   <div className="flex items-center gap-2">
+                    {ch.status === "needs_reconnect" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setRenewing(ch.id);
+                          setConnecting(type);
+                        }}
+                      >
+                        Update token
+                      </Button>
+                    )}
                     <Switch checked={ch.enabled} onCheckedChange={(on) => toggle.mutate({ id: ch.id, on })} />
                     <button
                       onClick={() => remove.mutate(ch.id)}
@@ -695,7 +717,16 @@ function MessagingChannels({ agentId }: { agentId: string }) {
         })}
       </ul>
       <MetaOverlays meta={meta} agentId={agentId} />
-      <ConnectDialog type={connecting} agentId={agentId} onClose={() => setConnecting(null)} onConnected={invalidate} />
+      <ConnectDialog
+        type={connecting}
+        agentId={agentId}
+        existingId={renewing}
+        onClose={() => {
+          setConnecting(null);
+          setRenewing(null);
+        }}
+        onConnected={invalidate}
+      />
     </SectionCard>
   );
 }
@@ -703,11 +734,13 @@ function MessagingChannels({ agentId }: { agentId: string }) {
 function ConnectDialog({
   type,
   agentId,
+  existingId = null,
   onClose,
   onConnected,
 }: {
   type: ChannelType | null;
   agentId: string;
+  existingId?: string | null;
   onClose: () => void;
   onConnected: () => void;
 }) {
@@ -715,7 +748,12 @@ function ConnectDialog({
   const spec = type ? CHANNEL_SPECS[type] : null;
 
   const create = useMutation({
-    mutationFn: () => createChannel({ agent_id: agentId, type: type!, config: values }),
+    mutationFn: () => {
+      if (!existingId) return createChannel({ agent_id: agentId, type: type!, config: values });
+      // Replacing a rejected token: send only what was typed; the server keeps every other saved setting.
+      const typed = Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim() !== ""));
+      return updateChannel(existingId, { config: typed });
+    },
     onSuccess: () => {
       setValues({});
       onClose();
@@ -727,7 +765,7 @@ function ConnectDialog({
     <Dialog open={Boolean(type)} onOpenChange={(o) => !o && (setValues({}), onClose())}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Connect {spec?.label}</DialogTitle>
+          <DialogTitle>{existingId ? `Update ${spec?.label} token` : `Connect ${spec?.label}`}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(e) => {
@@ -749,7 +787,7 @@ function ConnectDialog({
           <p className="text-xs text-faint">{spec?.hint}</p>
           {create.isError && <p className="text-sm text-error-text">{(create.error as Error).message}</p>}
           <Button type="submit" variant="primary" className="w-full" disabled={create.isPending}>
-            {create.isPending && <Loader2 className="size-4 animate-spin" />} Connect
+            {create.isPending && <Loader2 className="size-4 animate-spin" />} {existingId ? "Save token" : "Connect"}
           </Button>
         </form>
       </DialogContent>

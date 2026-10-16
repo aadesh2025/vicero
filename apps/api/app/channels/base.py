@@ -16,6 +16,31 @@ from app.models import Channel
 
 log = get_logger("channels")
 
+#: Meta's "the access token is invalid, expired or revoked" error code (OAuthException).
+META_TOKEN_REJECTED_CODE = 190
+
+
+class ChannelAuthRejected(Exception):
+    """The provider refused the channel's credentials (expired, revoked or wrong token).
+
+    Deliberately not an `AppError`: callers that deliver a reply catch it, flip the channel to
+    `needs_reconnect` (so the dashboard says so) and carry on; the customer's message is already saved.
+    """
+
+    def __init__(self, code: int | None = None) -> None:
+        super().__init__("channel credentials rejected by the provider")
+        self.code = code
+
+
+def meta_error_code(resp: httpx.Response) -> tuple[int | None, str]:
+    """`(code, message)` from a Graph error body; `(None, "")` when there is none."""
+    try:
+        error = (resp.json() or {}).get("error") or {}
+    except ValueError:
+        return None, ""
+    code = error.get("code")
+    return (code if isinstance(code, int) else None), str(error.get("message", ""))[:200]
+
 
 @dataclass
 class ContactProfile:

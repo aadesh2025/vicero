@@ -313,6 +313,13 @@ async def execute_tool_call(
     session.add(run)
     await session.flush()
     ctx.run_id = run.id
+    if tool.type == "n8n":
+        # n8n calls Vicero back while this call is still in flight (`/internal/tools/*`, the async callback) from
+        # its own connection, and a row that is only flushed is invisible to it: every such call got
+        # `bookings.bad_run` (401) until the turn committed. So make the run, and the conversation and message
+        # it hangs off, durable BEFORE the webhook goes out. (A separate session cannot do this: the run's
+        # foreign key to the conversation needs that row committed first.)
+        await session.commit()
 
     t0 = time.perf_counter()
     try:

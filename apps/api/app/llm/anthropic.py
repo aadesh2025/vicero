@@ -40,7 +40,24 @@ def to_anthropic_payload(req: ChatRequest) -> dict[str, Any]:
             messages.append({"role": "assistant", "content": blocks})
         else:
             role = "assistant" if m.role == "assistant" else "user"
-            messages.append({"role": role, "content": m.content or ""})
+            if m.images:
+                messages.append(
+                    {
+                        "role": role,
+                        "content": [
+                            *(
+                                {
+                                    "type": "image",
+                                    "source": {"type": "base64", "media_type": img.mime, "data": img.data_b64},
+                                }
+                                for img in m.images
+                            ),
+                            {"type": "text", "text": m.content or ""},
+                        ],
+                    }
+                )
+            else:
+                messages.append({"role": role, "content": m.content or ""})
 
     payload: dict[str, Any] = {
         "model": req.model,

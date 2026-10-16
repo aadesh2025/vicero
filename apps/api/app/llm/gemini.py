@@ -22,7 +22,9 @@ def to_gemini_payload(req: ChatRequest) -> dict[str, Any]:
                 system_parts.append(m.content)
             continue
         role = "model" if m.role == "assistant" else "user"
-        contents.append({"role": role, "parts": [{"text": m.content or ""}]})
+        parts: list[dict[str, Any]] = [{"text": m.content or ""}]
+        parts.extend({"inlineData": {"mimeType": img.mime, "data": img.data_b64}} for img in m.images or [])
+        contents.append({"role": role, "parts": parts})
 
     payload: dict[str, Any] = {
         "contents": contents,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -58,13 +58,29 @@ class ContactProfile:
         return not (self.display_name or self.avatar_url or self.extra)
 
 
+MediaKind = Literal["image", "audio", "video", "file", "sticker"]
+
+
+@dataclass
+class MediaRef:
+    """A non-text item the customer sent. Where it is downloaded from depends on the platform:
+    WhatsApp gives a `provider_id` (two Graph calls), Messenger/Instagram a CDN `url` that expires."""
+
+    kind: MediaKind
+    provider_id: str | None = None
+    url: str | None = None
+    caption: str | None = None
+
+
 @dataclass
 class InboundMessage:
     external_user_id: str
+    #: May be "" when the customer sent only media.
     text: str
     raw: dict[str, Any] = field(default_factory=dict)
     #: Identity carried by the inbound payload itself, when the platform includes one.
     profile: ContactProfile | None = None
+    media: list[MediaRef] = field(default_factory=list)
 
 
 class BaseChannel:
@@ -73,6 +89,8 @@ class BaseChannel:
     type: str = ""
     #: config keys that hold secrets (encrypted at rest, masked in API responses).
     secret_fields: tuple[str, ...] = ()
+    #: Whether `send_image` is implemented. Callers check this instead of catching NotImplementedError.
+    supports_images: bool = False
 
     def __init__(self) -> None:
         # Tests set this to an httpx.MockTransport; production leaves it None.
@@ -101,6 +119,10 @@ class BaseChannel:
         raise NotImplementedError
 
     async def send(self, channel: Channel, to: str, text: str) -> None:
+        raise NotImplementedError
+
+    async def send_image(self, channel: Channel, to: str, url: str, caption: str | None = None) -> None:
+        """Send one image the platform downloads from `url` (a signed, short-lived link)."""
         raise NotImplementedError
 
     def check_can_send(self, channel: Channel, *, last_inbound_at: dt.datetime | None) -> None:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
 from app.channels import schemas
-from app.channels.base import BaseChannel, ChannelAuthRejected, InboundMessage, get_channel
+from app.channels.base import BaseChannel, ChannelAuthRejected, InboundMessage, MediaRef, get_channel
 from app.channels.reconnect import flag_token_rejected
 from app.chat import stage_timing
 from app.chat.inbound import InboundTurn
@@ -21,7 +21,11 @@ from app.core.config import settings
 from app.core.crypto import encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
-from app.models import Agent, AgentVersion, Channel, Contact, Conversation
+from app.media import vision
+from app.media.fetch import MediaFetchError, fetch_url, fetch_whatsapp
+from app.media.service import save_asset
+from app.media.store import get_store
+from app.models import Agent, AgentVersion, Channel, Contact, Conversation, MediaAsset
 from app.modules.orgs.deps import OrgContext
 
 log = get_logger("channels.service")
@@ -277,6 +281,82 @@ async def _get_or_create_conversation(
     return conv
 
 
+#: Said when a customer sends something the bot cannot read (a voice note, a video) or media is switched off.
+MEDIA_UNSUPPORTED_REPLY = "Thanks! I can read text and photos for now — could you type your question?"
+#: Photos kept for the inbox per message, and how many of those are described by the vision model.
+MAX_INBOUND_IMAGES = 6
+MAX_DESCRIBED_IMAGES = 3
+_UNREADABLE_PHOTO = "[Customer sent a photo that could not be loaded]"
+
+
+async def _download(adapter: BaseChannel, channel: Channel, ref: MediaRef) -> bytes:
+    if ref.provider_id:
+        return await fetch_whatsapp(adapter, channel, ref.provider_id)
+    if ref.url:
+        return await fetch_url(adapter, ref.url)
+    raise MediaFetchError("no media reference")
+
+
+async def _store_images(
+    session: AsyncSession, channel: Channel, adapter: BaseChannel, refs: list[MediaRef], contact: Contact | None
+) -> tuple[list[MediaAsset], int]:
+    """Download + sanitise + store each photo. Returns the stored assets and how many failed.
+
+    No model call happens here, so doing it before the plan/handoff gates costs bandwidth only.
+    """
+    stored: list[MediaAsset] = []
+    failed = 0
+    for ref in refs[:MAX_INBOUND_IMAGES]:
+        try:
+            raw = await _download(adapter, channel, ref)
+            stored.append(
+                await save_asset(
+                    session,
+                    channel.organization_id,
+                    "inbound",
+                    raw,
+                    source_channel=channel.type,
+                    contact_id=contact.id if contact else None,
+                )
+            )
+        except (MediaFetchError, AppError) as exc:
+            failed += 1
+            log.warning(
+                "media_fetch_failed" if isinstance(exc, MediaFetchError) else "media_rejected",
+                channel_type=channel.type,
+                channel=str(channel.id),
+                error=str(exc)[:120],
+            )
+    failed += max(len(refs) - MAX_INBOUND_IMAGES, 0)
+    return stored, failed
+
+
+def _turn_media(
+    session: AsyncSession, org_id: uuid.UUID, caption: str, assets: list[MediaAsset], failed: int,
+    attachments: list[dict[str, Any]],
+) -> Any:
+    """The `prepare` callback: describe the stored photos and fold them into the turn's text."""
+
+    async def prepare() -> str:
+        lines: list[str] = []
+        for asset, attachment in list(zip(assets, attachments, strict=False))[:MAX_DESCRIBED_IMAGES]:
+            description = asset.description
+            if not description:
+                try:
+                    data = await get_store().open(asset.storage_key)
+                except (OSError, ValueError):
+                    data = b""
+                description = await vision.describe(session, org_id, data, asset.mime) if data else None
+                if description:
+                    asset.description = description
+            attachment["description"] = description
+            lines.append(f"[Customer sent a photo: {description}]" if description else _UNREADABLE_PHOTO)
+        lines.extend([_UNREADABLE_PHOTO] * failed)
+        return "\n".join(part for part in (caption, *lines) if part)
+
+    return prepare
+
+
 async def process_inbound(
     session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]
 ) -> tuple[InboundMessage | None, str | None]:
@@ -297,10 +377,47 @@ async def process_inbound(
     with stage_timing.stage("contact"):  # includes the Graph profile fetch while name/photo are unknown
         contact = await resolve_contact(session, channel, adapter, msg.external_user_id, msg.profile)
         conv = await _get_or_create_conversation(session, channel, msg.external_user_id, contact)
-    turn = InboundTurn(session, agent, version, conv, msg.text)
+    turn = await _build_turn(session, channel, adapter, agent, version, conv, contact, msg)
     await turn.run()
     reply = None if turn.handed_off else ((turn.result.content or "").strip() or None)
     return msg, reply
+
+
+async def _build_turn(
+    session: AsyncSession,
+    channel: Channel,
+    adapter: BaseChannel,
+    agent: Agent,
+    version: AgentVersion,
+    conv: Conversation,
+    contact: Contact | None,
+    msg: InboundMessage,
+) -> InboundTurn:
+    """A text message is the unchanged path. Anything with media branches here (docs/26 §M2)."""
+    if not msg.media:
+        return InboundTurn(session, agent, version, conv, msg.text)
+
+    images = [m for m in msg.media if m.kind == "image"]
+    if not images or not settings.media_feature_enabled:
+        kind = msg.media[0].kind if not images else "photo"
+        return InboundTurn(
+            session, agent, version, conv, msg.text or f"[Customer sent a {kind}]", canned_reply=MEDIA_UNSUPPORTED_REPLY
+        )
+
+    assets, failed = await _store_images(session, channel, adapter, images, contact)
+    attachments: list[dict[str, Any]] = [
+        {"media_id": str(a.id), "kind": "image", "direction": "in", "description": a.description} for a in assets
+    ]
+    caption = msg.text.strip()
+    return InboundTurn(
+        session,
+        agent,
+        version,
+        conv,
+        caption or "[Customer sent a photo]",
+        attachments=attachments,
+        prepare=_turn_media(session, channel.organization_id, caption, assets, failed, attachments),
+    )
 
 
 async def run_and_send(session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]) -> None:

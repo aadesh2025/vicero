@@ -18,6 +18,8 @@ from app.channels.base import (
     ChannelAuthRejected,
     ContactProfile,
     InboundMessage,
+    MediaKind,
+    MediaRef,
     meta_error_code,
 )
 from app.channels.meta_graph import graph_base
@@ -27,6 +29,9 @@ from app.core.logging import get_logger
 log = get_logger("channels.meta")
 
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
+
+
+_ATTACHMENT_KINDS: dict[str, MediaKind] = {"image": "image", "audio": "audio", "video": "video", "file": "file"}
 
 
 class MetaMessagingChannel(BaseChannel):
@@ -63,10 +68,31 @@ class MetaMessagingChannel(BaseChannel):
                     continue  # our own outbound, echoed back to us
                 text = message.get("text")
                 sender = (event.get("sender") or {}).get("id")
-                if not text or sender is None:
+                media = self._media(message)
+                if sender is None or not (text or media):
                     continue
-                return InboundMessage(external_user_id=str(sender), text=str(text), raw=payload)
+                return InboundMessage(
+                    external_user_id=str(sender), text=str(text or ""), raw=payload, media=media
+                )
         return None
+
+    @staticmethod
+    def _media(message: dict[str, Any]) -> list[MediaRef]:
+        """Attachments we can name. `story_mention`, shared posts/reels, `fallback`, locations and
+        templates are ignored: there is nothing a support bot can usefully do with them."""
+        out: list[MediaRef] = []
+        for att in message.get("attachments") or []:
+            if not isinstance(att, dict):
+                continue
+            kind = _ATTACHMENT_KINDS.get(str(att.get("type")))
+            payload = att.get("payload")
+            if kind is None or not isinstance(payload, dict):
+                continue
+            if kind == "image" and payload.get("sticker_id"):
+                kind = "sticker"
+            url = payload.get("url")
+            out.append(MediaRef(kind=kind, url=str(url) if url else None))
+        return out
 
     # ── outbound ─────────────────────────────────────────────────────────────
     def check_can_send(self, channel: Any, *, last_inbound_at: Any) -> None:

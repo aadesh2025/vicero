@@ -44,6 +44,8 @@ class ModelSpec:
     label: str
     context: int | None = None
     tools: bool = True
+    #: Accepts image input (the describe-first vision call, docs/26). False = text only or unknown.
+    vision: bool = False
     prompt_micros: int | None = None
     completion_micros: int | None = None
     note: str | None = None
@@ -109,9 +111,9 @@ _GEMINI = ProviderSpec(
     key_hint="AIza…",
     description="Generous free tier; large context windows.",
     models=(
-        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000),
-        ModelSpec("gemini-2.5-pro", "Gemini 2.5 Pro", 1_000_000),
-        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000),
+        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000, vision=True),
+        ModelSpec("gemini-2.5-pro", "Gemini 2.5 Pro", 1_000_000, vision=True),
+        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000, vision=True),
         ModelSpec("gemini-1.5-flash", "Gemini 1.5 Flash", 1_000_000, note="legacy"),
         ModelSpec("gemini-1.5-pro", "Gemini 1.5 Pro", 2_000_000, note="legacy"),
     ),
@@ -172,11 +174,11 @@ _OPENAI = ProviderSpec(
     api_key_url="https://platform.openai.com/api-keys",
     key_hint="sk-…",
     models=(
-        ModelSpec("gpt-4o", "GPT-4o", 128_000, prompt_micros=2500, completion_micros=10000),
-        ModelSpec("gpt-4o-mini", "GPT-4o mini", 128_000, prompt_micros=150, completion_micros=600),
-        ModelSpec("gpt-4.1", "GPT-4.1", 1_000_000, prompt_micros=2000, completion_micros=8000),
-        ModelSpec("gpt-4.1-mini", "GPT-4.1 mini", 1_000_000, prompt_micros=400, completion_micros=1600),
-        ModelSpec("gpt-4.1-nano", "GPT-4.1 nano", 1_000_000, prompt_micros=100, completion_micros=400),
+        ModelSpec("gpt-4o", "GPT-4o", 128_000, prompt_micros=2500, completion_micros=10000, vision=True),
+        ModelSpec("gpt-4o-mini", "GPT-4o mini", 128_000, prompt_micros=150, completion_micros=600, vision=True),
+        ModelSpec("gpt-4.1", "GPT-4.1", 1_000_000, prompt_micros=2000, completion_micros=8000, vision=True),
+        ModelSpec("gpt-4.1-mini", "GPT-4.1 mini", 1_000_000, prompt_micros=400, completion_micros=1600, vision=True),
+        ModelSpec("gpt-4.1-nano", "GPT-4.1 nano", 1_000_000, prompt_micros=100, completion_micros=400, vision=True),
         ModelSpec("o4-mini", "o4-mini (reasoning)", 200_000, prompt_micros=1100, completion_micros=4400),
     ),
 )
@@ -190,12 +192,17 @@ _ANTHROPIC = ProviderSpec(
     api_key_url="https://console.anthropic.com/settings/keys",
     key_hint="sk-ant-…",
     models=(
-        ModelSpec("claude-opus-5", "Claude Opus 5", 200_000, prompt_micros=15000, completion_micros=75000),
-        ModelSpec("claude-sonnet-5", "Claude Sonnet 5", 200_000, prompt_micros=3000, completion_micros=15000),
+        ModelSpec(
+            "claude-opus-5", "Claude Opus 5", 200_000, prompt_micros=15000, completion_micros=75000, vision=True
+        ),
+        ModelSpec(
+            "claude-sonnet-5", "Claude Sonnet 5", 200_000, prompt_micros=3000, completion_micros=15000, vision=True
+        ),
         ModelSpec(
             "claude-haiku-4-5-20251001",
             "Claude Haiku 4.5",
             200_000,
+            vision=True,
             prompt_micros=800,
             completion_micros=4000,
         ),

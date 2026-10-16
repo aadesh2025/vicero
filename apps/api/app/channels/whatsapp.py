@@ -22,6 +22,8 @@ from app.channels.base import (
     ChannelAuthRejected,
     ContactProfile,
     InboundMessage,
+    MediaKind,
+    MediaRef,
     register,
 )
 from app.channels.meta_graph import graph_base
@@ -87,8 +89,19 @@ def is_group_message(message: dict[str, Any]) -> bool:
     return any(str(message.get(k) or "").endswith("@g.us") for k in ("from", "to", "recipient_id"))
 
 
+#: WhatsApp message `type` -> the kind we hand the media pipeline.
+_MEDIA_TYPES: dict[str, MediaKind] = {
+    "image": "image",
+    "audio": "audio",
+    "video": "video",
+    "document": "file",
+    "sticker": "sticker",
+}
+
+
 class WhatsAppChannel(BaseChannel):
     type = "whatsapp"
+    supports_images = True
     secret_fields = ("access_token", "app_secret", "registration_pin")
 
     async def verify(
@@ -107,14 +120,32 @@ class WhatsAppChannel(BaseChannel):
             if is_group_message(msg):
                 return None
             sender = msg["from"]
-            text = msg["text"]["body"]
+            kind = msg.get("type", "text")
+            text = ""
+            media: list[MediaRef] = []
+            if kind == "text":
+                text = str(msg["text"]["body"])
+            elif kind in _MEDIA_TYPES:
+                body = msg[kind]
+                caption = body.get("caption") if isinstance(body, dict) else None
+                media.append(
+                    MediaRef(
+                        kind=_MEDIA_TYPES[kind],
+                        provider_id=str(body["id"]) if isinstance(body, dict) and body.get("id") else None,
+                        caption=str(caption) if caption else None,
+                    )
+                )
+                text = str(caption) if caption else ""
+            else:
+                return None  # reaction, location, interactive reply, ...
         except (KeyError, IndexError, TypeError):
             return None
         return InboundMessage(
             external_user_id=str(sender),
-            text=str(text),
+            text=text,
             raw=payload,
             profile=self._profile(value, str(sender)),
+            media=media,
         )
 
     @staticmethod

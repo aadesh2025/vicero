@@ -167,8 +167,16 @@ async def _resolve_provider(
 
 
 # ── Persistence ─────────────────────────────────────────────────────────────────
-async def _persist_user_message(session: AsyncSession, conv: Conversation, text: str) -> Message:
-    msg = Message(conversation_id=conv.id, organization_id=conv.organization_id, role="user", content=text)
+async def _persist_user_message(
+    session: AsyncSession, conv: Conversation, text: str, *, attachments: list[dict[str, Any]] | None = None
+) -> Message:
+    msg = Message(
+        conversation_id=conv.id,
+        organization_id=conv.organization_id,
+        role="user",
+        content=text,
+        attachments=attachments or [],
+    )
     session.add(msg)
     # Every inbound path funnels through here, so this is the one place the 24-hour
     # WhatsApp window clock is reset.

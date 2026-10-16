@@ -23,6 +23,33 @@ from app.llm.types import ChatRequest, Message, StreamEvent, ToolCall, Usage
 
 log = get_logger("chat.runtime")
 
+
+def _log_llm_failure(provider: ChatProvider, req: ChatRequest, exc: ProviderError) -> None:
+    """One line per failed model call, so "why did it answer with the fallback line?" has an answer in the logs.
+
+    Status and kind always; the provider's own text only for rate limits and outages, where it carries the limit that
+    was hit. A 400 can echo what the model was asked or tried to do, i.e. customer text, so it is left out.
+    """
+    status = exc.status
+    if status == 429:
+        kind = "rate_limited"
+    elif status is not None and status >= 500:
+        kind = "provider_error"
+    elif status is None:
+        kind = "network_or_timeout"
+    else:
+        kind = "rejected"
+    detail = str(exc)[:200] if kind in {"rate_limited", "provider_error", "network_or_timeout"} else ""
+    log.warning(
+        "llm_call_failed",
+        provider=getattr(provider, "name", "?"),
+        model=getattr(provider, "active_model", None) or req.model,
+        status=status,
+        kind=kind,
+        retryable=exc.retryable,
+        detail=detail,
+    )
+
 # executor(call) -> {"output": dict, "status": str, "error": str|None}
 ToolExecutor = Callable[[ToolCall], Awaitable[dict[str, Any]]]
 
@@ -138,6 +165,7 @@ async def run_turn(
                     result.finish_reason = ev.finish_reason
         except ProviderError as exc:
             result.error = str(exc)
+            _log_llm_failure(provider, req, exc)
             # A provider failure must never reach a visitor as an empty reply. That is exactly
             # what happened live (ADR-044): a malformed API key made Gemini 400 on every turn,
             # `content` stayed "", and the widget returned HTTP 200 with nothing in it — silent

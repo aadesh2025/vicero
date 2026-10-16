@@ -229,13 +229,16 @@ async def get_chat_provider_chain(
         if not isinstance(entry, dict):
             continue
         name = str(entry.get("provider") or "").strip()
-        if not name or name == primary_name:
+        model = str(entry.get("model") or "") or None
+        # The same provider is a valid fallback when it names a DIFFERENT model: Groq rate-limits per model, so
+        # `gpt-oss-120b` at its tokens-per-minute cap can fall back to `llama-3.3-70b-versatile` (ADR-123).
+        if not name or (name == primary_name and (model is None or model == str(model_config.get("model") or ""))):
             continue
         try:
             provider = await lookup(session, org_id, name, agent_id=agent_id)
         except AppError as exc:
             log.warning("llm_fallback_unavailable", provider=name, error=str(exc))
             continue
-        chain.append((provider, str(entry.get("model") or "") or None))
+        chain.append((provider, model))
 
     return build_fallback_chain(primary, str(model_config.get("model") or "") or None, chain)

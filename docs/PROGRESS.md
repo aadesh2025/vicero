@@ -2238,3 +2238,7 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - **Warm-up:** Ollama `keep_alive` 24h, `warmup.keep_warm` on worker start and every 240 s, cold stages named in the logs.
 - **L3:** retry with backoff, fallback model, last elevated verdict reused, repeated-failure alert (`guard_l3_unavailable_repeated`).
 - **Channels:** Meta code 190 on a send flips the channel to `needs_reconnect`; the Channels tab shows it with an Update token button.
+
+## Same-provider model fallback + LLM failure log (2026-10-16, ADR-123)
+
+- A model can fall back to another model of the same provider (`model_config.fallbacks`); `llm_call_failed` is logged for every failed model call, without customer text.

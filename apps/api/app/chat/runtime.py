@@ -24,6 +24,22 @@ from app.llm.types import ChatRequest, Message, StreamEvent, ToolCall, Usage
 log = get_logger("chat.runtime")
 
 
+def _request_sizes(req: ChatRequest) -> dict[str, int]:
+    """Where a turn's prompt comes from, in characters (about 4 per token). Sizes only, never text."""
+    system = [m for m in req.messages if m.role == "system"]
+    try:
+        tools_chars = len(json.dumps([t.model_dump() for t in req.tools])) if req.tools else 0
+    except (TypeError, ValueError):
+        tools_chars = 0
+    return {
+        "system_msgs": len(system),
+        "system_chars": sum(len(m.content or "") for m in system),
+        "history_msgs": len(req.messages) - len(system),
+        "tools_chars": tools_chars,
+        "max_tokens": req.max_tokens,
+    }
+
+
 def _log_llm_failure(provider: ChatProvider, req: ChatRequest, exc: ProviderError) -> None:
     """One line per failed model call, so "why did it answer with the fallback line?" has an answer in the logs.
 
@@ -126,6 +142,7 @@ async def run_turn(
     if citations:
         yield StreamEvent(type="citations", citations=citations)
 
+    sizes = _request_sizes(req)
     messages = list(req.messages)
     base_iters = max_iters if (executor is not None and req.tools) else 1
     if budget is not None:
@@ -342,6 +359,18 @@ async def run_turn(
     # and usage/cost must be attributed to the provider that actually answered.
     result.provider = provider.name
     result.model = getattr(provider, "active_model", None) or req.model
+    # The real size of the turn, as the provider counted it (summed over every model call in the turn).
+    log.info(
+        "turn_tokens",
+        provider=result.provider,
+        model=result.model,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        total_tokens=result.prompt_tokens + result.completion_tokens,
+        tool_rounds=len(result.tool_runs),
+        error=bool(result.error),
+        **sizes,
+    )
 
     yield StreamEvent(
         type="done",

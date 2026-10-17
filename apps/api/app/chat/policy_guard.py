@@ -43,6 +43,7 @@ from app.core.logging import get_logger
 log = get_logger("chat.policy_guard")
 
 _GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+_GEMINI_CHAT_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 _POLICY_DIR = Path(__file__).parent / "policies"
 
 DistressLevel = Literal["none", "mild", "elevated", "crisis"]
@@ -220,11 +221,19 @@ _failures: deque[float] = deque(maxlen=200)  # monotonic times of calls that end
 _last_alert = -1e9
 
 
-def _attempt_models() -> list[str]:
-    """The primary model (1 + retries times), then the fallback model once (its rate limit is its own)."""
-    models = [settings.guard_policy_model] * (1 + max(0, settings.guard_policy_retries))
-    fallback = settings.guard_policy_fallback_model.strip()
-    if fallback and fallback != settings.guard_policy_model:
+def _target(provider: str) -> tuple[str, str | None]:
+    """`(chat-completions URL, platform key)` for an L3 provider. Always the platform's key, never the org's."""
+    if provider == "gemini":
+        return _GEMINI_CHAT_URL, (settings.gemini_api_key or "").strip() or None
+    return _GROQ_CHAT_URL, platform_guard_key()
+
+
+def _attempt_models() -> list[tuple[str, str]]:
+    """`(provider, model)`: the primary (1 + retries times), then the fallback once (its limit is its own)."""
+    primary = (settings.guard_policy_provider, settings.guard_policy_model)
+    models = [primary] * (1 + max(0, settings.guard_policy_retries))
+    fallback = (settings.guard_policy_fallback_provider, settings.guard_policy_fallback_model.strip())
+    if fallback[1] and fallback != primary:
         models.append(fallback)
     return models
 
@@ -251,22 +260,27 @@ def _retry_delay(attempt: int, exc: BaseException) -> float:
 
 
 async def _post_once(
+    provider: str,
     model: str,
     system: str,
     context: str,
     text: str,
-    key: str,
     transport: httpx.AsyncBaseTransport | None,
 ) -> dict[str, Any]:
+    url, key = _target(provider)
+    if not key:
+        raise PermissionError(f"no platform key for the {provider} L3 provider")
     extra: dict[str, Any] = {}
-    if model.startswith("openai/gpt-oss"):
+    if provider == "groq" and model.startswith("openai/gpt-oss"):
         extra["reasoning_effort"] = "low"  # a reasoning model: keep it short, it only has to pick a level
+    elif provider == "groq" and model.startswith("qwen/"):
+        extra["reasoning_effort"] = "none"  # no hidden thinking: it would eat the completion cap
     budget_ms = settings.guard_policy_timeout_ms
     client, owned = guard_http.make_client(transport)
     try:
         resp = await guard_http.bounded(
             client.post(
-                _GROQ_CHAT_URL,
+                url,
                 timeout=httpx.Timeout(budget_ms / 1000.0),
                 headers={"Authorization": f"Bearer {key}"},
                 json={
@@ -353,7 +367,7 @@ async def classify(
     """
     if not settings.guard_policy_enabled or org_enabled is False:
         return None
-    key = platform_guard_key()
+    key = _target(settings.guard_policy_provider)[1]
     if not key or not (message or "").strip():
         if not key:
             metrics.observe_policy_call("unavailable", 0)
@@ -365,12 +379,12 @@ async def classify(
     started = time.monotonic()
     body: dict[str, Any] | None = None
     last_exc: BaseException | None = None
-    model = settings.guard_policy_model
+    provider, model = item = (settings.guard_policy_provider, settings.guard_policy_model)
     attempt = 0
     while queue:
-        model = queue.pop(0)
+        provider, model = item = queue.pop(0)
         try:
-            body = await _post_once(model, system, context, text, key, transport)
+            body = await _post_once(provider, model, system, context, text, transport)
             break
         except Exception as exc:
             last_exc = exc
@@ -379,6 +393,7 @@ async def classify(
             log.info(
                 "guard_l3_attempt_failed",
                 attempt=attempt + 1,
+                provider=provider,
                 model=model,
                 retryable=retryable,
                 error=guard_http.describe(exc, settings.guard_policy_timeout_ms),
@@ -387,21 +402,21 @@ async def classify(
             if not retryable or timed_out:
                 # The same request fails the same way again (413/400), or just spent the whole per-call budget
                 # (timeout): only the fallback model can differ.
-                queue = [m for m in queue if m != model]
+                queue = [q for q in queue if q != item]
             remaining_ms = settings.guard_policy_retry_budget_ms - (time.monotonic() - started) * 1000
             # A slow failure must leave room for another full call, or the turn waits on L3 for several seconds.
             needed_ms = settings.guard_policy_timeout_ms + guard_http.BOUND_MARGIN_SECONDS * 1000 if timed_out else 0
             if not queue or remaining_ms <= needed_ms:
                 break
-            if queue[0] == model:
+            if queue[0] == item:
                 await asyncio.sleep(_retry_delay(attempt, exc))
             attempt += 1
             metrics.observe_policy_call("retry", 0)
     if body is None:
         return _unavailable(cache_key, last_exc)
-    if model != settings.guard_policy_model:
+    if item != (settings.guard_policy_provider, settings.guard_policy_model):
         metrics.observe_policy_call("fallback_ok", 0)
-        log.info("guard_l3_fallback_used", model=model)
+        log.info("guard_l3_fallback_used", provider=provider, model=model)
 
     content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "")
     tokens = int((body.get("usage") or {}).get("total_tokens") or 0)
@@ -416,15 +431,15 @@ async def classify(
 
 
 def is_available() -> bool:
-    return bool(settings.guard_policy_enabled and platform_guard_key())
+    return bool(settings.guard_policy_enabled and _target(settings.guard_policy_provider)[1])
 
 
 def unavailable_reason() -> str | None:
     if not settings.guard_policy_enabled:
         return "disabled by configuration (GUARD_POLICY_ENABLED=false)"
-    if not platform_guard_key():
+    if not _target(settings.guard_policy_provider)[1]:
         return (
-            "no platform GROQ_API_KEY — conversations are not being graded for distress, so "
-            "the attention queue stays empty whether or not anyone needs help"
+            f"no platform {settings.guard_policy_provider.upper()}_API_KEY — conversations are not being "
+            "graded for distress, so the attention queue stays empty whether or not anyone needs help"
         )
     return None

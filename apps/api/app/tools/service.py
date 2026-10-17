@@ -29,6 +29,7 @@ from app.modules.orgs.deps import OrgContext
 from app.tools import schemas
 from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS
+from app.tools.compact import compact_description, compact_schema
 from app.tools.http_tool import execute_http_tool
 from app.tools.mcp_client import MCPToolError
 from app.tools.mcp_client import list_tools as mcp_list_tools
@@ -191,10 +192,10 @@ async def resolve_agent_tools(
     specs = [
         ToolSpec(
             name=t.name,
-            description=t.description or "",
+            description=compact_description(t.description),
             # n8n schemas are repaired on read so tools bound before the fix stop
             # breaking turns without needing a data migration.
-            parameters=(
+            parameters=compact_schema(
                 relax_n8n_schema(t.input_schema) if t.type == "n8n" else (t.input_schema or {})
             ),
         )

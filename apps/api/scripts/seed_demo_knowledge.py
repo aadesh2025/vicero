@@ -91,7 +91,7 @@ async def seed(session: AsyncSession, agent_id: uuid.UUID, directory: Path, publ
         )
     print(f"knowledge base {kb_out.id}: {len(docs)} documents queued for ingestion")
 
-    latest = (await agents.list_versions(session, ctx, agent_id))[-1]
+    latest = max(await agents.list_versions(session, ctx, agent_id), key=lambda v: v.version)
     rag = {**latest.rag_config, "enabled": True, "knowledge_base_ids": [str(kb_out.id)]}
     features = {**latest.features, "handoff_enabled": True}
     patched = await agents.update_version(

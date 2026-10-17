@@ -357,6 +357,7 @@ async def test_fallback_reports_tool_support_conservatively() -> None:
     mixed = FallbackChatProvider([(_StreamProvider("a"), None), (_NoTools("b"), None)])
     assert mixed.supports_tools() is False
 
-    # No fallbacks configured → the primary is returned untouched (no wrapper overhead).
+    # No fallbacks configured → still wrapped (one link): the wrapper is also what retries a 429 (ADR-125).
     primary = _StreamProvider("solo")
-    assert build_fallback_chain(primary, "m", []) is primary
+    solo = build_fallback_chain(primary, "m", [])
+    assert isinstance(solo, FallbackChatProvider) and solo.name == "solo"

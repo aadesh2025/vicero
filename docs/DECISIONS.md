@@ -18,6 +18,20 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-125: Smaller chat turns, one Retry-After retry, L3 on its own provider, tokens logged per turn
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Constraint:** free tiers only (no paid Groq).
+- **Context:** Groq's free tier gives each model its own tokens-per-minute bucket: 8,000 for `gpt-oss-120b`, `gpt-oss-20b` and `qwen3.8-27b`, and 2,000 for `gpt-oss-safeguard-20b`. The L3 guard sat on the 2,000 bucket with a ~1,450-token policy, so it could make about one call a minute and 429'd on nearly every turn. A plain question cost ~2,500 tokens (one model call); a turn that used a tool made two calls and cost 5,000-8,700, so two messages inside a minute exhausted the main model.
+- **Decision:**
+  1. **Smaller turns.** `rag_context_char_budget` 8000 -> 3000 chars and per-agent `top_k` 5 -> 3; `memory_window_messages` 12 -> 6; `max_tokens` 400 on the agent; a shorter system prompt; tool definitions sent compact (`tools/compact.py`: no `title`, `additionalProperties`, length limits or defaults; descriptions collapsed and capped; the server still validates every call).
+  2. **L3 off the chat's bucket.** `GUARD_POLICY_MODEL` defaults to `openai/gpt-oss-20b` (own 8,000 bucket; 5/5 on the labelled samples, where `qwen3.8-27b` missed the abuse one), fallback `qwen/qwen3.8-27b`; timeout 1.2 s -> 2.5 s because these models answer in 0.7-2.8 s. `GUARD_POLICY_PROVIDER=gemini` (+ `GEMINI_API_KEY`, free tier, model e.g. `gemini-2.5-flash-lite`) moves L3 to another provider entirely. Fail-closed alerting is unchanged: no key logs `guard_l3_unavailable_repeated` and shows in `unavailable_reason()`.
+  3. **A third main-chat provider.** Gemini's free tier (2.5 Flash / Flash-Lite, 250k tokens/min, function calling) is the right one. OpenRouter's free models were rejected: 50 requests/day, tool support varies by model, and the list changes weekly. It activates when `GEMINI_API_KEY` is set; a fallback entry whose key is missing is skipped with a log line.
+  4. **429 handling.** `ProviderError.retry_after` carries the `Retry-After` header; the fallback chain waits that long (or `LLM_RETRY_DEFAULT_SECONDS`) and retries the same model once, only when the wait is at most `LLM_RETRY_AFTER_MAX_SECONDS` (3 s), then moves on. The chain now always wraps the primary so single-model agents get the retry too. Never after output has started.
+  5. **`turn_tokens` log line** per turn: provider-counted prompt/completion/total tokens (summed over the turn's model calls), tool rounds, and request sizes in characters (system, history messages, tools). No text.
+  6. `list_versions()` returns newest first; the installer and seed scripts took `[-1]` (the oldest). They now take the highest version.
+- **Consequences:** answers draw on three chunks instead of five and the last six messages; the shortened prompt and tool text need the demo-knowledge comparison (see PROGRESS). A fallback model can behave differently from the primary.
+
 ### ADR-123: Model fallback within one provider; failed model calls are logged
 - **Date:** 2026-10-16
 - **Status:** accepted

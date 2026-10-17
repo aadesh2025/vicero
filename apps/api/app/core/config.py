@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # How long Ollama keeps the embedding model loaded after a call. Its own default is 5 minutes, after
     # which the next customer message paid ~8 s to load it again (ADR-122).
     ollama_keep_alive: str = "24h"
+    # After a 429 the same model is tried once more, after the provider's `Retry-After` (or this default) and only
+    # when that wait is at most `llm_retry_after_max_seconds`; a longer wait goes straight to the next model.
+    llm_retry_default_seconds: float = 1.0
+    llm_retry_after_max_seconds: float = 3.0
     # Warm-up on worker start + every `warmup_interval_seconds` (beat): embedding model, database, and the
     # DNS/TLS to Groq and Meta. A stage slower than `warmup_cold_ms` is logged as `warmup_stage_cold`.
     warmup_enabled: bool = True
@@ -76,7 +80,7 @@ class Settings(BaseSettings):
     # Directory for uploaded/ingested document files (created on demand).
     upload_dir: str = "./var/uploads"
     # Ceiling on characters of retrieved context injected into a prompt (token budgeting).
-    rag_context_char_budget: int = 8000
+    rag_context_char_budget: int = 3000  # ~750 tokens: three chunks (was 8000, ADR-125)
     # Weight of the keyword (Postgres FTS) list in the hybrid RRF fusion; the dense list is
     # always 1.0. Textbook RRF weights every list equally, which assumes the two retrievers are
     # comparable. Measured on the frozen eval corpus they are not — dense NDCG@10 0.898 against
@@ -167,7 +171,7 @@ class Settings(BaseSettings):
 
     # --- Chat runtime / memory ---
     # How many recent turns (user+assistant messages) to keep verbatim in the prompt.
-    memory_window_messages: int = 12
+    memory_window_messages: int = 6  # last 6 messages go to the model (was 12, ADR-125)
     # Once a conversation exceeds this many messages, older turns are summarized.
     memory_summary_threshold: int = 24
     # Summarizer provider/model — deliberately a small/fast model, NOT the agent's model
@@ -221,15 +225,21 @@ class Settings(BaseSettings):
     # Grades each customer message against the markdown in `app/chat/policies/` — abuse,
     # off-topic, PII request, and a four-level distress read that drives the attention queue.
     guard_policy_enabled: bool = True
-    guard_policy_model: str = "openai/gpt-oss-safeguard-20b"
+    # Own rate-limit bucket, not the main chat's (ADR-125). Groq caps `gpt-oss-safeguard-20b` at 2,000 tokens a
+    # minute on the free tier, which is about one L3 call a minute (the policy alone is ~1,450 tokens): it 429'd
+    # on nearly every turn. `gpt-oss-20b` has 8,000 a minute and graded all five labelled samples correctly.
+    # `guard_policy_provider` is `groq` or `gemini` (free tier, needs GEMINI_API_KEY; set the model to match,
+    # e.g. `gemini-2.5-flash-lite`), so L3 can sit on a different provider from the chat entirely.
+    guard_policy_provider: str = "groq"
+    guard_policy_model: str = "openai/gpt-oss-20b"
     # It is a reasoning model (~200-300ms observed), so the budget is wider than L2's.
-    guard_policy_timeout_ms: int = 1200
+    guard_policy_timeout_ms: int = 2500
     # Groq rejects a request with 413 when prompt + the completion it reserves exceeds the model's
     # tokens-per-minute limit, which is 2000 for this model on the free tier (measured on prod: the
     # ~1450-token policy prompt plus the default completion reservation asked for 2836). The request is
     # sized to fit this ceiling instead: the completion is capped, and the customer text is windowed to
     # whatever room is left. Raise it on a paid tier.
-    guard_policy_max_request_tokens: int = 2000
+    guard_policy_max_request_tokens: int = 4000
     guard_policy_max_completion_tokens: int = 300
     # Resilience (ADR-122). A 429/5xx/timeout is retried on the same model with backoff (up to
     # `retries` more times, never past `retry_budget_ms` in total), then tried once on the fallback model,
@@ -237,7 +247,8 @@ class Settings(BaseSettings):
     guard_policy_retries: int = 2
     guard_policy_retry_backoff_ms: int = 250
     guard_policy_retry_budget_ms: int = 2500
-    guard_policy_fallback_model: str = "openai/gpt-oss-20b"
+    guard_policy_fallback_provider: str = "groq"
+    guard_policy_fallback_model: str = "qwen/qwen3.8-27b"
     # When no attempt works, reuse this conversation's last elevated-or-worse verdict for this long
     # instead of silently treating the message as calm.
     guard_policy_sticky_ttl_seconds: int = 600

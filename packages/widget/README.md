@@ -93,6 +93,8 @@ cd packages/widget && npm run build
 Copies (and minifies with esbuild if available) `src/widget.js` → `dist/widget.js` and
 `apps/web/public/widget.js` so the web app serves it at `/widget.js`. Never edit the built files.
 
-Size (shipped, unminified because `build.mjs` does not find esbuild from this package):
-40,040 B (12.4 KB gzip) before docs/27, 102,843 B (27.1 KB gzip) after. With esbuild minification the same
-sources are 22.8 KB → 66.8 KB (8.0 KB → 18.9 KB gzip).
+The build minifies with esbuild, a devDependency of this package only (`npm ci` here first; the build
+fails loudly if it is missing). The widget itself still has no runtime dependencies.
+
+Size as shipped: 40,040 B (12.4 KB gzip) before docs/27 (it was never minified); 102,843 B (27.1 KB gzip)
+with layouts + blocks unminified; **67,439 B (18.9 KB gzip)** minified.

@@ -1,6 +1,7 @@
-// Zero-dependency "build": the widget is already vanilla JS, so we lightly strip the
-// license banner's leading whitespace and copy it to dist/ and to the web app's public/
-// dir (served at /widget.js). If esbuild is installed, we minify; otherwise we plain-copy.
+// The widget is vanilla JS with no runtime dependencies. This build minifies it with esbuild (a
+// devDependency of this package only: `npm ci` in packages/widget) and writes it to dist/ and to the
+// web app's public/ dir (served at /widget.js). It fails loudly if esbuild is missing, so an
+// unminified bundle can never be shipped by accident.
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,13 +16,15 @@ mkdirSync(distDir, { recursive: true });
 mkdirSync(webPublic, { recursive: true });
 
 let js = readFileSync(srcJs, "utf8");
+let esbuild;
 try {
-  const esbuild = await import("esbuild");
-  js = (await esbuild.transform(js, { minify: true, loader: "js" })).code;
-  console.log("[widget] minified with esbuild");
+  esbuild = await import("esbuild");
 } catch {
-  console.log("[widget] esbuild not found — shipping unminified");
+  console.error("[widget] esbuild is not installed. Run `npm ci` in packages/widget, then build again.");
+  process.exit(1);
 }
+js = (await esbuild.transform(js, { minify: true, loader: "js", legalComments: "inline" })).code;
+console.log("[widget] minified with esbuild");
 
 writeFileSync(resolve(distDir, "widget.js"), js);
 writeFileSync(resolve(webPublic, "widget.js"), js);

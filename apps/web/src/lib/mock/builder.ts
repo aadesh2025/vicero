@@ -45,6 +45,8 @@ export interface FeatureToggles {
   tools: boolean;
   memory: boolean;
   handoff: boolean;
+  /** Let the agent look up the product catalog and send product photos (docs/26). */
+  catalog: boolean;
 }
 
 export type FloatingButtonStyle =
@@ -57,9 +59,9 @@ export type FloatingButtonStyle =
 
 export type WidgetFont = "system" | "inter" | "arial" | "georgia" | "courier";
 export type InputBarButton = "attachment" | "emoji";
+export type { WidgetLayout, WidgetDensity } from "@/lib/widget-layouts";
 
 export interface WidgetConfig {
-export type { WidgetLayout, WidgetDensity } from "@/lib/widget-layouts";
   primaryColor: string;
   position: "bottom-right" | "bottom-left";
   launcherText: string;
@@ -76,14 +78,14 @@ export type { WidgetLayout, WidgetDensity } from "@/lib/widget-layouts";
   floatingButtonStyle: FloatingButtonStyle | null;
   floatingButtonColor: string | null;
   inputBarButtons: InputBarButton[];
-  /** Websites allowed to embed the widget (hostnames). Empty = any site. */
-  allowedSites: string[];
   /** Structural design (docs/27). null = the original look, unchanged. */
   widgetLayout: import("@/lib/widget-layouts").WidgetLayout | null;
   /** Corner radius in px, 0-28. null = the original radii. */
   cornerRadius: number | null;
   /** Spacing. null = the original spacing. */
   density: import("@/lib/widget-layouts").WidgetDensity | null;
+  /** Websites allowed to embed the widget (hostnames). Empty = any site. */
+  allowedSites: string[];
 }
 
 export interface AgentDraft {

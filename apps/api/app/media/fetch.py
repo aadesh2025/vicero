@@ -12,7 +12,6 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.channels.meta_graph import graph_base
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -30,6 +29,12 @@ _MAX_HOPS = 3
 
 class MediaFetchError(Exception):
     """The photo could not be downloaded. The message is for logs, never for the customer."""
+
+
+def graph_base() -> str:
+    # Same URL as `channels.meta_graph.graph_base`, restated here so this package does not import `channels`
+    # (which imports it - a package cycle).
+    return f"https://graph.facebook.com/{settings.meta_graph_version}"
 
 
 def host_allowed(url: str) -> bool:

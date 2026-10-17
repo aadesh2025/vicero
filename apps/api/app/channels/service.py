@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
@@ -21,11 +22,12 @@ from app.core.config import settings
 from app.core.crypto import encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.media import urls as media_urls
 from app.media import vision
 from app.media.fetch import MediaFetchError, fetch_url, fetch_whatsapp
 from app.media.service import save_asset
 from app.media.store import get_store
-from app.models import Agent, AgentVersion, Channel, Contact, Conversation, MediaAsset
+from app.models import Agent, AgentVersion, Channel, Contact, Conversation, MediaAsset, Message
 from app.modules.orgs.deps import OrgContext
 
 log = get_logger("channels.service")
@@ -357,30 +359,48 @@ def _turn_media(
     return prepare
 
 
+@dataclass
+class InboundOutcome:
+    """What one inbound message produced: the parsed message, the text reply, and any photos to send after it."""
+
+    msg: InboundMessage | None = None
+    reply: str | None = None
+    media: list[uuid.UUID] = field(default_factory=list)
+    assistant_message: Message | None = None
+
+
 async def process_inbound(
     session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]
 ) -> tuple[InboundMessage | None, str | None]:
     """Parse → run the bot turn → return (message, reply_text|None). Caller delivers the reply."""
+    outcome = await process_inbound_full(session, channel, adapter, payload)
+    return outcome.msg, outcome.reply
+
+
+async def process_inbound_full(
+    session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]
+) -> InboundOutcome:
     msg = adapter.parse_inbound(channel, payload)
     if msg is None:
-        return None, None
+        return InboundOutcome()
     if not channel.enabled:
         log.info("channel_inbound_ignored_disabled", channel=str(channel.id))
-        return msg, None
+        return InboundOutcome(msg)
     with stage_timing.stage("channel_load"):
         agent = await session.get(Agent, channel.agent_id)
         if agent is None or agent.deleted_at is not None:
-            return msg, None
+            return InboundOutcome(msg)
         version = await _live_version(session, agent)
         if version is None:
-            return msg, None
+            return InboundOutcome(msg)
     with stage_timing.stage("contact"):  # includes the Graph profile fetch while name/photo are unknown
         contact = await resolve_contact(session, channel, adapter, msg.external_user_id, msg.profile)
         conv = await _get_or_create_conversation(session, channel, msg.external_user_id, contact)
     turn = await _build_turn(session, channel, adapter, agent, version, conv, contact, msg)
     await turn.run()
     reply = None if turn.handed_off else ((turn.result.content or "").strip() or None)
-    return msg, reply
+    media = [] if turn.handed_off else list(turn.result.outbound_media)
+    return InboundOutcome(msg, reply, media, turn.assistant_message)
 
 
 async def _build_turn(
@@ -395,15 +415,22 @@ async def _build_turn(
 ) -> InboundTurn:
     """A text message is the unchanged path. Anything with media branches here (docs/26 §M2)."""
     if not msg.media:
-        return InboundTurn(session, agent, version, conv, msg.text)
+        return InboundTurn(session, agent, version, conv, msg.text, supports_images=adapter.supports_images)
 
     images = [m for m in msg.media if m.kind == "image"]
     if not images or not settings.media_feature_enabled:
         kind = msg.media[0].kind if not images else "photo"
         return InboundTurn(
-            session, agent, version, conv, msg.text or f"[Customer sent a {kind}]", canned_reply=MEDIA_UNSUPPORTED_REPLY
+            session,
+            agent,
+            version,
+            conv,
+            msg.text or f"[Customer sent a {kind}]",
+            canned_reply=MEDIA_UNSUPPORTED_REPLY,
+            supports_images=adapter.supports_images,
         )
 
+    await adapter.send_typing(channel, msg.external_user_id)  # the download + vision call takes a few seconds
     assets, failed = await _store_images(session, channel, adapter, images, contact)
     attachments: list[dict[str, Any]] = [
         {"media_id": str(a.id), "kind": "image", "direction": "in", "description": a.description} for a in assets
@@ -417,20 +444,61 @@ async def _build_turn(
         caption or "[Customer sent a photo]",
         attachments=attachments,
         prepare=_turn_media(session, channel.organization_id, caption, assets, failed, attachments),
+        supports_images=adapter.supports_images,
     )
 
 
 async def run_and_send(session: AsyncSession, channel: Channel, adapter: BaseChannel, payload: dict[str, Any]) -> None:
     """process_inbound, then deliver the reply. Shared by every webhook entry point."""
-    msg, reply = await process_inbound(session, channel, adapter, payload)
-    if msg is not None and reply:
+    outcome = await process_inbound_full(session, channel, adapter, payload)
+    msg = outcome.msg
+    if msg is None or not (outcome.reply or outcome.media):
+        return
+    if outcome.reply:
         try:
             with stage_timing.stage("send"):
-                await adapter.send(channel, msg.external_user_id, reply)
+                await adapter.send(channel, msg.external_user_id, outcome.reply)
         except ChannelAuthRejected:
             # Dead token: say so on the dashboard instead of failing silently. The customer's message is saved.
             await flag_token_rejected(session, channel)
+            return
         except Exception as exc:
             # The inbound is already persisted; a provider-delivery failure must not
             # 500 the webhook (that makes Telegram/Meta re-deliver → duplicate turns).
             log.warning("channel_delivery_failed", channel_type=channel.type, error=str(exc))
+            return
+    if outcome.media and adapter.supports_images:
+        await _send_images(session, channel, adapter, msg.external_user_id, outcome)
+
+
+async def _send_images(
+    session: AsyncSession, channel: Channel, adapter: BaseChannel, to: str, outcome: InboundOutcome
+) -> None:
+    """Send the queued product photos after the text reply (docs/26 §M4).
+
+    One bad photo must not stop the rest. A dead token or a closed WhatsApp window would fail every
+    remaining photo the same way, so those end the loop. What was actually delivered is recorded on the
+    assistant message, so the inbox shows what the customer received.
+    """
+    sent: list[dict[str, Any]] = []
+    for media_id in outcome.media[: settings.max_images_per_reply]:
+        asset = await session.get(MediaAsset, media_id)
+        if asset is None or asset.organization_id != channel.organization_id:
+            continue
+        try:
+            with stage_timing.stage("send_image"):
+                delivered = await adapter.send_image(channel, to, media_urls.public_url(media_id))
+        except ChannelAuthRejected:
+            await flag_token_rejected(session, channel)
+            break
+        except AppError as exc:  # e.g. the WhatsApp window closed: every further photo would fail too
+            log.warning("media_send_rejected", channel_type=channel.type, channel=str(channel.id), error=exc.code)
+            break
+        except Exception as exc:
+            log.warning("media_send_rejected", channel_type=channel.type, channel=str(channel.id), error=str(exc)[:120])
+            continue
+        if delivered:
+            sent.append({"media_id": str(media_id), "kind": "image", "direction": "out", "description": None})
+    if sent and outcome.assistant_message is not None:
+        outcome.assistant_message.attachments = sent
+        await session.flush()

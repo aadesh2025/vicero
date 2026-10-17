@@ -29,6 +29,7 @@ from app.chat.handoff import (
 from app.chat.pii import build_allowlist
 from app.chat.runtime import TurnResult, run_turn
 from app.core.audit import write_audit
+from app.core.catalog import CATALOG_INSTRUCTION, catalog_enabled
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.ratelimit import limiter
@@ -76,6 +77,7 @@ class InboundTurn:
         attachments: list[dict[str, Any]] | None = None,
         prepare: Callable[[], Awaitable[str]] | None = None,
         canned_reply: str | None = None,
+        supports_images: bool = False,
     ) -> None:
         self.session = session
         self.agent = agent
@@ -90,6 +92,8 @@ class InboundTurn:
         self.prepare = prepare
         #: Said instead of generating, for media the bot cannot read (voice notes, video, ...).
         self.canned_reply = canned_reply
+        #: The channel can send images, so the agent is offered `send_product_images` (docs/26 §M4).
+        self.supports_images = supports_images
         self.result = TurnResult()
         self.handed_off = False
         #: The plan is out (trial over / messages spent), so the bot stayed silent. The visitor's
@@ -295,6 +299,8 @@ class InboundTurn:
             business_name=org.name if org else None,
             variables=await self._variables(org),
         )
+        if catalog_enabled(self.version):
+            system_prompt = "\n\n".join(p for p in (system_prompt, CATALOG_INSTRUCTION) if p)
         # mild/elevated steer the tone; the bot keeps answering either way. Only `crisis`
         # suppresses generation, and it is handled below with a written holding message.
         if policy is not None and (directive := policy_guard.TONE_DIRECTIVES.get(policy.distress)):
@@ -373,7 +379,13 @@ class InboundTurn:
             org_for_flags = await self._org()
             include_mcp = agentic_loop_enabled(org_for_flags.agentic_loop_enabled if org_for_flags else None)
             specs, executor = await build_tooling(
-                session, org_id, self.agent, self.version, conv.id, include_mcp=include_mcp
+                session,
+                org_id,
+                self.agent,
+                self.version,
+                conv.id,
+                include_mcp=include_mcp,
+                outbound_media=self.result.outbound_media if self.supports_images else None,
             )
             if specs and executor is not None and provider.supports_tools():
                 req.tools = specs

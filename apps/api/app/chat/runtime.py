@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -71,6 +72,11 @@ class TurnResult:
     # `budget` — i.e. only for orgs with the agentic runtime on. Persisted to `agent_steps`
     # by the caller once the assistant `Message` row exists (see conversations/service.py).
     agent_steps: list[dict[str, Any]] = field(default_factory=list)
+    #: Media assets (product photos) the agent chose to send after its text reply (docs/26 §M4).
+    outbound_media: list[uuid.UUID] = field(default_factory=list)
+    #: Interactive blocks the agent queued this turn (docs/27 Phase 2). Cleared if the output guard or a
+    #: provider failure discards the turn; whatever is left is persisted and was shown to the visitor.
+    blocks: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def cost_micros(self) -> int:

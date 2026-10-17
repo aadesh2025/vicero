@@ -19,7 +19,7 @@ EXPECTED_TABLES = {
     "agents", "agent_versions", "provider_credentials",
     "knowledge_bases", "documents", "chunks",
     "canned_responses", "contacts", "crm_contacts", "conversations", "conversation_flags",
-    "messages",
+    "messages", "media_assets", "products", "product_images",
     "tools", "tool_runs", "channels", "handoffs", "macros",
     "bookings", "google_calendar_connections",
     "automation_requests", "automations", "automation_runs", "data_deletion_requests",

@@ -36,12 +36,16 @@ async def save_asset(
     img = sanitize_image(raw)
 
     existing = (
-        await session.execute(
-            select(MediaAsset).where(
-                MediaAsset.organization_id == org_id, MediaAsset.kind == kind, MediaAsset.sha256 == img.sha256
+        (
+            await session.execute(
+                select(MediaAsset).where(
+                    MediaAsset.organization_id == org_id, MediaAsset.kind == kind, MediaAsset.sha256 == img.sha256
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if existing is not None and kind != "product":
         # A Meta redelivery of the same photo. (Product photos are never shared between rows, so that
         # deleting one product's picture can never pull it from under another's.)
@@ -77,6 +81,12 @@ async def save_asset(
     if kind == "product":
         await usage.adjust_storage_bytes(session, org_id, asset.bytes)
     return asset
+
+
+async def get_org_asset(session: AsyncSession, org_id: uuid.UUID, media_id: uuid.UUID) -> MediaAsset | None:
+    return (
+        await session.execute(select(MediaAsset).where(MediaAsset.id == media_id, MediaAsset.organization_id == org_id))
+    ).scalar_one_or_none()
 
 
 async def delete_asset(session: AsyncSession, asset: MediaAsset) -> None:

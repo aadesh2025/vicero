@@ -60,6 +60,7 @@ export function versionToDraft(
       tools: (feat.tools_enabled as boolean) ?? false,
       memory: (feat.memory_enabled as boolean) ?? true,
       handoff: (feat.handoff_enabled as boolean) ?? false,
+      catalog: (feat.product_catalog_enabled as boolean) ?? false,
     },
     widget: {
       primaryColor: (w.primaryColor as string) ?? "#1F2937",
@@ -77,10 +78,10 @@ export function versionToDraft(
       floatingButtonStyle: (w.floatingButtonStyle as AgentDraft["widget"]["floatingButtonStyle"]) ?? null,
       floatingButtonColor: (w.floatingButtonColor as string) ?? null,
       inputBarButtons: (w.inputBarButtons as AgentDraft["widget"]["inputBarButtons"]) ?? ["attachment"],
-      allowedSites: Array.isArray(w.allowedSites) ? (w.allowedSites as string[]) : [],
       widgetLayout: (w.widgetLayout as AgentDraft["widget"]["widgetLayout"]) ?? null,
       cornerRadius: typeof w.cornerRadius === "number" ? w.cornerRadius : null,
       density: (w.density as AgentDraft["widget"]["density"]) ?? null,
+      allowedSites: Array.isArray(w.allowedSites) ? (w.allowedSites as string[]) : [],
     },
   };
 }
@@ -122,7 +123,12 @@ export function draftToPatch(draft: AgentDraft): Record<string, unknown> {
       score_threshold: k.scoreThreshold,
       hybrid: k.hybrid,
     },
-    features: { tools_enabled: f.tools, memory_enabled: f.memory, handoff_enabled: f.handoff },
+    features: {
+      tools_enabled: f.tools,
+      memory_enabled: f.memory,
+      handoff_enabled: f.handoff,
+      product_catalog_enabled: f.catalog,
+    },
   };
 }
 
@@ -148,9 +154,9 @@ export function draftToWidgetConfig(draft: AgentDraft): Record<string, unknown> 
     floatingButtonStyle: w.floatingButtonStyle,
     floatingButtonColor: w.floatingButtonColor,
     inputBarButtons: w.inputBarButtons,
-    allowedSites: w.allowedSites,
-  };
-}
     widgetLayout: w.widgetLayout ?? null,
     cornerRadius: w.cornerRadius ?? null,
     density: w.density ?? null,
+    allowedSites: w.allowedSites,
+  };
+}

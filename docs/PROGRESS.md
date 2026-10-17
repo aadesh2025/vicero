@@ -2242,3 +2242,12 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 ## Same-provider model fallback + LLM failure log (2026-10-16, ADR-123)
 
 - A model can fall back to another model of the same provider (`model_config.fallbacks`); `llm_call_failed` is logged for every failed model call, without customer text.
+
+## Images on WhatsApp / Instagram / Messenger + product catalog (2026-10-16, ADR-124, docs/26)
+
+- **M1 media foundation:** migration 0036; local media store; Pillow sanitiser; storage accounting for product photos; signed public URLs and authenticated `GET /v1/media/{id}`; daily retention job; Meta data-deletion removes a contact's photos.
+- **M2 customer photos:** WhatsApp / Messenger / Instagram parse images (other media gets a polite reply); safe download; describe-first vision (Gemini by default); the description is guarded like typed text; no vision call for silenced or human-handled chats.
+- **M3 catalog:** `/v1/products` CRUD, up to 5 photos each, hybrid search; Products page; "Use product catalog" switch on the agent's Model tab.
+- **M4 sending:** `send_image` on the three Meta adapters; `search_products` / `send_product_images` tools; text first, then up to 3 photos.
+- **M5 inbox:** photos in the thread (click to enlarge, alt text from the description, "deleted after 30 days"); operator can send a photo; typing indicator while a photo is processed.
+- Needs from you: `MEDIA_URL_SIGNING_KEY` in the production `.env`, the media volume and backup (runbook section 16), and the live checks on real WhatsApp / Instagram / Messenger accounts. Not verified live: Meta's real size limits and that no extra permission is needed for attachments.

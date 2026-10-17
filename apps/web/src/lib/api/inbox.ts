@@ -1,6 +1,6 @@
 "use client";
 
-import { api } from "./client";
+import { api, apiForm } from "./client";
 import { API_BASE } from "./config";
 import { getAccessToken, getActiveOrgId } from "./tokens";
 import type { ApiMessage } from "./conversations";
@@ -107,6 +107,14 @@ export function replyInbox(cid: string, text: string) {
     orgScoped: true,
     body: { text },
   });
+}
+
+/** Send one photo (with an optional caption) from the operator's reply box. */
+export function sendInboxImage(cid: string, file: File, caption?: string) {
+  const form = new FormData();
+  form.append("file", file);
+  if (caption?.trim()) form.append("caption", caption.trim());
+  return apiForm<ApiMessage>(`/v1/inbox/conversations/${cid}/images`, form);
 }
 
 /** Re-open a WhatsApp conversation whose 24-hour free-form window has closed. */

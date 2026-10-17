@@ -515,6 +515,7 @@ def _message_out(m: Message) -> schemas.MessageOut:
         tool_calls=m.tool_calls,
         tool_call_id=m.tool_call_id,
         citations=m.citations,
+        attachments=m.attachments or [],
         provider=m.provider,
         model=m.model,
         tokens_prompt=m.tokens_prompt,

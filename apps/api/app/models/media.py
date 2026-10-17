@@ -34,9 +34,7 @@ class MediaAsset(Base, UUIDPrimaryKey):
     __tablename__ = "media_assets"
     __table_args__ = (Index("ix_media_assets_org_sha", "organization_id", "sha256"),)
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # inbound | product | operator
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     mime: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -50,9 +48,7 @@ class MediaAsset(Base, UUIDPrimaryKey):
     #: The contact who sent an inbound photo, so a data-deletion request can find it.
     contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"))
     expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    created_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class Product(Base, UUIDPrimaryKey, TimestampMixin):
@@ -62,9 +58,7 @@ class Product(Base, UUIDPrimaryKey, TimestampMixin):
         Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
     )
 
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
-    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     sku: Mapped[str | None] = mapped_column(String(100))
     price_minor: Mapped[int | None] = mapped_column(BigInteger)

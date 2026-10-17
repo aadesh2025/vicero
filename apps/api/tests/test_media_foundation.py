@@ -161,6 +161,9 @@ async def test_routes_auth_and_public_signed(client: AsyncClient, db_session: As
     exp, sig = urls.sign(asset.id)
     pub = await client.get(f"/v1/media/public/{asset.id}", params={"exp": exp, "sig": sig})
     assert pub.status_code == 200 and pub.content == ok.content
+    # The dashboard embeds the signed link cross-origin; the API-wide `same-origin` policy would block it.
+    assert pub.headers["cross-origin-resource-policy"] == "cross-origin"
+    assert ok.headers["cross-origin-resource-policy"] == "same-origin"
     bad = await client.get(f"/v1/media/public/{asset.id}", params={"exp": exp, "sig": "0" * 64})
     assert bad.status_code == 404
     old_exp, old_sig = urls.sign(asset.id, ttl=-5)

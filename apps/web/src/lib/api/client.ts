@@ -121,6 +121,17 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   return (await res.json()) as T;
 }
 
+/** Fetch a binary (an inbox photo) with the session's auth. An <img src> cannot send a Bearer token. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const sentToken = getAccessToken();
+  let res = await fetch(`${API_BASE}${path}`, { headers: buildHeaders(true) });
+  if (res.status === 401 && (await tryRefresh(sentToken))) {
+    res = await fetch(`${API_BASE}${path}`, { headers: buildHeaders(true) });
+  }
+  if (!res.ok) throw await toError(res);
+  return res.blob();
+}
+
 /** Upload multipart form data (used for document file uploads). */
 export async function apiForm<T>(path: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = {};

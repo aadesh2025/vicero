@@ -98,7 +98,8 @@ def _messaging(obj: str, message: dict[str, Any]) -> dict[str, Any]:
 def test_facebook_parse_single_and_multi_image() -> None:
     adapter = get_channel("facebook")
     one = adapter.parse_inbound(
-        object(), _messaging("page", {"mid": "m", "attachments": [{"type": "image", "payload": {"url": "https://x/1"}}]})
+        object(),
+        _messaging("page", {"mid": "m", "attachments": [{"type": "image", "payload": {"url": "https://x/1"}}]}),
     )
     assert one is not None and one.text == "" and one.media == [MediaRef(kind="image", url="https://x/1")]
     four = adapter.parse_inbound(
@@ -121,7 +122,8 @@ def test_instagram_parse_image_story_mention_and_sticker() -> None:
     )
     assert img is not None and img.media[0].kind == "image"
     story = adapter.parse_inbound(
-        object(), _messaging("instagram", {"attachments": [{"type": "story_mention", "payload": {"url": "https://x/s"}}]})
+        object(),
+        _messaging("instagram", {"attachments": [{"type": "story_mention", "payload": {"url": "https://x/s"}}]}),
     )
     assert story is None
     share = adapter.parse_inbound(
@@ -416,8 +418,10 @@ async def test_handoff_conversation_stores_photo_but_spends_no_vision_call(
     cid = await _wa_channel(client, await _headers(client, "ph5@example.com"))
     await _post_wa(client, cid, {"type": "text", "text": {"body": "hi"}})
     conv = (
-        await db_session.execute(select(Conversation).where(Conversation.organization_id == _STATE["org"]))
-    ).scalars().one()
+        (await db_session.execute(select(Conversation).where(Conversation.organization_id == _STATE["org"])))
+        .scalars()
+        .one()
+    )
     conv.status = "handoff"
     await db_session.flush()
     sent_before = len(_sends(calls))

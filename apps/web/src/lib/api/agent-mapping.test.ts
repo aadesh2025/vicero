@@ -132,3 +132,18 @@ describe("allowed websites", () => {
     expect(draftToWidgetConfig(d).allowedSites).toEqual(["customer.com"]);
   });
 });
+
+describe("widget layouts", () => {
+  it("an untouched agent has no layout, radius or density", () => {
+    const w = versionToDraft(agent, version()).widget;
+    expect([w.widgetLayout, w.cornerRadius, w.density]).toEqual([null, null, null]);
+    const sent = draftToWidgetConfig(versionToDraft(agent, version()));
+    expect([sent.widgetLayout, sent.cornerRadius, sent.density]).toEqual([null, null, null]);
+  });
+
+  it("round-trips layout, corners and spacing through the widget config", () => {
+    const d = versionToDraft(agent, version(), { widgetLayout: "glass", cornerRadius: 0, density: "roomy" });
+    expect(d.widget).toMatchObject({ widgetLayout: "glass", cornerRadius: 0, density: "roomy" });
+    expect(draftToWidgetConfig(d)).toMatchObject({ widgetLayout: "glass", cornerRadius: 0, density: "roomy" });
+  });
+});

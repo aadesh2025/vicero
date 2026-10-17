@@ -59,6 +59,7 @@ export type WidgetFont = "system" | "inter" | "arial" | "georgia" | "courier";
 export type InputBarButton = "attachment" | "emoji";
 
 export interface WidgetConfig {
+export type { WidgetLayout, WidgetDensity } from "@/lib/widget-layouts";
   primaryColor: string;
   position: "bottom-right" | "bottom-left";
   launcherText: string;
@@ -77,6 +78,12 @@ export interface WidgetConfig {
   inputBarButtons: InputBarButton[];
   /** Websites allowed to embed the widget (hostnames). Empty = any site. */
   allowedSites: string[];
+  /** Structural design (docs/27). null = the original look, unchanged. */
+  widgetLayout: import("@/lib/widget-layouts").WidgetLayout | null;
+  /** Corner radius in px, 0-28. null = the original radii. */
+  cornerRadius: number | null;
+  /** Spacing. null = the original spacing. */
+  density: import("@/lib/widget-layouts").WidgetDensity | null;
 }
 
 export interface AgentDraft {

@@ -36,6 +36,9 @@ async def _resolve_agent(session: AsyncSession, public_key: str) -> tuple[Agent,
 def _theme_from(widget: dict[str, Any]) -> schemas.WidgetTheme:
     """Map the stored camelCase config onto the widget's snake_case response shape."""
     buttons = widget.get("inputBarButtons")
+    layout = widget.get("widgetLayout")
+    radius = widget.get("cornerRadius")
+    density = widget.get("density")
     return schemas.WidgetTheme(
         primary_color=widget.get("primaryColor", "#1F2937"),
         position=widget.get("position", "bottom-right"),
@@ -52,6 +55,10 @@ def _theme_from(widget: dict[str, Any]) -> schemas.WidgetTheme:
         floating_button_style=widget.get("floatingButtonStyle"),
         floating_button_color=widget.get("floatingButtonColor"),
         input_bar_buttons=buttons if isinstance(buttons, list) else ["attachment"],
+        widget_layout=layout if layout in schemas.WIDGET_LAYOUTS else None,
+        # bool is an int subclass; a stray `true` must not become radius 1.
+        corner_radius=radius if isinstance(radius, int) and not isinstance(radius, bool) else None,
+        density=density if density in schemas.WIDGET_DENSITIES else None,
     )
 
 

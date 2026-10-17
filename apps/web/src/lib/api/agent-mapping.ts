@@ -78,6 +78,9 @@ export function versionToDraft(
       floatingButtonColor: (w.floatingButtonColor as string) ?? null,
       inputBarButtons: (w.inputBarButtons as AgentDraft["widget"]["inputBarButtons"]) ?? ["attachment"],
       allowedSites: Array.isArray(w.allowedSites) ? (w.allowedSites as string[]) : [],
+      widgetLayout: (w.widgetLayout as AgentDraft["widget"]["widgetLayout"]) ?? null,
+      cornerRadius: typeof w.cornerRadius === "number" ? w.cornerRadius : null,
+      density: (w.density as AgentDraft["widget"]["density"]) ?? null,
     },
   };
 }
@@ -148,3 +151,6 @@ export function draftToWidgetConfig(draft: AgentDraft): Record<string, unknown> 
     allowedSites: w.allowedSites,
   };
 }
+    widgetLayout: w.widgetLayout ?? null,
+    cornerRadius: w.cornerRadius ?? null,
+    density: w.density ?? null,

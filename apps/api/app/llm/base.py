@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from app.llm.types import ChatRequest, ChatResponse, ModelInfo, StreamEvent
+
+
+def parse_retry_after(headers: Any) -> float | None:
+    """`Retry-After` (delta-seconds) as a float, or `None` when absent or not a number."""
+    try:
+        raw = headers.get("retry-after")
+    except AttributeError:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 0 else None
 
 
 class ProviderError(Exception):
@@ -20,10 +33,19 @@ class ProviderError(Exception):
     # Request-level failures — every provider would reject these the same way.
     _REQUEST_ERRORS = frozenset({400, 422})
 
-    def __init__(self, message: str, *, retryable: bool = True, status: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool = True,
+        status: int | None = None,
+        retry_after: float | None = None,
+    ) -> None:
         super().__init__(message)
         self.retryable = retryable
         self.status = status
+        # Seconds the provider asked us to wait (the `Retry-After` header on a 429), if it said.
+        self.retry_after = retry_after
 
     @property
     def try_other_provider(self) -> bool:

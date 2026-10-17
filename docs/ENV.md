@@ -495,3 +495,16 @@ to RRF ordering, logged, never an error and never an empty result set.
 | `GUARD_POLICY_FALLBACK_MODEL` | `openai/gpt-oss-20b` | Tried once after the retries; empty disables |
 | `GUARD_POLICY_STICKY_TTL_SECONDS` | `600` | A conversation's last elevated verdict is reused this long when L3 is down |
 | `GUARD_POLICY_ALERT_THRESHOLD` / `GUARD_POLICY_ALERT_WINDOW_SECONDS` | `5` / `300` | `guard_l3_unavailable_repeated` (error level) when this many calls end ungraded in the window |
+
+### Token diet and provider limits (ADR-125)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `RAG_CONTEXT_CHAR_BUDGET` | `3000` | Characters of retrieved text sent per turn (was 8000) |
+| `MEMORY_WINDOW_MESSAGES` | `6` | Recent messages sent to the model (was 12) |
+| `LLM_RETRY_DEFAULT_SECONDS` | `1.0` | Wait before the one retry after a 429 that sent no `Retry-After` |
+| `LLM_RETRY_AFTER_MAX_SECONDS` | `3.0` | Longest wait worth taking; a longer `Retry-After` goes to the next model |
+| `GUARD_POLICY_PROVIDER` | `groq` | L3 provider: `groq` or `gemini` (needs `GEMINI_API_KEY`) |
+| `GUARD_POLICY_FALLBACK_PROVIDER` | `groq` | Provider for `GUARD_POLICY_FALLBACK_MODEL` |
+| `GUARD_POLICY_MODEL` | `openai/gpt-oss-20b` | L3 model (own rate-limit bucket, not the chat's) |
+| `GUARD_POLICY_FALLBACK_MODEL` | `qwen/qwen3.8-27b` | Tried once when the L3 model is unavailable |

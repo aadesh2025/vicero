@@ -2242,3 +2242,8 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 ## Same-provider model fallback + LLM failure log (2026-10-16, ADR-123)
 
 - A model can fall back to another model of the same provider (`model_config.fallbacks`); `llm_call_failed` is logged for every failed model call, without customer text.
+
+
+## Token diet, Retry-After, L3 on its own bucket (2026-10-17, ADR-125)
+
+- Per-turn size cut (context 3,000 chars / top 3, history 6, max output 400, compact tool definitions, shorter prompt); `turn_tokens` log line; one `Retry-After` retry per model; L3 on `gpt-oss-20b` (own bucket) with `qwen3.8-27b` fallback, or `gemini` with a key; installer/seed scripts pick the newest version.

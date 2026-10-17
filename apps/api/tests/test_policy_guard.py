@@ -185,7 +185,9 @@ async def test_a_short_message_keeps_its_history_and_is_not_truncated() -> None:
     assert "still nothing" in user_msg and "you said tomorrow" in user_msg and "[...]" not in user_msg
 
 
-async def test_a_long_message_and_long_history_are_windowed_to_fit() -> None:
+async def test_a_long_message_and_long_history_are_windowed_to_fit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The windowing is the point, so test it at a tight ceiling.
+    monkeypatch.setattr(settings, "guard_policy_max_request_tokens", 2000)
     captured: list[httpx.Request] = []
     huge = "start of the message " + ("blah " * 3000) + " the worst part is at the very end"
     await policy_guard.classify(

@@ -11,7 +11,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.ssrf import is_blocked_destination
-from app.llm.base import ProviderError
+from app.llm.base import ProviderError, parse_retry_after
 from app.llm.types import (
     ChatRequest,
     ChatResponse,
@@ -118,6 +118,7 @@ class OpenAICompatibleProvider:
             f"provider returned {resp.status_code}: {resp.text[:200]}",
             retryable=retryable,
             status=resp.status_code,
+            retry_after=parse_retry_after(resp.headers),
         )
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
@@ -170,6 +171,7 @@ class OpenAICompatibleProvider:
                             f"provider returned {resp.status_code}: {body}",
                             retryable=retryable,
                             status=resp.status_code,
+                            retry_after=parse_retry_after(resp.headers),
                         )
                     async for line in resp.aiter_lines():
                         if not line.startswith("data:"):

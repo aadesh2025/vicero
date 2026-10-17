@@ -221,7 +221,7 @@ async def install(session: Any, agent_id: uuid.UUID, directory: Path, publish: b
             }
             print(f"tool {spec['name']} updated")
 
-    latest = (await agents.list_versions(session, ctx, agent_id))[-1]
+    latest = max(await agents.list_versions(session, ctx, agent_id), key=lambda v: v.version)
     if not latest.features.get("tools_enabled"):
         patched = await agents.update_version(
             session,

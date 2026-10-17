@@ -50,3 +50,39 @@ test("designer: pick a layout, tune corners and spacing, reset, go back to Origi
   await expect(frame.locator(".bf-panel")).not.toHaveClass(/bf-l-/);
   await expect.poll(async () => (await saved()).widgetLayout, { timeout: 15_000 }).toBeNull();
 });
+
+test("designer: interactive blocks master switch and per-type toggles", async ({ page, context, request }) => {
+  const account = await createAccount(request, "Designer Blocks Org");
+  const { id } = await createPublishedAgent(request, account, { name: "Blocks Designer Bot" });
+  await authenticateBrowser(context, account);
+  await page.goto(`/agents/${id}?tab=channels`);
+  const frame = page.frameLocator('iframe[title="Widget preview"]');
+  await expect(frame.locator(".bf-launcher")).toBeVisible({ timeout: 20_000 });
+
+  const saved = async () =>
+    (await (await request.get(`${API}/v1/agents/${id}/widget-config`, { headers: auth(account) })).json()) as Record<string, unknown>;
+
+  // Off by default: nothing saved as enabled, no sample blocks in the preview, toggles hidden.
+  expect((await saved()).interactiveBlocks ?? null).toBeNull();
+  await expect(page.getByLabel("Product cards")).toHaveCount(0);
+
+  await page.getByRole("switch", { name: "Interactive blocks" }).click();
+  await expect.poll(async () => ((await saved()).interactiveBlocks as Record<string, boolean> | null)?.enabled, { timeout: 15_000 }).toBe(true);
+  await expect(frame.locator(".bf-b-options")).toHaveCount(1); // preview shows a sample
+  await expect(frame.locator(".bf-b-cards")).toHaveCount(1);
+
+  await page.getByLabel("Product cards").uncheck();
+  await expect.poll(async () => ((await saved()).interactiveBlocks as Record<string, boolean>).cards, { timeout: 15_000 }).toBe(false);
+  await expect(frame.locator(".bf-b-cards")).toHaveCount(0);
+  await expect(frame.locator(".bf-b-options")).toHaveCount(1);
+
+  // Public config carries the switch only while it is on.
+  const agentRow = await (await request.get(`${API}/v1/agents/${id}`, { headers: auth(account) })).json();
+  const pub = async () =>
+    (await (await request.get(`${API}/v1/public/agents/${agentRow.public_key}/config`)).json()).theme.interactive_blocks;
+  expect(await pub()).toMatchObject({ enabled: true, cards: false, options: true });
+
+  await page.getByRole("switch", { name: "Interactive blocks" }).click();
+  await expect.poll(pub, { timeout: 15_000 }).toBeNull();
+  await expect(frame.locator(".bf-blk")).toHaveCount(0);
+});

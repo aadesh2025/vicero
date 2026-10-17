@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import automations as automation_rules
 from app.billing import usage
+from app.chat import blocks as chat_blocks
 from app.core import rbac
 from app.core.catalog import catalog_enabled
 from app.core.config import settings
@@ -27,7 +28,7 @@ from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
 from app.models import Agent, AgentVersion, MCPServer, Organization, Tool, ToolRun
 from app.modules.orgs.deps import OrgContext
-from app.tools import schemas
+from app.tools import block_tools, schemas
 from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS, CATALOG_TOOLS
 from app.tools.compact import compact_description, compact_schema
@@ -214,6 +215,8 @@ async def build_tooling(
     *,
     include_mcp: bool = False,
     outbound_media: list[uuid.UUID] | None = None,
+    blocks: list[dict[str, Any]] | None = None,
+    block_flags: dict[str, bool] | None = None,
 ) -> tuple[list[ToolSpec], Any]:
     """Return (ToolSpecs, executor) for an agent's enabled tools, or ([], None) when disabled.
 
@@ -223,6 +226,10 @@ async def build_tooling(
 
     `outbound_media` is the list a channel reply collects product photos in; only channels that can
     send images pass it, so only they are offered `send_product_images` (docs/26 §M4).
+
+    `blocks` + `block_flags` (docs/27 Phase 2): the widget passes the list its turn collects interactive blocks
+    in and the agent's `interactiveBlocks` settings. Both default to None, which is exactly today's behaviour:
+    no block tool is registered and nothing about the request changes.
     """
     features = version.features or {}
     specs: list[ToolSpec] = []
@@ -250,6 +257,15 @@ async def build_tooling(
                 continue
             catalog_names.add(name)
             specs.append(ToolSpec(name=name, description=tool.description, parameters=tool.parameters))
+    block_names: set[str] = set()
+    if blocks is not None:
+        for name, block_tool in chat_blocks.tools_for(block_flags).items():
+            if name in by_name or name in catalog_names:
+                continue
+            block_names.add(name)
+            specs.append(
+                ToolSpec(name=name, description=block_tool.description, parameters=block_tool.parameters)
+            )
     if not specs:
         return [], None
 
@@ -260,9 +276,13 @@ async def build_tooling(
         version=version,
         conversation_id=conversation_id,
         outbound_media=outbound_media,
+        blocks=blocks if block_names else None,
     )
 
     async def executor(call: ToolCall) -> dict[str, Any]:
+        if call.name in block_names:
+            block_res = await block_tools.run_block_tool(tool_ctx, call.name, call.arguments)
+            return {"output": block_res.output, "status": block_res.status, "error": block_res.error}
         if call.name in catalog_names:
             catalog_res = await CATALOG_TOOLS[call.name].run(tool_ctx, call.arguments)
             return {"output": catalog_res.output, "status": catalog_res.status, "error": catalog_res.error}

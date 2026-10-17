@@ -65,6 +65,9 @@ class WidgetTheme(BaseModel):
     widget_layout: str | None = None
     corner_radius: int | None = None  # 0-28 px; null → legacy radii
     density: str | None = None  # compact | comfortable | roomy; null → legacy spacing
+    #: Interactive blocks (docs/27 Phase 2). null → the feature is off and the widget behaves as before.
+    #: Only sent while the master switch is on, as `{type: bool}` for the types the widget may render.
+    interactive_blocks: dict[str, bool] | None = None
 
 
 class WidgetConfigIn(BaseModel):
@@ -94,6 +97,9 @@ class WidgetConfigIn(BaseModel):
     widgetLayout: str | None = None
     cornerRadius: int | None = None
     density: str | None = None
+    #: `{enabled, options, cards, form, datetime, counter, rating, steps, handoff}`, all bool.
+    #: `enabled` is the master switch.
+    interactiveBlocks: dict[str, bool] | None = None
     #: Websites allowed to embed this widget (hostnames). Empty/absent = any site. Never sent to the widget.
     allowedSites: list[str] | None = None
 
@@ -172,6 +178,17 @@ class WidgetConfigIn(BaseModel):
             raise ValueError(f"must be one of {WIDGET_DENSITIES}")
         return v
 
+    @field_validator("interactiveBlocks")
+    @classmethod
+    def _blocks(cls, v: dict[str, bool] | None) -> dict[str, bool] | None:
+        if v is not None:
+            from app.chat.blocks import FLAG_KEYS
+
+            bad = [k for k in v if k not in FLAG_KEYS]
+            if bad:
+                raise ValueError(f"unknown block settings {bad}; allowed {FLAG_KEYS}")
+        return v
+
     @field_validator("inputBarButtons")
     @classmethod
     def _buttons(cls, v: list[str] | None) -> list[str] | None:
@@ -208,8 +225,23 @@ class Visitor(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class BlockReply(BaseModel):
+    """The visitor tapped something in an interactive block (docs/27 Phase 2). The tap also arrives as an
+    ordinary `message`, which is what the agent reads; this only lets the server mark the block answered."""
+
+    block_id: str = Field(min_length=1, max_length=64)
+    value: Any = None
+
+
 class PublicChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: uuid.UUID | None = None
     stream: bool = True
     visitor: Visitor | None = None
+    block_reply: BlockReply | None = None
+
+
+class PublicHistoryMessage(BaseModel):
+    role: str  # user | assistant
+    text: str
+    blocks: list[dict[str, Any]] = Field(default_factory=list)

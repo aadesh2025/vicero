@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
 from app.chat import attention, guard_models, guardrails, policy_guard, stage_timing, variables
+from app.chat import blocks as chat_blocks
 from app.chat.assembly import build_messages, compose_system_prompt
 from app.chat.budget import agentic_loop_enabled, turn_budget
 from app.chat.handoff import (
@@ -301,6 +302,13 @@ class InboundTurn:
         )
         if catalog_enabled(self.version):
             system_prompt = "\n\n".join(p for p in (system_prompt, CATALOG_INSTRUCTION) if p)
+        # Interactive blocks are the web widget's alone and opt-in per agent (docs/27 Phase 2). `None` - the
+        # default for every agent and every other channel - adds nothing to the prompt, the tools or the stream.
+        block_flags = (
+            await chat_blocks.load_flags(session, self.agent.id) if conv.channel == "widget" else None
+        )
+        if block_flags is not None:
+            system_prompt = "\n\n".join(p for p in (system_prompt, chat_blocks.BLOCKS_INSTRUCTION) if p)
         # mild/elevated steer the tone; the bot keeps answering either way. Only `crisis`
         # suppresses generation, and it is handled below with a written holding message.
         if policy is not None and (directive := policy_guard.TONE_DIRECTIVES.get(policy.distress)):
@@ -386,6 +394,8 @@ class InboundTurn:
                 conv.id,
                 include_mcp=include_mcp,
                 outbound_media=self.result.outbound_media if self.supports_images else None,
+                blocks=self.result.blocks if block_flags is not None else None,
+                block_flags=block_flags,
             )
             if specs and executor is not None and provider.supports_tools():
                 req.tools = specs

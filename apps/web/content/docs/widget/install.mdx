@@ -75,6 +75,22 @@ Vicero" footer. Change it in the dashboard and the widget picks it up on next lo
 Keeping theming server-side means you can restyle the widget across every site that embeds
 it without anyone editing HTML.
 
+### Designs
+
+Under **Channels → Web widget → Design** you can pick one of ten layouts (Classic, Glass,
+Hairline, Paper, Pebble, Console, Concierge, Command, Side drawer, Bold block) and tune the
+corner radius and spacing. Picking a design fills in sensible colors, font, corners and launcher;
+you can still change each one. "Original" keeps the widget exactly as it has always looked, and an
+agent you never touch stays on it. On phones every design opens full screen.
+
+### Interactive blocks
+
+Turn on **Interactive blocks** and the agent can answer with buttons, product cards, a small
+form, a date and time picker or a rating instead of plain text. It needs a model that supports
+tool calling. A tap reaches the agent as an ordinary message, so your guardrails and message
+limits apply as usual. Forms never ask for passwords, card numbers or ID numbers. Leave the
+switch off and the agent replies in text as before.
+
 ## Human handoff
 
 If the agent has handoff enabled, a visitor can ask to talk to a person. The conversation

@@ -1575,6 +1575,25 @@
         "title": "BindN8nRequest",
         "type": "object"
       },
+      "BlockReply": {
+        "description": "The visitor tapped something in an interactive block (docs/27 Phase 2). The tap also arrives as an\nordinary `message`, which is what the agent reads; this only lets the server mark the block answered.",
+        "properties": {
+          "block_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Block Id",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "block_id"
+        ],
+        "title": "BlockReply",
+        "type": "object"
+      },
       "Body_deauthorize_api_meta_deauthorize_post": {
         "properties": {
           "signed_request": {
@@ -8275,6 +8294,16 @@
       },
       "PublicChatRequest": {
         "properties": {
+          "block_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BlockReply"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "conversation_id": {
             "anyOf": [
               {
@@ -8432,6 +8461,32 @@
           "updated_at"
         ],
         "title": "PublicHelpArticleSummary",
+        "type": "object"
+      },
+      "PublicHistoryMessage": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Blocks",
+            "type": "array"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "PublicHistoryMessage",
         "type": "object"
       },
       "QuestionCount": {
@@ -11807,6 +11862,28 @@
             ],
             "title": "Bubble Color"
           },
+          "corner_radius": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corner Radius"
+          },
+          "density": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Density"
+          },
           "floating_button_color": {
             "anyOf": [
               {
@@ -11840,6 +11917,20 @@
             },
             "title": "Input Bar Buttons",
             "type": "array"
+          },
+          "interactive_blocks": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interactive Blocks"
           },
           "launcher_text": {
             "default": "Chat with us",
@@ -11893,6 +11984,17 @@
               }
             ],
             "title": "Typing Area Color"
+          },
+          "widget_layout": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Widget Layout"
           },
           "widget_style": {
             "default": "solid",
@@ -28857,6 +28959,72 @@
           }
         },
         "summary": "Get Config",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/v1/public/agents/{public_key}/conversations/{conversation_id}/messages": {
+      "get": {
+        "description": "The visitor's own thread, so an interactive-blocks widget can reload mid-conversation (docs/27).",
+        "operationId": "public_history_v1_public_agents__public_key__conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_key",
+            "required": true,
+            "schema": {
+              "title": "Public Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "visitor_id",
+            "required": true,
+            "schema": {
+              "title": "Visitor Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PublicHistoryMessage"
+                  },
+                  "title": "Response Public History V1 Public Agents  Public Key  Conversations  Conversation Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Public History",
         "tags": [
           "public"
         ]

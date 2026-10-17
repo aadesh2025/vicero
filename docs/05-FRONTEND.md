@@ -59,6 +59,11 @@ on the right (or a tab) to chat with the draft, and a **Publish** button.
   quick "test retrieval" box.
 - **Tools tab**: toggle built-in tools, create HTTP tools (form: method/url/headers/body
   schema/auth), bind n8n workflows, test a tool, view recent runs.
+- **Channels tab → Web widget** (docs/27): a **Design** picker (Original + 10 layout cards) applies a
+  preset (colors, font, radius, launcher) that is saved as ordinary values; **Corners** slider (0-28),
+  **Spacing** control, "Reset to <layout> defaults", and an **Interactive blocks** master switch with
+  per-type toggles. The live preview is the real widget bundle (`bf-preview-config`) and shows sample
+  blocks for the enabled types. Presets live in `lib/widget-layouts.ts`, never in the widget.
 - **Channels tab**: manage widget (theme/colors/position/branding preview), connect Telegram/
   WhatsApp/Slack/Discord (guided forms), copy embed snippet.
 - **Playground**: streaming chat with token counter, shows citations + tool calls inline;

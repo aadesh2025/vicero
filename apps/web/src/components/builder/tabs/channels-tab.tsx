@@ -17,7 +17,9 @@ import { useBuilder } from "@/lib/store/builder";
 import {
   applyLayoutPreset,
   applyModeChange,
+  BLOCK_TOGGLES,
   DENSITY_OPTIONS,
+  enableBlocks,
   layoutDef,
   layoutSwatch,
   WIDGET_LAYOUTS,
@@ -124,8 +126,60 @@ function toPreviewConfig(draft: AgentDraft) {
       widget_layout: w.widgetLayout,
       corner_radius: w.cornerRadius,
       density: w.density,
+      interactive_blocks: w.interactiveBlocks?.enabled ? w.interactiveBlocks : null,
     },
   };
+}
+
+/** Master switch + per-type toggles. Saved as `interactiveBlocks` on the widget config; the master switch
+ *  is what gives the agent the tools, so an agent that never touches this behaves exactly as before. */
+function InteractiveBlocks({ w, setW }: { w: Widget; setW: (fn: (widget: Widget) => void) => void }) {
+  const flags = w.interactiveBlocks;
+  const on = flags?.enabled === true;
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-surface-2/50 p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <div className="text-sm font-medium text-text">Interactive blocks</div>
+          <div className="text-xs text-muted">
+            Let the agent answer with buttons, cards, forms and pickers. Needs a model that supports tool calling.
+            Off, the agent replies in plain text as before.
+          </div>
+        </div>
+        <Switch
+          aria-label="Interactive blocks"
+          checked={on}
+          onCheckedChange={(v) =>
+            setW((x) => {
+              x.interactiveBlocks = v ? enableBlocks(x.interactiveBlocks) : { ...(x.interactiveBlocks ?? {}), enabled: false };
+            })
+          }
+        />
+      </div>
+      {on && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {BLOCK_TOGGLES.map((b) => (
+            <label key={b.key} className="flex cursor-pointer items-start gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={flags?.[b.key] !== false}
+                onChange={(e) =>
+                  setW((x) => {
+                    x.interactiveBlocks = { ...enableBlocks(x.interactiveBlocks), [b.key]: e.target.checked };
+                  })
+                }
+                className="mt-0.5 size-4 accent-accent"
+              />
+              <span>
+                {b.label}
+                <span className="block text-[11px] leading-tight text-faint">{b.hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Visual layout cards + corners + spacing. Picking a card applies its preset to the saved
@@ -422,6 +476,8 @@ export function ChannelsTab() {
                 })}
               </div>
             </Field>
+
+            <InteractiveBlocks w={w} setW={setW} />
 
             <div className="flex items-center gap-3 rounded-md border border-border bg-surface-2/50 p-3">
               <div className="flex-1">

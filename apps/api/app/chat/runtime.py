@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.chat import blocks as chat_blocks
 from app.chat import output_guard, pii
 from app.chat.budget import AgentBudget
 from app.chat.guardrails import neutralize_injections
@@ -296,6 +297,7 @@ async def run_turn(
     # has already rendered it — hence the `replace` event rather than pre-emptive suppression
     # (ADR-049). `result.content` is corrected here, which is what every non-streaming caller
     # and the persistence path read, so those are protected outright.
+    guard_discarded = False  # the guard rewrote/suppressed the reply: blocks from this turn must not show either
     if guard_output and settings.guard_output_enabled and result.content.strip():
         verdict = output_guard.inspect(
             result.content, protected_prompt, leak_threshold=settings.guard_output_leak_threshold
@@ -365,8 +367,35 @@ async def run_turn(
             )
         if final.changed:
             result.content = final.text
+            guard_discarded = True
             # Tell a streaming client to discard what it painted for this turn.
             yield StreamEvent(type="replace", delta=final.text)
+
+    # Interactive blocks (docs/27 Phase 2) go out last and only for a turn that survived: not one the output
+    # guard rewrote, not one whose provider failed, and not one whose block text the guard would have changed
+    # (block labels come from the model and often from the knowledge base, so they get the same PII/leak check).
+    if result.blocks:
+        if (
+            guard_discarded
+            or result.error
+            or not chat_blocks.passes_output_guard(result.blocks, req.messages, protected_prompt, pii_allowlist)
+        ):
+            log.warning(
+                "blocks_discarded",
+                provider=provider.name,
+                model=req.model,
+                count=len(result.blocks),
+                guard=guard_discarded,
+                error=bool(result.error),
+            )
+            result.blocks = []
+            if not result.content.strip() and fallback_message:
+                # A block-only reply that was withdrawn must not leave the visitor with silence.
+                result.content = fallback_message
+                yield StreamEvent(type="token", delta=fallback_message)
+        else:
+            for shown in chat_blocks.public_view(result.blocks):
+                yield StreamEvent(type="block", block=shown)
 
     # Re-read after streaming: a fallback chain only knows which link served once it has run,
     # and usage/cost must be attributed to the provider that actually answered.

@@ -88,6 +88,21 @@ async def public_chat(
     return await service.public_chat_once(session, resolved, data)
 
 
+@router.get(
+    "/agents/{public_key}/conversations/{conversation_id}/messages",
+    response_model=list[schemas.PublicHistoryMessage],
+    dependencies=[Depends(rate_limit("public_history", limit=60, window=60))],
+)
+async def public_history(
+    public_key: str,
+    conversation_id: uuid.UUID,
+    visitor_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> list[schemas.PublicHistoryMessage]:
+    """The visitor's own thread, so an interactive-blocks widget can reload mid-conversation (docs/27)."""
+    return await service.conversation_history(session, public_key, conversation_id, visitor_id[:255])
+
+
 @router.websocket("/agents/{public_key}/ws")
 async def public_chat_ws(websocket: WebSocket, public_key: str) -> None:
     await websocket.accept()

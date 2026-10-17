@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WidgetConfig } from "@/lib/mock/builder";
-import { applyLayoutPreset, applyModeChange, layoutDef, WIDGET_LAYOUTS } from "./widget-layouts";
+import { applyLayoutPreset, applyModeChange, BLOCK_TOGGLES, enableBlocks, layoutDef, WIDGET_LAYOUTS } from "./widget-layouts";
 
 function widget(over: Partial<WidgetConfig> = {}): WidgetConfig {
   return {
@@ -22,6 +22,7 @@ function widget(over: Partial<WidgetConfig> = {}): WidgetConfig {
     widgetLayout: null,
     cornerRadius: null,
     density: null,
+    interactiveBlocks: null,
     allowedSites: [],
     ...over,
   };
@@ -92,5 +93,17 @@ describe("widget layouts", () => {
   it("unknown ids resolve to nothing", () => {
     expect(layoutDef(null)).toBeNull();
     expect(layoutDef("nope" as never)).toBeNull();
+  });
+});
+
+describe("interactive blocks settings", () => {
+  it("offers one toggle per tool-backed block type", () => {
+    expect(BLOCK_TOGGLES.map((b) => b.key)).toEqual(["options", "cards", "form", "datetime", "rating"]);
+  });
+
+  it("turning the master switch on enables every type and keeps earlier choices", () => {
+    expect(enableBlocks(null)).toEqual({ options: true, cards: true, form: true, datetime: true, rating: true, enabled: true });
+    expect(enableBlocks({ enabled: false, cards: false }).cards).toBe(false);
+    expect(enableBlocks({ enabled: false, cards: false }).enabled).toBe(true);
   });
 });

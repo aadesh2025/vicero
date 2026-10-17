@@ -18,6 +18,66 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-130: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** Block labels, card text and form labels come from the model, often from the knowledge base,
+  and are shown to a visitor — the same egress path the reply text takes (docs/11 L5). Left unchecked, a block
+  is a way around PII redaction and the prompt-leak check.
+- **Decision:** `run_turn` emits `block` events last, and only when (a) the output guard did not rewrite the
+  reply, (b) the provider did not fail, and (c) the block text itself passes `output_guard.apply` unchanged
+  (`chat.blocks.passes_output_guard`; conservative — an option list has no meaningful partial version, so a hit
+  drops all blocks). A block-only reply that is withdrawn says the agent's fallback line, never silence. The
+  model supplies content but never the block `id` or `fallback_text`; limits are *rejected*, not truncated, with
+  a message the model sees so it can fall back to text. Forms refuse any field type outside text/email/tel and
+  any label asking for passwords, card numbers, ID numbers or one-time codes.
+- **Consequences:** a leaky or withdrawn turn shows plain text only; at most two blocks per reply.
+
+### ADR-129: A block tap is an ordinary user message (with `block_reply` beside it)
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** The agent runtime, guardrails, metering and rate limits are tuned for text turns.
+- **Decision:** The widget posts the tap as the normal `message` plus `block_reply: {block_id, value}`. The LLM
+  loop sees plain text and nothing special-cases blocks. `block_reply` only lets the server mark the block
+  answered (`resolve_block`: this conversation only, once only, a miss is ignored) so it reloads read-only. The
+  stored message `content` already contains the blocks' fallback text, so the inbox, transcripts, exports and
+  the next turn's history need no knowledge of blocks; `messages.blocks` (migration 0037, nullable JSONB) holds
+  the structured form. History for a reload is a new public endpoint, owned by the visitor who started the
+  conversation and enabled only for agents that opted in.
+- **Alternatives considered:** a dedicated block-reply turn type (a second path around every guard).
+
+### ADR-128: Interactive blocks are an additive `block` SSE event, opt-in per agent
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** docs/27 wants tappable UI without risking any current agent, embed or channel.
+- **Decision:** `StreamEvent` gains `block`; old cached widgets ignore unknown events. The master switch
+  (`interactiveBlocks.enabled`, on the unversioned widget config, so a save is live) gates five tools
+  (`present_options`, `present_cards`, `request_details`, `pick_datetime`, `ask_rating`) registered only for the
+  web widget channel; per-type toggles gate each tool. Off (the default): no tool, no prompt text, no extra query
+  result, no history call, no CSS. `counter`, `steps` and `handoff` are validated and rendered but have no model
+  tool yet. Tool execution lives in `app.tools.block_tools` and the rules in `app.chat.blocks`, so `app.chat`
+  does not import `app.tools` (no new package cycle). `present_cards` builds cards from the org's catalog rows
+  (committed `Product` / `ProductImage` models), never from model-supplied titles, prices or images.
+- **Consequences:** blocks need a tool-calling model; the system prompt gains a short instruction only for opted-in
+  agents (prompt text is guidance — every limit is also enforced in code; the no-context A/B of ADR-045 was not
+  re-run because `DEFAULT_SYSTEM_PROMPT`, the templates and the identity lock are untouched).
+
+### ADR-127: Layouts are a separate `widgetLayout` field; presets live in the designer; no web fonts
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** Ten new designs must ship without changing a single existing embed.
+- **Decision:** A new nullable `widgetLayout` (enum), `cornerRadius` (0-28) and `density` on the unversioned
+  widget config (JSONB, no migration); `widgetStyle` is untouched and is ignored while a layout is active (a layout
+  owns the whole surface). `null` = today's rendering: the widget adds no class, CSS variable, `<style>` or DOM, which
+  a computed-style regression snapshot of the pre-change bundle pins. Layout CSS is injected for the active
+  layout only. Presets (accent, font, radius, launcher, palette) are applied by the designer when a card is
+  picked and saved as ordinary values, so the widget has no hidden preset logic. Fonts map to the existing five
+  keys; Geist / Plus Jakarta from the demo are not loaded (third-party fonts inside customer sites are a privacy
+  and performance cost). `color-mix()` is replaced by colours computed in JS; Drawer ships Chat and Help only
+  (no status data exists) and Concierge hides its home screen once a conversation exists.
+- **Consequences:** the bundle grew from 12.4 KB to 27.1 KB gzip as shipped (unminified; see
+  `packages/widget/README.md`). Rolling back is reverting the commits.
+
 ### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
 - **Date:** 2026-10-17
 - **Status:** accepted

@@ -22,6 +22,21 @@ FLOATING_BUTTON_STYLES = (
     "pulse-ring",
 )
 INPUT_BAR_BUTTONS = ("attachment", "emoji")
+#: Structural designs (docs/27). Separate from ``widget_style`` (solid | transparent), which is a
+#: surface treatment already live for customers. ``None`` = today's rendering.
+WIDGET_LAYOUTS = (
+    "classic",
+    "glass",
+    "hairline",
+    "paper",
+    "pebble",
+    "console",
+    "concierge",
+    "command",
+    "drawer",
+    "block",
+)
+WIDGET_DENSITIES = ("compact", "comfortable", "roomy")
 
 
 class WidgetTheme(BaseModel):
@@ -45,6 +60,11 @@ class WidgetTheme(BaseModel):
     floating_button_style: str | None = None  # null → legacy text pill (today's look)
     floating_button_color: str | None = None  # null → inherit primary_color
     input_bar_buttons: list[str] = Field(default_factory=lambda: ["attachment"])
+
+    # ── Layouts (docs/27) — all null for an untouched agent → legacy rendering ──────
+    widget_layout: str | None = None
+    corner_radius: int | None = None  # 0-28 px; null → legacy radii
+    density: str | None = None  # compact | comfortable | roomy; null → legacy spacing
 
 
 class WidgetConfigIn(BaseModel):
@@ -71,6 +91,9 @@ class WidgetConfigIn(BaseModel):
     floatingButtonStyle: str | None = None
     floatingButtonColor: str | None = None
     inputBarButtons: list[str] | None = None
+    widgetLayout: str | None = None
+    cornerRadius: int | None = None
+    density: str | None = None
     #: Websites allowed to embed this widget (hostnames). Empty/absent = any site. Never sent to the widget.
     allowedSites: list[str] | None = None
 
@@ -126,6 +149,27 @@ class WidgetConfigIn(BaseModel):
     def _button(cls, v: str | None) -> str | None:
         if v is not None and v not in FLOATING_BUTTON_STYLES:
             raise ValueError(f"must be one of {FLOATING_BUTTON_STYLES}")
+        return v
+
+    @field_validator("widgetLayout")
+    @classmethod
+    def _layout(cls, v: str | None) -> str | None:
+        if v is not None and v not in WIDGET_LAYOUTS:
+            raise ValueError(f"must be one of {WIDGET_LAYOUTS}")
+        return v
+
+    @field_validator("cornerRadius")
+    @classmethod
+    def _radius(cls, v: int | None) -> int | None:
+        if v is not None and not 0 <= v <= 28:
+            raise ValueError("must be between 0 and 28")
+        return v
+
+    @field_validator("density")
+    @classmethod
+    def _density(cls, v: str | None) -> str | None:
+        if v is not None and v not in WIDGET_DENSITIES:
+            raise ValueError(f"must be one of {WIDGET_DENSITIES}")
         return v
 
     @field_validator("inputBarButtons")

@@ -8,11 +8,20 @@ import { CHANNEL_META } from "@/lib/channel-meta";
 import { CampaignsSection } from "@/components/builder/campaigns-section";
 import { WidgetChatIcon, WidgetDotsIcon, WidgetMessageIcon } from "@/lib/widget-icons";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBuilder } from "@/lib/store/builder";
+import {
+  applyLayoutPreset,
+  applyModeChange,
+  DENSITY_OPTIONS,
+  layoutDef,
+  layoutSwatch,
+  WIDGET_LAYOUTS,
+} from "@/lib/widget-layouts";
 import {
   isMetaType,
   MetaOverlays,
@@ -112,8 +121,124 @@ function toPreviewConfig(draft: AgentDraft) {
       floating_button_style: w.floatingButtonStyle,
       floating_button_color: w.floatingButtonColor,
       input_bar_buttons: w.inputBarButtons,
+      widget_layout: w.widgetLayout,
+      corner_radius: w.cornerRadius,
+      density: w.density,
     },
   };
+}
+
+/** Visual layout cards + corners + spacing. Picking a card applies its preset to the saved
+ *  config (colours, font, radius, launcher); everything stays editable afterwards. */
+function LayoutPicker({ w, setW }: { w: Widget; setW: (fn: (widget: Widget) => void) => void }) {
+  const def = layoutDef(w.widgetLayout);
+  const mode = w.mode;
+  return (
+    <div className="space-y-4">
+      <Field label="Design" description="Pick a look for the chat window. You can still change every color and setting below.">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Widget design">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={w.widgetLayout === null}
+            onClick={() => setW((x) => void (x.widgetLayout = null))}
+            className={`rounded-lg border p-2.5 text-left transition-colors ${
+              w.widgetLayout === null ? "border-accent bg-accent/[0.06]" : "border-border hover:border-border-strong"
+            }`}
+          >
+            <span className="mb-2 grid h-9 place-items-center rounded-md border border-dashed border-border text-[10px] text-faint">
+              Original
+            </span>
+            <span className="block text-xs font-medium text-text">Original</span>
+            <span className="block text-[10px] leading-tight text-faint">The widget as it has always looked.</span>
+          </button>
+          {WIDGET_LAYOUTS.map((l) => {
+            const sw = layoutSwatch(l, mode);
+            const selected = w.widgetLayout === l.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setW((x) => applyLayoutPreset(x, l.id))}
+                className={`rounded-lg border p-2.5 text-left transition-colors ${
+                  selected ? "border-accent bg-accent/[0.06]" : "border-border hover:border-border-strong"
+                }`}
+              >
+                <span
+                  className="mb-2 flex h-9 items-center gap-1.5 rounded-md border border-border px-2"
+                  style={{ background: sw.bg }}
+                  aria-hidden="true"
+                >
+                  <i className="h-2 flex-1 rounded-full" style={{ background: sw.fg, opacity: 0.18 }} />
+                  <i className="size-3.5 rounded-full" style={{ background: sw.accent }} />
+                </span>
+                <span className="block text-xs font-medium text-text">{l.name}</span>
+                <span className="block text-[10px] leading-tight text-faint">{l.tag}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label={`Corners${w.cornerRadius !== null ? ` · ${w.cornerRadius}px` : ""}`}>
+          <div className="flex items-center gap-3">
+            <Slider
+              aria-label="Corner radius"
+              min={0}
+              max={28}
+              step={1}
+              value={[w.cornerRadius ?? 16]}
+              onValueChange={([v]) => setW((x) => void (x.cornerRadius = v))}
+            />
+            {w.cornerRadius !== null && (
+              <button
+                type="button"
+                onClick={() => setW((x) => void (x.cornerRadius = null))}
+                className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted hover:text-text"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Spacing">
+          <div className="flex rounded-md border border-border bg-surface-2 p-0.5" role="group" aria-label="Spacing">
+            {DENSITY_OPTIONS.map((d) => (
+              <button
+                key={d.value}
+                type="button"
+                aria-pressed={w.density === d.value}
+                onClick={() => setW((x) => void (x.density = d.value))}
+                className={`flex-1 rounded px-2 py-1.5 text-xs transition-colors ${
+                  w.density === d.value ? "bg-accent-strong text-on-accent" : "text-muted hover:text-text"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+      </div>
+
+      {def && (
+        <button
+          type="button"
+          onClick={() =>
+            setW((x) => {
+              applyLayoutPreset(x, def.id);
+              x.density = null;
+            })
+          }
+          className="rounded-md border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:text-text"
+        >
+          Reset to {def.name} defaults
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function ChannelsTab() {
@@ -152,15 +277,21 @@ export function ChannelsTab() {
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <SectionCard title="Web widget" description="Design an embeddable chat bubble for any website.">
+            <LayoutPicker w={w} setW={setW} />
+
             {/* Style + font */}
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Widget style">
+              <Field
+                label="Widget style"
+                description={w.widgetLayout ? "A design above controls the whole surface; this applies to the Original look." : undefined}
+              >
                 <div className="flex rounded-md border border-border bg-surface-2 p-0.5">
                   {(["solid", "transparent"] as const).map((s) => (
                     <button
                       key={s}
+                      disabled={w.widgetLayout !== null}
                       onClick={() => setW((x) => void (x.widgetStyle = s))}
-                      className={`flex-1 rounded px-2 py-1.5 text-xs capitalize transition-colors ${
+                      className={`flex-1 rounded px-2 py-1.5 text-xs capitalize transition-colors disabled:opacity-40 ${
                         w.widgetStyle === s ? "bg-accent-strong text-on-accent" : "text-muted hover:text-text"
                       }`}
                     >
@@ -201,7 +332,7 @@ export function ChannelsTab() {
               <Field label="Theme mode">
                 <select
                   value={w.mode}
-                  onChange={(e) => setW((x) => void (x.mode = e.target.value as "dark" | "light"))}
+                  onChange={(e) => setW((x) => applyModeChange(x, e.target.value as "dark" | "light"))}
                   className="h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-text"
                 >
                   <option value="dark">Dark</option>

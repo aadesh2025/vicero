@@ -52,7 +52,18 @@ else
   echo "[backup] WARNING: UPLOADS_DIR not set — uploads volume NOT backed up (DB dump only). See docs/09 §4 / ADR-082." >&2
 fi
 
-# Rotate: delete backups (both DB dumps and uploads archives) older than RETENTION_DAYS.
-find "$BACKUP_DIR" \( -name 'vicero_*.sql.gz' -o -name 'vicero_uploads_*.tar.gz' \) \
+# Photos (ADR-124): customer images and product photos live in their own volume.
+MEDIA_DIR="${MEDIA_DIR:-}"
+if [ -n "$MEDIA_DIR" ] && [ -d "$MEDIA_DIR" ]; then
+  MEDIA_OUT="$BACKUP_DIR/vicero_media_${STAMP}.tar.gz"
+  echo "[backup] archiving media $MEDIA_DIR -> $MEDIA_OUT"
+  tar -C "$MEDIA_DIR" -czf "$MEDIA_OUT" .
+  echo "[backup] wrote $(du -h "$MEDIA_OUT" | cut -f1)"
+elif [ -n "$MEDIA_DIR" ]; then
+  echo "[backup] WARNING: MEDIA_DIR=$MEDIA_DIR is set but does not exist — photos NOT backed up this run" >&2
+fi
+
+# Rotate: delete backups (DB dumps, uploads and media archives) older than RETENTION_DAYS.
+find "$BACKUP_DIR" \( -name 'vicero_*.sql.gz' -o -name 'vicero_uploads_*.tar.gz' -o -name 'vicero_media_*.tar.gz' \) \
      -type f -mtime "+${RETENTION_DAYS}" -print -delete || true
 echo "[backup] done; retention ${RETENTION_DAYS}d"

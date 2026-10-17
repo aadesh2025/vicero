@@ -67,6 +67,9 @@ x-api-env: &api-env
   # (`./var/uploads`) resolves to the same directory via WORKDIR, but naming it here means the
   # setting and the mount are visibly one decision instead of two that happen to agree.
   UPLOAD_DIR: /app/var/uploads
+  # Photos (customer images + product photos, ADR-124). Same rule as UPLOAD_DIR: must match the
+  # `media` volume mounted on api + worker, or the worker saves a photo the api cannot serve.
+  MEDIA_DIR: /app/var/media
   # Offline IP->country file for the pricing page's display currency (ADR-112). Absent file = lookup off.
   # Fill it: docker compose exec api python scripts/fetch_geoip_db.py /app/var/geoip/country.mmdb
   GEOIP_DB_PATH: /app/var/geoip/country.mmdb
@@ -166,6 +169,7 @@ services:
       # Single-VPS fix. It does NOT survive scaling to a second node — the proper answer is
       # object storage (docs/15 §4 Option 2), which the persisted DoclingDocument needs anyway.
       - uploads:/app/var/uploads
+      - media:/app/var/media
       - geoip:/app/var/geoip
     deploy:
       resources:
@@ -205,6 +209,7 @@ services:
       # ingest task reads the file the api wrote (`ingest._stored_bytes`) and also writes the
       # persisted DoclingDocument *beside* it, so one shared mount covers both files.
       - uploads:/app/var/uploads
+      - media:/app/var/media
     deploy:
       resources:
         limits:
@@ -449,10 +454,13 @@ services:
       # RISK-REGISTER R1 / docs/15 §8.3: without this, restoring the DB dump alone leaves every
       # `documents` row pointing at a storage_path/docling_json_path that no longer exists.
       UPLOADS_DIR: /uploads
+      # Customer + product photos (ADR-124), archived beside the uploads.
+      MEDIA_DIR: /media
     volumes:
       - ./scripts:/scripts:ro
       - backups:/backups
       - uploads:/uploads:ro
+      - media:/media:ro
     entrypoint: ["/bin/sh", "-c"]
     # Run the backup script once an hour past 3am UTC daily; keep the container alive with a sleep loop.
     command: ["while true; do sh /scripts/backup.sh || true; sleep 86400; done"]
@@ -477,6 +485,8 @@ volumes:
   # restoring the database alone leaving every `documents` row pointing at a file that is gone
   # (docs/15 §8.3, RISK-REGISTER R1 — closed).
   uploads:
+  # Customer photos and product photos (ADR-124, docs/26). Shared by api + worker, read-only in backup.
+  media:
   # DB-IP country database (ADR-112); refreshed monthly by scripts/fetch_geoip_db.py.
   geoip:
   ollamadata:

@@ -2259,7 +2259,7 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - **M5 inbox:** photos in the thread (click to enlarge, alt text from the description, "deleted after 30 days"); operator can send a photo; typing indicator while a photo is processed.
 - Needs from you: `MEDIA_URL_SIGNING_KEY` in the production `.env`, the media volume and backup (runbook section 16), and the live checks on real WhatsApp / Instagram / Messenger accounts. Not verified live: Meta's real size limits and that no extra permission is needed for attachments.
 
-## Widget layouts + interactive blocks (2026-10-17, ADR-125 to ADR-128, docs/27)
+## Widget layouts + interactive blocks (2026-10-17, ADR-127 to ADR-130, docs/27)
 
 - **Phase 1 - ten layouts.** `widgetLayout` (classic, glass, hairline, paper, pebble, console, concierge, command, drawer, block), `cornerRadius` (0-28) and `density` on the widget config; all `null` = the original look. Designer: Design picker, Corners, Spacing, Reset to layout defaults. Layout CSS is injected for the active layout only; Concierge / Drawer / Command are the only layouts that add DOM. No migration (unversioned JSONB).
 - **Phase 2 - interactive blocks (off by default).** New `block` SSE event; tools `present_options`, `present_cards` (from the org's catalog rows), `request_details`, `pick_datetime`, `ask_rating`; widget renderers for options, cards, form, datetime, counter, rating, steps, handoff; a tap goes back as a normal user message plus `block_reply`; answered blocks reload read-only (`GET /v1/public/agents/{key}/conversations/{id}/messages`). Migration 0037 adds nullable `messages.blocks`. Blocks pass the output guard; a withdrawn turn shows none.

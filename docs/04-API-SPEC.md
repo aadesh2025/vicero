@@ -71,6 +71,21 @@ from it. Error model per `02 §8`.
 - `POST /public/agents/{public_key}/chat` (rate-limited, no dashboard auth; optional
   visitor token) → same streaming contract.
 - `WS /public/agents/{public_key}/ws`.
+- **Widget config additions (docs/27, all additive, `null` = unchanged).** `PATCH /agents/{id}/widget-config`
+  accepts `widgetLayout` (`classic|glass|hairline|paper|pebble|console|concierge|command|drawer|block`),
+  `cornerRadius` (int 0-28), `density` (`compact|comfortable|roomy`) and `interactiveBlocks`
+  (`{enabled, options, cards, form, datetime, counter, rating, steps, handoff: bool}`); anything else is
+  `widget.invalid_config` (400). The public config returns `widget_layout`, `corner_radius`, `density`
+  (all `null` for an untouched agent) and `interactive_blocks` (`null` unless the master switch is on).
+- **Interactive blocks.** The chat stream gains `{type: "block", block}` (after the text, before `done`; only for a
+  turn the output guard passed; `replace`d, failed or crisis turns carry none). `POST .../chat` accepts
+  `block_reply: {block_id, value}` beside the normal `message`; the tap is an ordinary turn. `stream:false`
+  adds `blocks` to the JSON only when there are some. `GET /public/agents/{public_key}/conversations/{id}/messages?visitor_id=`
+  returns `[{role, text, blocks}]` (last 40; blocks-enabled agents only; the visitor who started the
+  conversation only, else 404). A block: `{id, type, ...fields, fallback_text, resolved?}`; the server assigns
+  `id` and `fallback_text`. Caps: options <= 8 items / label <= 60; cards <= 6 (https images); form <= 5 fields
+  of `text|email|tel`; datetime <= 14 days / <= 12 slots; counter max <= 20; steps <= 8; <= 2 blocks per reply.
+  Persisted in `messages.blocks` (migration 0037); `content` carries the fallback text.
 
 ## Tools  `/v1/tools`
 - `GET /builtin` → available built-in tools.

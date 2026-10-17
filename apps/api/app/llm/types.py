@@ -83,6 +83,9 @@ StreamEventType = Literal[
     # every reply until it could be checked would have cost first-token latency on every
     # turn to defend against a rare event, so the correction is sent after the fact.
     "replace",
+    # An interactive block the agent chose to show (docs/27 Phase 2). Emitted once the output guard has
+    # passed, so a turn that was rewritten or suppressed never shows one. Old widgets ignore unknown events.
+    "block",
 ]
 
 
@@ -100,3 +103,5 @@ class StreamEvent(BaseModel):
     # Persistence markers (dashboard chat): the conversation and persisted assistant message.
     conversation_id: str | None = None
     message_id: str | None = None
+    # A validated interactive block (see app.chat.blocks); only on `block` events.
+    block: dict[str, Any] | None = None

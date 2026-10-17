@@ -13,6 +13,7 @@ from typing import Any, cast
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.chat import blocks as chat_blocks
 from app.chat import guard_models, guardrails, memory, variables
 from app.chat.agent_trace import persist_agent_steps
 from app.chat.assembly import build_messages, compose_system_prompt, instruction_prompt_of
@@ -203,11 +204,18 @@ def _persist_assistant_message(
     # Output redaction guardrail: strip secret-looking strings before the text is stored/returned.
     redacted = guardrails.redact_secrets((result.content or "").strip()) or None
     result.content = redacted or ""
+    blocks = list(result.blocks or [])
+    content = redacted
+    if blocks:
+        # `content` carries the blocks' plain-text version, so the inbox, transcripts, exports and the next
+        # turn's history read a normal message and need no knowledge of blocks (docs/27 Phase 2).
+        content = ((redacted or "") + chat_blocks.fallback_suffix(blocks)).strip() or None
     msg = Message(
         conversation_id=conv.id,
         organization_id=conv.organization_id,
         role="assistant",
-        content=redacted,
+        content=content,
+        blocks=blocks or None,
         citations=result.citations,
         provider=result.provider or None,
         model=result.model or None,

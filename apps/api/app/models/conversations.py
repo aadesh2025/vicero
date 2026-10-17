@@ -72,6 +72,10 @@ class Message(Base, UUIDPrimaryKey):
     citations: Mapped[list[Any]] = mapped_column(JSONB, default=list, nullable=False)
     #: Images on this message: `[{"media_id", "kind": "image", "direction": "in"|"out", "description"}]`.
     attachments: Mapped[list[Any]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
+    #: Interactive blocks this assistant message showed (docs/27 Phase 2): a list of validated block dicts, each
+    #: with a plain-text `fallback_text`. NULL when none. `content` already carries the fallback text, so the
+    #: inbox, transcripts and exports need no knowledge of this column.
+    blocks: Mapped[list[Any] | None] = mapped_column(JSONB)
     provider: Mapped[str | None] = mapped_column(String(32))
     model: Mapped[str | None] = mapped_column(String(128))
     tokens_prompt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

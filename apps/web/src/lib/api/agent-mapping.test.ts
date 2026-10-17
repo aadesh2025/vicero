@@ -147,3 +147,13 @@ describe("widget layouts", () => {
     expect(draftToWidgetConfig(d)).toMatchObject({ widgetLayout: "glass", cornerRadius: 0, density: "roomy" });
   });
 });
+
+describe("interactive blocks setting", () => {
+  it("is off (null) for an untouched agent and round-trips when set", () => {
+    expect(versionToDraft(agent, version()).widget.interactiveBlocks).toBeNull();
+    expect(draftToWidgetConfig(versionToDraft(agent, version())).interactiveBlocks).toBeNull();
+    const d = versionToDraft(agent, version(), { interactiveBlocks: { enabled: true, cards: false } });
+    expect(d.widget.interactiveBlocks).toEqual({ enabled: true, cards: false });
+    expect(draftToWidgetConfig(d).interactiveBlocks).toEqual({ enabled: true, cards: false });
+  });
+});

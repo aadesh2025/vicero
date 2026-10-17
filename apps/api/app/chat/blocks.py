@@ -35,7 +35,6 @@ from app.core.logging import get_logger
 from app.llm.types import Message
 from app.models import Message as DbMessage
 from app.models import WidgetConfig
-from app.tools.base import ToolContext, ToolResult
 
 log = get_logger("chat.blocks")
 
@@ -170,7 +169,7 @@ def _options(p: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(prog, dict):
             raise BlockError("progress must be {step, total}")
         try:
-            step, total = int(prog.get("step")), int(prog.get("total"))
+            step, total = int(prog.get("step") or 0), int(prog.get("total") or 0)
         except (TypeError, ValueError):
             raise BlockError("progress step and total must be whole numbers") from None
         if not (1 <= step <= total <= 20):
@@ -236,7 +235,7 @@ def _form(p: dict[str, Any]) -> dict[str, Any]:
 
 def _datetime(p: dict[str, Any]) -> dict[str, Any]:
     days = []
-    for i, raw in enumerate(_list(p.get("days"), "days", MAX_DAYS)):
+    for raw in _list(p.get("days"), "days", MAX_DAYS):
         if isinstance(raw, str):
             raw = {"date": raw}
         if not isinstance(raw, dict):
@@ -248,7 +247,7 @@ def _datetime(p: dict[str, Any]) -> dict[str, Any]:
             dt.date.fromisoformat(date)
         except ValueError:
             raise BlockError(f"'{date}' is not a real date") from None
-        day = {"id": date, "label": _text(raw.get("label"), "label", 30, required=False) or date}
+        day: dict[str, Any] = {"id": date, "label": _text(raw.get("label"), "label", 30, required=False) or date}
         if raw.get("disabled") or raw.get("closed"):
             day["disabled"] = True
         days.append(day)
@@ -288,9 +287,7 @@ def _rating(p: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {"prompt": _text(p.get("prompt"), "prompt", 120)}
     for key in ("reasons_good", "reasons_bad"):
         raw = p.get(key)
-        out[key] = (
-            [_text(r, key, 40) for r in _list(raw, key, MAX_REASONS, minimum=0)] if raw is not None else []
-        )
+        out[key] = [_text(r, key, 40) for r in _list(raw, key, MAX_REASONS, minimum=0)] if raw is not None else []
     return out
 
 
@@ -420,7 +417,8 @@ def visible_text(blocks: list[dict[str, Any]]) -> str:
             parts.append(node)
         elif isinstance(node, dict):
             for key, val in node.items():
-                if key not in ("id", "type", "image_url", "image_media_id", "resolved"):
+                # fallback_text is derived from the other strings; counting it would dilute the leak score.
+                if key not in ("id", "type", "image_url", "image_media_id", "resolved", "fallback_text"):
                     walk(val)
         elif isinstance(node, list):
             for val in node:
@@ -482,9 +480,7 @@ def clean_reply_value(value: Any, *, _depth: int = 0) -> Any:
     return None
 
 
-async def resolve_block(
-    session: AsyncSession, conversation_id: uuid.UUID, block_id: str, value: Any
-) -> bool:
+async def resolve_block(session: AsyncSession, conversation_id: uuid.UUID, block_id: str, value: Any) -> bool:
     """Mark a block answered, so it renders read-only (with the chosen value) after a reload.
 
     Looks only inside this conversation, so a forged id from another thread resolves nothing, and only
@@ -506,10 +502,11 @@ async def resolve_block(
         blocks = list(msg.blocks or [])
         for i, b in enumerate(blocks):
             if isinstance(b, dict) and b.get("id") == block_id and not b.get("resolved"):
-                blocks[i] = {
-                    **b,
-                    "resolved": {"value": clean_reply_value(value), "at": dt.datetime.now(tz=dt.UTC).isoformat()},
-                }
+                # A form's values are contact details the visitor typed. They already live in the user message,
+                # which is the one place the normal pipeline (retention, deletion, redaction) knows about; a
+                # second copy here would be storage that pipeline does not reach. Only the fact is kept.
+                kept = None if b.get("type") == "form" else clean_reply_value(value)
+                blocks[i] = {**b, "resolved": {"value": kept, "at": dt.datetime.now(tz=dt.UTC).isoformat()}}
                 msg.blocks = blocks  # reassign: JSONB change tracking needs a new object
                 await session.flush()
                 return True
@@ -525,13 +522,6 @@ class BlockTool:
     block_type: str
     description: str
     parameters: dict[str, Any]
-
-
-_SHOWN = {
-    "status": "shown",
-    "note": "The visitor now sees it and will answer by tapping. Reply with at most one short sentence and wait; "
-    "do not repeat the choices in text.",
-}
 
 
 def _text_schema(maxlen: int) -> dict[str, Any]:
@@ -664,81 +654,23 @@ BLOCK_TOOLS: dict[str, BlockTool] = {
 }
 
 
+#: Appended to the system prompt only for an agent that opted in. Prompt text is guidance, not enforcement:
+#: every limit it mentions is also enforced in code (`build_block`, the output guard, the per-turn cap).
+BLOCKS_INSTRUCTION = (
+    "The chat window can show tappable controls. When the visitor must choose between a few options, pick a "
+    "day and time, or give contact details, call the matching tool (present_options, present_cards, "
+    "pick_datetime, request_details, ask_rating) instead of typing the choices out. Keep your own text to one "
+    "short sentence when you do, show at most one control per reply, and then wait for the visitor's answer, "
+    "which arrives as a normal message. Never use a control to ask for passwords, card numbers, ID numbers "
+    "or one-time codes. If a tool reports an error, just ask in plain text."
+)
+
+
 def tools_for(flags: dict[str, bool] | None) -> dict[str, BlockTool]:
     """The block tools to offer: none unless the master switch is on, then one per enabled type."""
     if not flags or not flags.get("enabled"):
         return {}
     return {name: t for name, t in BLOCK_TOOLS.items() if flags.get(t.block_type, True)}
-
-
-async def _cards_from_catalog(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
-    """Cards built from this org's catalog rows — never from model-supplied titles, prices or images."""
-    from sqlalchemy import func
-
-    from app.models import Product, ProductImage
-
-    stmt = select(Product).where(Product.organization_id == ctx.org_id, Product.is_active.is_(True))
-    ids: list[uuid.UUID] = []
-    for raw in args.get("product_ids") or []:
-        try:
-            ids.append(uuid.UUID(str(raw)))
-        except ValueError:
-            continue
-    if ids:
-        stmt = stmt.where(Product.id.in_(ids[:MAX_CARDS]))
-    else:
-        query = str(args.get("query") or "").strip()[:80]
-        if not query:
-            raise BlockError("give product_ids or a query")
-        like = "%" + query.replace("%", r"\%").replace("_", r"\_") + "%"
-        stmt = stmt.where(Product.name.ilike(like) | func.coalesce(Product.sku, "").ilike(like))
-    products = list((await ctx.session.execute(stmt.limit(MAX_CARDS))).scalars().all())
-    if not products:
-        raise BlockError("no matching products in the catalog; answer in text instead")
-    first_image = {
-        pid: mid
-        for pid, mid in (
-            await ctx.session.execute(
-                select(ProductImage.product_id, ProductImage.media_asset_id)
-                .where(ProductImage.product_id.in_([p.id for p in products]))
-                .order_by(ProductImage.position)
-            )
-        ).all()
-    }
-    cards = []
-    for p in products:
-        card: dict[str, Any] = {"id": str(p.id), "title": p.name, "actions": [{"label": "Choose"}]}
-        if p.price_minor is not None:
-            card["price"] = f"{p.currency + ' ' if p.currency else ''}{p.price_minor / 100:g}"
-        if (p.description or "").strip():
-            card["subtitle"] = " ".join(p.description.split())[:120]
-        if not p.in_stock:
-            card["badge"] = "Out of stock"
-        media_id = first_image.get(p.id)
-        if media_id is not None:
-            # Only the id is stored: the signed URL is short-lived and is re-made on every read.
-            card["image_media_id"] = str(media_id)
-        cards.append(card)
-    return {"items": cards}
-
-
-async def run_block_tool(ctx: ToolContext, name: str, args: dict[str, Any]) -> ToolResult:
-    """Execute a block tool: validate, queue the block on the turn, tell the model it was shown."""
-    tool = BLOCK_TOOLS.get(name)
-    if tool is None or ctx.blocks is None:
-        return ToolResult(output={}, status="error", error="blocks are not available in this conversation")
-    if len(ctx.blocks) >= MAX_BLOCKS_PER_TURN:
-        return ToolResult(
-            output={}, status="error", error=f"at most {MAX_BLOCKS_PER_TURN} interactive blocks per reply"
-        )
-    try:
-        payload = await _cards_from_catalog(ctx, args) if tool.block_type == "cards" else args
-        block = build_block(tool.block_type, payload)
-    except BlockError as exc:
-        log.info("block_rejected", block_type=tool.block_type, reason=str(exc)[:120])
-        return ToolResult(output={}, status="error", error=str(exc))
-    ctx.blocks.append(block)
-    return ToolResult(output=dict(_SHOWN))
 
 
 def refresh_media_urls(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:

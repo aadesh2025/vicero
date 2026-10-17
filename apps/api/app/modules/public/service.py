@@ -14,11 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.base import ContactProfile
+from app.chat import blocks
 from app.chat.inbound import InboundTurn
 from app.contacts import upsert_contact
 from app.core.errors import AppError
 from app.llm.types import StreamEvent
-from app.models import Agent, AgentVersion, Conversation, WidgetConfig
+from app.models import Agent, AgentVersion, Conversation, Message, WidgetConfig
 from app.modules.campaigns import service as campaign_service
 from app.modules.conversations.service import _live_version
 from app.modules.public import schemas
@@ -36,6 +37,7 @@ async def _resolve_agent(session: AsyncSession, public_key: str) -> tuple[Agent,
 def _theme_from(widget: dict[str, Any]) -> schemas.WidgetTheme:
     """Map the stored camelCase config onto the widget's snake_case response shape."""
     buttons = widget.get("inputBarButtons")
+    ib = blocks.normalize_flags(widget.get("interactiveBlocks"))
     layout = widget.get("widgetLayout")
     radius = widget.get("cornerRadius")
     density = widget.get("density")
@@ -59,6 +61,7 @@ def _theme_from(widget: dict[str, Any]) -> schemas.WidgetTheme:
         # bool is an int subclass; a stray `true` must not become radius 1.
         corner_radius=radius if isinstance(radius, int) and not isinstance(radius, bool) else None,
         density=density if density in schemas.WIDGET_DENSITIES else None,
+        interactive_blocks=ib,
     )
 
 
@@ -202,6 +205,10 @@ async def public_chat_events(
     agent, version, conv = resolved
 
     yield StreamEvent(type="conversation", conversation_id=str(conv.id))
+    if data.block_reply is not None:
+        # Marks the block answered so it reloads read-only. A miss (unknown id, already answered, another
+        # thread's id) is ignored: the message below is a normal turn either way, with every guard on it.
+        await blocks.resolve_block(session, conv.id, data.block_reply.block_id, data.block_reply.value)
     turn = InboundTurn(session, agent, version, conv, data.message)
     async for ev in turn.events():
         yield ev
@@ -235,6 +242,7 @@ async def public_chat_once(
     replaced: str | None = None
     conversation_id = ""
     citations: list[Any] = []
+    shown_blocks: list[dict[str, Any]] = []
     async for ev in public_chat_events(session, resolved, data):
         if ev.type == "conversation" and ev.conversation_id:
             conversation_id = ev.conversation_id
@@ -246,8 +254,64 @@ async def public_chat_once(
             replaced = ev.delta or ""
         elif ev.type == "citations" and ev.citations:
             citations = ev.citations
+        elif ev.type == "block" and ev.block:
+            shown_blocks.append(ev.block)
     final = content if replaced is None else replaced
-    return {"conversation_id": conversation_id, "content": final.strip(), "citations": citations}
+    out: dict[str, Any] = {"conversation_id": conversation_id, "content": final.strip(), "citations": citations}
+    if shown_blocks:  # absent for every agent that has not opted in, so the legacy response is unchanged
+        out["blocks"] = shown_blocks
+    return out
+
+
+async def conversation_history(
+    session: AsyncSession, public_key: str, conversation_id: uuid.UUID, visitor_id: str
+) -> list[schemas.PublicHistoryMessage]:
+    """The thread so far, for a widget reloading mid-conversation. Only for agents with interactive blocks on:
+    the legacy widget has never restored history and an agent that did not opt in must not start to.
+
+    The same ownership rule as resuming a chat: only the visitor who started the conversation can read it,
+    and anyone else gets the same 404 as a conversation that does not exist.
+    """
+    agent, _version = await _resolve_agent(session, public_key)
+    conv = await session.get(Conversation, conversation_id)
+    if (
+        conv is None
+        or conv.agent_id != agent.id
+        or conv.organization_id != agent.organization_id
+        or conv.channel != "widget"
+        or conv.channel_user_id != visitor_id
+    ):
+        raise AppError("public.conversation_not_found", "Conversation not found.", 404)
+    if await blocks.load_flags(session, agent.id) is None:
+        return []
+    rows = list(
+        (
+            await session.execute(
+                select(Message)
+                .where(
+                    Message.conversation_id == conv.id,
+                    Message.role.in_(("user", "assistant")),
+                    Message.content.is_not(None),
+                )
+                .order_by(Message.created_at.desc())
+                .limit(40)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    rows.reverse()
+    out: list[schemas.PublicHistoryMessage] = []
+    for m in rows:
+        shown = blocks.public_view(list(m.blocks or [])) if m.role == "assistant" else []
+        out.append(
+            schemas.PublicHistoryMessage(
+                role=m.role,
+                text=blocks.strip_fallback(m.content, list(m.blocks or [])) if shown else (m.content or ""),
+                blocks=shown,
+            )
+        )
+    return out
 
 
 def visitor_id_for(data: schemas.PublicChatRequest) -> str:

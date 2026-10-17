@@ -57,6 +57,21 @@ export const DENSITY_OPTIONS: { value: WidgetDensity; label: string }[] = [
   { value: "roomy", label: "Roomy" },
 ];
 
+/** The block types an agent can be given as tools, with the label shown in the designer (docs/27 Phase 2). */
+export const BLOCK_TOGGLES: { key: string; label: string; hint: string }[] = [
+  { key: "options", label: "Quick replies", hint: "Tappable choices instead of a typed list" },
+  { key: "cards", label: "Product cards", hint: "Photo, price and a button, from your product catalog" },
+  { key: "form", label: "Inline forms", hint: "Name, email or phone — never passwords or card details" },
+  { key: "datetime", label: "Date & time picker", hint: "Days and time slots the agent got from a tool" },
+  { key: "rating", label: "Rating", hint: "1 to 5 stars with optional reason chips" },
+];
+
+/** Master switch on: every type starts on, so turning the feature on does something immediately. */
+export function enableBlocks(current: Record<string, boolean> | null): Record<string, boolean> {
+  const all = Object.fromEntries(BLOCK_TOGGLES.map((b) => [b.key, true]));
+  return { ...all, ...(current ?? {}), enabled: true };
+}
+
 export function layoutDef(id: WidgetLayout | null | undefined): LayoutDef | null {
   return WIDGET_LAYOUTS.find((l) => l.id === id) ?? null;
 }

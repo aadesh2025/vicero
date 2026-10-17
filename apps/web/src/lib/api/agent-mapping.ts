@@ -81,6 +81,10 @@ export function versionToDraft(
       widgetLayout: (w.widgetLayout as AgentDraft["widget"]["widgetLayout"]) ?? null,
       cornerRadius: typeof w.cornerRadius === "number" ? w.cornerRadius : null,
       density: (w.density as AgentDraft["widget"]["density"]) ?? null,
+      interactiveBlocks:
+        w.interactiveBlocks && typeof w.interactiveBlocks === "object"
+          ? (w.interactiveBlocks as Record<string, boolean>)
+          : null,
       allowedSites: Array.isArray(w.allowedSites) ? (w.allowedSites as string[]) : [],
     },
   };
@@ -157,6 +161,7 @@ export function draftToWidgetConfig(draft: AgentDraft): Record<string, unknown> 
     widgetLayout: w.widgetLayout ?? null,
     cornerRadius: w.cornerRadius ?? null,
     density: w.density ?? null,
+    interactiveBlocks: w.interactiveBlocks ?? null,
     allowedSites: w.allowedSites,
   };
 }

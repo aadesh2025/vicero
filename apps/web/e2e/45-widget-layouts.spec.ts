@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { API, auth, createAccount, type Account } from "./helpers";
 
 // docs/27 Phase 1: every one of the 10 layouts must embed, open, stream a real reply, render
@@ -198,4 +199,73 @@ test.describe("widget layouts", () => {
     );
     await expect(page.locator(".bf-panel")).not.toHaveClass(/bf-lay|bf-l-|bf-tuned/);
   });
+});
+
+test.describe("compatibility and edge cases", () => {
+  test("a cached OLD widget.js still works against an agent saved with the new fields", async ({ page, request }) => {
+    const account = await createAccount(request, "Old Bundle Org");
+    const agent = await agentWithPrompts(request, account);
+    await request.patch(`${API}/v1/agents/${agent.id}/widget-config`, {
+      headers: auth(account),
+      data: {
+        widgetLayout: "glass",
+        cornerRadius: 20,
+        density: "roomy",
+        interactiveBlocks: { enabled: true },
+      },
+    });
+    // Serve the bundle exactly as it was before docs/27 (a visitor whose browser cached it).
+    const old = readFileSync(resolve(__dirname, "fixtures/widget-before-docs27.js"), "utf8");
+    await page.route("**/widget.js", (route) => route.fulfill({ contentType: "text/javascript", body: old }));
+    await embed(page, agent.publicKey);
+    await page.locator(".bf-launcher").click();
+    await page.locator(".bf-ta").fill("hello from an old bundle");
+    await page.locator(".bf-send").click();
+    await expect(page.locator(".bf-bot .bf-bubble").last()).toContainText(/echo:\s*hello from an old bundle/i, {
+      timeout: 20_000,
+    });
+    // It ignores what it does not know: no layout class, no block markup.
+    await expect(page.locator(".bf-panel")).not.toHaveClass(/bf-l-/);
+    await expect(page.locator(".bf-blk")).toHaveCount(0);
+  });
+
+  for (const layout of LAYOUTS) {
+    test(`${layout}: 320px wide, a very long name, RTL text, no horizontal overflow`, async ({ page }) => {
+      await page.setViewportSize({ width: 320, height: 600 });
+      await page.goto("/widget-preview.html");
+      await expect(page.locator(".bf-launcher")).toBeVisible();
+      await page.evaluate((l) => {
+        window.postMessage(
+          {
+            type: "bf-preview-config",
+            config: {
+              name: "An extraordinarily long assistant name that keeps going well past any reasonable header width",
+              welcome_message: "مرحبا بكم في متجرنا، كيف يمكننا مساعدتكم اليوم؟ ".repeat(3),
+              suggested_prompts: ["A suggestion that is also quite long and should wrap instead of overflowing", "ثاني"],
+              theme: { widget_layout: l, interactive_blocks: { enabled: true } },
+            },
+          },
+          "*",
+        );
+      }, layout);
+      await page.locator(".bf-launcher").click();
+      await page.waitForTimeout(450);
+      const overflow = await page.evaluate(() => {
+        const root = (document.querySelector("#vicero-widget") as HTMLElement).shadowRoot!;
+        const panel = root.querySelector(".bf-panel") as HTMLElement;
+        const box = panel.getBoundingClientRect();
+        const msgs = root.querySelector(".bf-msgs") as HTMLElement;
+        return {
+          panelRight: Math.round(box.right),
+          panelLeft: Math.round(box.left),
+          panelScroll: panel.scrollWidth - panel.clientWidth,
+          msgsScroll: msgs.scrollWidth - msgs.clientWidth,
+        };
+      });
+      expect(overflow.panelLeft).toBeGreaterThanOrEqual(0);
+      expect(overflow.panelRight).toBeLessThanOrEqual(320);
+      expect(overflow.panelScroll).toBeLessThanOrEqual(1);
+      expect(overflow.msgsScroll).toBeLessThanOrEqual(1);
+    });
+  }
 });

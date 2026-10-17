@@ -3,7 +3,15 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
-## ▶ OPS UPDATE — 2026-10-08 (newest; read before the blocks below)
+## ▶ WIDGET STYLES + INTERACTIVE BLOCKS — 2026-10-17 (newest; docs/27, ADR-125 to ADR-128)
+
+- Shipped in two commits: `feat(widget): 10 selectable layouts + corner radius + density` and `feat(widget): interactive blocks (opt-in)`. Everything is additive; reverting the commits is the rollback (migration 0037 drops `messages.blocks` on downgrade).
+- Pick-up points: widget code `packages/widget/src/widget.js` (layout engine and block renderers are marked sections; never edit `apps/web/public/widget.js`, run `node packages/widget/build.mjs`); backend rules `apps/api/app/chat/blocks.py`, tool execution `apps/api/app/tools/block_tools.py`; designer `apps/web/src/components/builder/tabs/channels-tab.tsx` and presets `apps/web/src/lib/widget-layouts.ts`.
+- The regression snapshot `apps/web/e2e/fixtures/widget-legacy-styles.json` was captured from the pre-change bundle. Re-capture it (`UPDATE_WIDGET_SNAPSHOT=1`) only when the original look is changed on purpose.
+- E2E needs the API with `ALLOW_SELF_SERVE_ORGS=true`, `SELF_SERVE_ENABLED=false`, `LLM_FORCE_FAKE=true` (see CI) and Docker Desktop running; Docker was found stopped at the start of this work.
+- Open: see the follow-ups in the 2026-10-17 entry of `docs/PROGRESS.md`.
+
+## ▶ OPS UPDATE — 2026-10-08 (read before the blocks below)
 
 - Production runs `master` at `0e3015a`; migrations at head `0031_automations`. Email goes via Gmail SMTP. The Groq key stays as is (owner's decision).
 - `deploy.sh` now always pulls images (`fix/deploy-pull-always` merged). Digests and rollback target: runbook §4 release log.

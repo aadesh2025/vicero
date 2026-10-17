@@ -84,6 +84,8 @@ export interface WidgetConfig {
   cornerRadius: number | null;
   /** Spacing. null = the original spacing. */
   density: import("@/lib/widget-layouts").WidgetDensity | null;
+  /** Interactive chat blocks (docs/27). null/absent = off. `enabled` is the master switch. */
+  interactiveBlocks: Record<string, boolean> | null;
   /** Websites allowed to embed the widget (hostnames). Empty = any site. */
   allowedSites: string[];
 }

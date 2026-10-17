@@ -22,6 +22,8 @@ class MessageOut(BaseModel):
     tool_calls: dict[str, Any] | None
     tool_call_id: str | None
     citations: list[Any]
+    #: Images on this message: [{media_id, kind, direction, description}] (docs/26).
+    attachments: list[Any] = []
     provider: str | None
     model: str | None
     tokens_prompt: int

@@ -71,7 +71,7 @@ function seedDraft(providerName: string, model: string) {
         stop: [],
       },
       knowledge: { attachedKbIds: [], topK: 4, scoreThreshold: 0.35, hybrid: true },
-      features: { rag: false, tools: false, memory: false, handoff: false },
+      features: { rag: false, tools: false, memory: false, handoff: false, catalog: false },
       widget: {
         primaryColor: "#f97316",
         position: "bottom-right",

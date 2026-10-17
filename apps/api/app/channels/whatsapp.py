@@ -22,6 +22,8 @@ from app.channels.base import (
     ChannelAuthRejected,
     ContactProfile,
     InboundMessage,
+    MediaKind,
+    MediaRef,
     register,
 )
 from app.channels.meta_graph import graph_base
@@ -87,8 +89,19 @@ def is_group_message(message: dict[str, Any]) -> bool:
     return any(str(message.get(k) or "").endswith("@g.us") for k in ("from", "to", "recipient_id"))
 
 
+#: WhatsApp message `type` -> the kind we hand the media pipeline.
+_MEDIA_TYPES: dict[str, MediaKind] = {
+    "image": "image",
+    "audio": "audio",
+    "video": "video",
+    "document": "file",
+    "sticker": "sticker",
+}
+
+
 class WhatsAppChannel(BaseChannel):
     type = "whatsapp"
+    supports_images = True
     secret_fields = ("access_token", "app_secret", "registration_pin")
 
     async def verify(
@@ -107,14 +120,32 @@ class WhatsAppChannel(BaseChannel):
             if is_group_message(msg):
                 return None
             sender = msg["from"]
-            text = msg["text"]["body"]
+            kind = msg.get("type", "text")
+            text = ""
+            media: list[MediaRef] = []
+            if kind == "text":
+                text = str(msg["text"]["body"])
+            elif kind in _MEDIA_TYPES:
+                body = msg[kind]
+                caption = body.get("caption") if isinstance(body, dict) else None
+                media.append(
+                    MediaRef(
+                        kind=_MEDIA_TYPES[kind],
+                        provider_id=str(body["id"]) if isinstance(body, dict) and body.get("id") else None,
+                        caption=str(caption) if caption else None,
+                    )
+                )
+                text = str(caption) if caption else ""
+            else:
+                return None  # reaction, location, interactive reply, ...
         except (KeyError, IndexError, TypeError):
             return None
         return InboundMessage(
             external_user_id=str(sender),
-            text=str(text),
+            text=text,
             raw=payload,
             profile=self._profile(value, str(sender)),
+            media=media,
         )
 
     @staticmethod
@@ -152,6 +183,28 @@ class WhatsAppChannel(BaseChannel):
             {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}},
         )
 
+    async def send_image(self, channel: Any, to: str, url: str, caption: str | None = None) -> bool:
+        """Send one image by link. Same window and token handling as a text send (`_post`)."""
+        self.ensure_active(channel)
+        token = self.secret(channel, "access_token")
+        phone_number_id = channel.config.get("phone_number_id")
+        if not token or not phone_number_id:
+            log.warning("whatsapp_send_skipped_missing_config", channel=str(channel.id))
+            return False
+        image: dict[str, str] = {"link": url}
+        if caption:
+            image["caption"] = caption
+        resp = await self._post(
+            channel,
+            token,
+            phone_number_id,
+            {"messaging_product": "whatsapp", "to": to, "type": "image", "image": image},
+        )
+        if resp.status_code >= 400:
+            log.warning("media_send_rejected", channel_type=self.type, channel=str(channel.id), status=resp.status_code)
+            return False
+        return True
+
     async def send_template(
         self,
         channel: Any,
@@ -184,7 +237,9 @@ class WhatsAppChannel(BaseChannel):
             {"messaging_product": "whatsapp", "to": to, "type": "template", "template": template},
         )
 
-    async def _post(self, channel: Any, token: str, phone_number_id: str, body: dict[str, Any]) -> None:
+    async def _post(
+        self, channel: Any, token: str, phone_number_id: str, body: dict[str, Any]
+    ) -> httpx.Response:
         async with self._client(base_url=graph_base()) as client:
             resp = await client.post(
                 f"/{phone_number_id}/messages",
@@ -192,6 +247,7 @@ class WhatsAppChannel(BaseChannel):
                 json=body,
             )
         self._raise_for_meta_error(channel, resp)
+        return resp
 
     @staticmethod
     def _raise_for_meta_error(channel: Any, resp: httpx.Response) -> None:

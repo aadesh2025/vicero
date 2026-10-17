@@ -15,9 +15,18 @@ class ToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class ImagePart(BaseModel):
+    """An image attached to a message (vision calls only; docs/26). Base64 so every adapter can embed it."""
+
+    mime: str
+    data_b64: str
+
+
 class Message(BaseModel):
     role: Role
     content: str | None = None
+    #: Only the vision call sets this. Every other caller keeps treating `content` as plain text.
+    images: list[ImagePart] | None = None
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
     name: str | None = None

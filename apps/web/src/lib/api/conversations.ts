@@ -2,6 +2,13 @@
 
 import { api, apiStream } from "./client";
 
+export interface ApiAttachment {
+  media_id: string;
+  kind: "image";
+  direction: "in" | "out";
+  description: string | null;
+}
+
 export interface ApiMessage {
   id: string;
   role: string;
@@ -9,6 +16,8 @@ export interface ApiMessage {
   tool_calls: Record<string, unknown> | null;
   tool_call_id: string | null;
   citations: unknown[];
+  /** Photos on this message (docs/26). Absent on older API responses. */
+  attachments?: ApiAttachment[];
   provider: string | null;
   model: string | null;
   tokens_prompt: number;

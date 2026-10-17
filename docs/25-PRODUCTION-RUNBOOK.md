@@ -284,3 +284,19 @@ ssh vicero "docker exec vicero-prod-api-1 python scripts/install_booking_tools.p
 ssh vicero "docker exec vicero-prod-api-1 python scripts/test_booking_tools.py --agent-id <AGENT_UUID>"
 ```
 Rollback: deactivate the three `ORG-<id> | Booking | ...` workflows in n8n (or disable the tools in the agent). The `bookings` table is additive and can stay.
+
+## 16. Images and the product catalog (ADR-124, docs/26)
+
+**Before deploying**
+1. Migration `0036_media_and_products` is additive (three tables, one defaulted column); `deploy.sh` runs it. Safe with the API up.
+2. Add to `/opt/vicero/.env`: `MEDIA_URL_SIGNING_KEY` (a long random value; if empty it falls back to `SECRET_KEY`, which works but ties image links to the JWT key). Defaults are fine for the rest (`.env.example`, `docs/ENV.md`).
+3. A `GEMINI_API_KEY` (or the key for whatever `VISION_PROVIDER` names) must exist, otherwise photos are stored but described as "could not be loaded".
+4. **Volume:** `MEDIA_DIR` (default `./var/media`) must be a named volume shared by `api` and `worker`, like `uploads` (ADR-068). Add it to `docker-compose.prod.yml` for both services, create the path in the image owned by the app user, and add it to the backup script next to `UPLOADS_DIR`. Without it the worker saves a photo the API cannot show.
+5. **Proxy body size:** Caddy allows large bodies by default; if a `request_body max_size` is set, raise it to 12MB for `/v1/products/*/images` and `/v1/inbox/conversations/*/images`.
+6. The API's public URL (`API_BASE_URL`) must be the real HTTPS address: it is the host in every image link Meta downloads.
+
+**Rollback:** set `MEDIA_FEATURE_ENABLED=false` and restart `api` and `worker`. Inbound photos then get "I can read text and photos for now - could you type your question?", and the catalog tools are not offered. Nothing is deleted.
+
+**Watch the logs for** `media_fetch_failed`, `media_rejected`, `vision_failed`, `media_send_rejected`. `vision_described` carries the cost of each photo.
+
+**Live check (WhatsApp, Instagram, Messenger):** send a photo and see a sensible answer; ask for a product photo and see it arrive after the text; on WhatsApp, a photo after 24 hours is refused with the usual window message; an operator photo from the inbox arrives; the photo is gone from the inbox after 30 days ("Photo deleted after 30 days").

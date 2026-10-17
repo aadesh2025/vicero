@@ -9,6 +9,15 @@ description: Session-by-session build history for Vicero — incident postmortem
 > fresh session has context beyond git log. Full detail lives in `docs/PROGRESS.md` +
 > `docs/DECISIONS.md`; keep entries here to a few lines.
 
+### 2026-10-16 - docs/26: images on WhatsApp / Instagram / Messenger + product catalog (ADR-124)
+- **Describe-first, link-based, tools are not `Tool` rows.** See ADR-124. Vision runs only after the plan gate and handoff check (`InboundTurn.prepare`, a lazy callback), the photo is stored first so the inbox always has it. `Message.images` (not a list `content`) carries vision input so no caller that treats `content` as `str` changed.
+- **Gotcha:** `InboundTurn` must persist a *copy* of `attachments`; `prepare` fills descriptions into the same dicts afterwards and SQLAlchemy sees no JSONB change if the stored value is the object being mutated (the description silently never saved).
+- **Gotcha:** two new package cycles were introduced and removed (`media` <-> `channels` via `meta_graph`; `chat` <-> `tools` via `builtins`). `test_architecture.py::test_no_new_package_import_cycle` is a **baseline failure** on HEAD; check that your change adds no *extra* cycle in its output. `catalog_enabled` / `CATALOG_INSTRUCTION` live in `app/core/catalog.py` for this reason.
+- **Gotcha:** routers may not import `select` (architecture test); queries go in services.
+- **Not measured:** the catalog instruction appended to the system prompt has not been through the no-context fabrication A/B (needs a live model). Re-run it before enabling the catalog for a real client.
+- **Shared working tree hazard:** another session was editing `modules/public/*` and the widget (docs/27) and switched branches in the same checkout mid-run, which reverted files and once emptied `app/tools/service.py` (restored from the dangling stash commit). Commit with explicit paths and re-check `git status` before trusting a test run. A stray `git stash` is not safe here.
+- Docker Desktop stops overnight: `docker compose up -d postgres redis` first. Suites: backend full run 2033 passed before M5, web vitest + tsc + eslint clean.
+
 ### 2026-09-25 — Phase S1: self-serve signup + 10-day trial (ADR-088, ADR-090; docs/18)
 - **Reverses "workspaces are provisioned per client".** Signup → one trial workspace → limits → silent stop. All
   limits are in `app/core/plans.py`; **`Organization.plan` defaults to `legacy` and migration 0028 backfilled every

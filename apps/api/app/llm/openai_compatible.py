@@ -25,7 +25,16 @@ from app.llm.types import (
 
 def _message_to_openai(m: Message) -> dict[str, Any]:
     d: dict[str, Any] = {"role": m.role}
-    d["content"] = m.content
+    if m.images:
+        d["content"] = [
+            {"type": "text", "text": m.content or ""},
+            *(
+                {"type": "image_url", "image_url": {"url": f"data:{img.mime};base64,{img.data_b64}"}}
+                for img in m.images
+            ),
+        ]
+    else:
+        d["content"] = m.content
     if m.tool_calls:
         d["tool_calls"] = [
             {

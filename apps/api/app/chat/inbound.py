@@ -11,7 +11,7 @@ import asyncio
 import datetime as dt
 import hashlib
 import time
-from collections.abc import AsyncIterator, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ from app.chat.handoff import (
 from app.chat.pii import build_allowlist
 from app.chat.runtime import TurnResult, run_turn
 from app.core.audit import write_audit
+from app.core.catalog import CATALOG_INSTRUCTION, catalog_enabled
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.ratelimit import limiter
@@ -72,12 +73,27 @@ class InboundTurn:
         version: AgentVersion,
         conversation: Conversation,
         message: str,
+        *,
+        attachments: list[dict[str, Any]] | None = None,
+        prepare: Callable[[], Awaitable[str]] | None = None,
+        canned_reply: str | None = None,
+        supports_images: bool = False,
     ) -> None:
         self.session = session
         self.agent = agent
         self.version = version
         self.conversation = conversation
         self.message = message
+        #: Images the customer sent, already stored (docs/26). Saved on the message either way, so the inbox
+        #: shows them even when the bot stays silent.
+        self.attachments = attachments or []
+        #: Turns the stored images into the turn's text (the vision call). Deliberately lazy: it runs only
+        #: after the handoff and plan gates, so a silenced or human-handled conversation never pays for it.
+        self.prepare = prepare
+        #: Said instead of generating, for media the bot cannot read (voice notes, video, ...).
+        self.canned_reply = canned_reply
+        #: The channel can send images, so the agent is offered `send_product_images` (docs/26 §M4).
+        self.supports_images = supports_images
         self.result = TurnResult()
         self.handed_off = False
         #: The plan is out (trial over / messages spent), so the bot stayed silent. The visitor's
@@ -102,7 +118,11 @@ class InboundTurn:
         org_id = conv.organization_id
 
         history = await _load_history(session, conv.id)
-        await _persist_user_message(session, conv, self.message)
+        # A copy: `prepare` fills in descriptions on `self.attachments` afterwards, and SQLAlchemy only sees
+        # the JSONB column change if the stored value is not the object being mutated.
+        user_msg = await _persist_user_message(
+            session, conv, self.message, attachments=[dict(a) for a in self.attachments]
+        )
         await session.flush()
 
         # Paused for a human — persist the visitor message, but the bot stays silent.
@@ -134,6 +154,25 @@ class InboundTurn:
                 await self._stay_silent(None)
                 return
 
+        # Media the bot cannot read: a fixed, polite line instead of a generated reply (docs/26 §9).
+        if self.canned_reply is not None:
+            canned_msg = Message(
+                conversation_id=conv.id,
+                organization_id=conv.organization_id,
+                role="assistant",
+                content=self.canned_reply,
+                provider="system",
+            )
+            session.add(canned_msg)
+            conv.last_message_at = dt.datetime.now(tz=dt.UTC)
+            await session.flush()
+            self.assistant_message = canned_msg
+            self.result.content = self.canned_reply
+            yield StreamEvent(type="token", delta=self.canned_reply)
+            yield StreamEvent(type="done", finish_reason="canned")
+            yield StreamEvent(type="message", message_id=str(canned_msg.id))
+            return
+
         # Keyword handoff: the visitor is asking for a human.
         features = self.version.features or {}
         if features.get("handoff_enabled") and wants_handoff(self.message):
@@ -159,6 +198,14 @@ class InboundTurn:
             yield StreamEvent(type="done", finish_reason="handoff")
             yield StreamEvent(type="message", message_id=str(msg.id))
             return
+
+        # Photos become text only now: past the plan gate and the handoff checks, before any guard, so the
+        # description is screened by L1/L2 exactly like something the customer typed (docs/26 §8).
+        if self.prepare is not None:
+            self.message = await self.prepare()
+            user_msg.content = self.message
+            user_msg.attachments = [dict(a) for a in self.attachments]
+            await session.flush()
 
         # L1 input guard (docs/11 §4-L1). The visitor's own message is untrusted content —
         # this is the half of the threat model that was missing, and the fix for the live
@@ -252,6 +299,8 @@ class InboundTurn:
             business_name=org.name if org else None,
             variables=await self._variables(org),
         )
+        if catalog_enabled(self.version):
+            system_prompt = "\n\n".join(p for p in (system_prompt, CATALOG_INSTRUCTION) if p)
         # mild/elevated steer the tone; the bot keeps answering either way. Only `crisis`
         # suppresses generation, and it is handled below with a written holding message.
         if policy is not None and (directive := policy_guard.TONE_DIRECTIVES.get(policy.distress)):
@@ -330,7 +379,13 @@ class InboundTurn:
             org_for_flags = await self._org()
             include_mcp = agentic_loop_enabled(org_for_flags.agentic_loop_enabled if org_for_flags else None)
             specs, executor = await build_tooling(
-                session, org_id, self.agent, self.version, conv.id, include_mcp=include_mcp
+                session,
+                org_id,
+                self.agent,
+                self.version,
+                conv.id,
+                include_mcp=include_mcp,
+                outbound_media=self.result.outbound_media if self.supports_images else None,
             )
             if specs and executor is not None and provider.supports_tools():
                 req.tools = specs

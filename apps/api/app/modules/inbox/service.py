@@ -344,6 +344,50 @@ async def operator_reply(session: AsyncSession, ctx: OrgContext, cid: uuid.UUID,
     return _message_out(msg)
 
 
+async def operator_image(
+    session: AsyncSession, ctx: OrgContext, cid: uuid.UUID, raw: bytes, caption: str | None
+) -> MessageOut:
+    """The operator sends one photo into a conversation they have taken over (docs/26 M5)."""
+    from app.media import service as media_service
+    from app.media import urls as media_urls
+
+    rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
+    conv = await _get_conversation(session, ctx, cid)
+    if conv.channel not in _CHANNEL_TYPES or not conv.channel_user_id:
+        raise AppError("inbox.images_unsupported", "Photos can only be sent on WhatsApp, Instagram and Messenger.", 400)
+    adapter = get_channel(conv.channel)
+    channel = await _channel_row(session, conv)
+    if adapter is None or channel is None or not adapter.supports_images:
+        raise AppError("inbox.images_unsupported", "This channel cannot send photos.", 400)
+    await _check_can_send(session, conv)
+    asset = await media_service.save_asset(session, ctx.org.id, "operator", raw)
+    try:
+        delivered = await adapter.send_image(
+            channel, conv.channel_user_id, media_urls.public_url(asset.id), (caption or "").strip() or None
+        )
+    except ChannelAuthRejected:
+        await flag_token_rejected(session, channel)
+        await session.commit()  # keep the flag: the AppError below rolls the request back
+        raise AppError(
+            "channel_needs_reconnect", "This channel's access token was rejected. Reconnect it, then send again.", 409
+        ) from None
+    if not delivered:
+        raise AppError("inbox.image_rejected", "The platform refused that photo. Try another image.", 502)
+    msg = Message(
+        conversation_id=conv.id,
+        organization_id=conv.organization_id,
+        role="assistant",
+        content=(caption or "").strip() or "[Photo]",
+        provider="operator",
+        attachments=[{"media_id": str(asset.id), "kind": "image", "direction": "out", "description": None}],
+    )
+    session.add(msg)
+    conv.last_message_at = _now()
+    await session.flush()
+    await _publish_inbox(session, ctx, conv, "message.created")
+    return _message_out(msg)
+
+
 async def _check_can_send(session: AsyncSession, conv: Conversation) -> None:
     """Ask the adapter whether a free-form send is allowed before we commit to one."""
     if conv.channel not in _CHANNEL_TYPES or not conv.channel_user_id:

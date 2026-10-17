@@ -60,6 +60,7 @@ export function versionToDraft(
       tools: (feat.tools_enabled as boolean) ?? false,
       memory: (feat.memory_enabled as boolean) ?? true,
       handoff: (feat.handoff_enabled as boolean) ?? false,
+      catalog: (feat.product_catalog_enabled as boolean) ?? false,
     },
     widget: {
       primaryColor: (w.primaryColor as string) ?? "#1F2937",
@@ -119,7 +120,12 @@ export function draftToPatch(draft: AgentDraft): Record<string, unknown> {
       score_threshold: k.scoreThreshold,
       hybrid: k.hybrid,
     },
-    features: { tools_enabled: f.tools, memory_enabled: f.memory, handoff_enabled: f.handoff },
+    features: {
+      tools_enabled: f.tools,
+      memory_enabled: f.memory,
+      handoff_enabled: f.handoff,
+      product_catalog_enabled: f.catalog,
+    },
   };
 }
 

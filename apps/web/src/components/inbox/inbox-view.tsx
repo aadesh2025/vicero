@@ -28,6 +28,7 @@ import {
 } from "@/lib/channel-meta";
 import { ContactAvatar, contactHandle, contactLabel } from "@/components/inbox/contact-avatar";
 import { ChannelNotConnected } from "@/components/inbox/channel-not-connected";
+import { MessageImages, visibleText } from "@/components/inbox/message-images";
 import { ReplyBox } from "@/components/inbox/reply-box";
 import { RunMacro } from "@/components/inbox/run-macro";
 import { Lock } from "lucide-react";
@@ -394,7 +395,10 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
                 {operator && (
                   <div className="mb-0.5 text-[10px] font-extrabold uppercase tracking-wide text-accent">Operator</div>
                 )}
-                {m.content}
+                {m.attachments && m.attachments.length > 0 && (
+                  <MessageImages attachments={m.attachments} />
+                )}
+                {visibleText(m)}
               </div>
             </div>
           );
@@ -402,7 +406,12 @@ function Thread({ cid, onChanged }: { cid: string; onChanged: () => void }) {
       </div>
 
       {isHandoff && assigned ? (
-        <ReplyBox cid={cid} sendWindow={detail?.send_window ?? null} onSent={invalidate} />
+        <ReplyBox
+          cid={cid}
+          sendWindow={detail?.send_window ?? null}
+          onSent={invalidate}
+          canSendImages={detail ? ["whatsapp", "instagram", "facebook"].includes(detail.channel) : false}
+        />
       ) : (
         <div className="border-t border-border p-3 text-center text-xs font-semibold text-muted">
           {isHandoff

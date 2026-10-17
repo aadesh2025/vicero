@@ -18,6 +18,8 @@ from app.channels.base import (
     ChannelAuthRejected,
     ContactProfile,
     InboundMessage,
+    MediaKind,
+    MediaRef,
     meta_error_code,
 )
 from app.channels.meta_graph import graph_base
@@ -29,10 +31,14 @@ log = get_logger("channels.meta")
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
 
+_ATTACHMENT_KINDS: dict[str, MediaKind] = {"image": "image", "audio": "audio", "video": "video", "file": "file"}
+
+
 class MetaMessagingChannel(BaseChannel):
     """Base for Facebook Messenger / Instagram DM adapters."""
 
     secret_fields = ("page_access_token", "app_secret")
+    supports_images = True
     #: The ``object`` value Meta stamps on this surface's webhook deliveries.
     webhook_object: str = ""
     #: Graph fields to request when resolving a sender's profile.
@@ -63,10 +69,31 @@ class MetaMessagingChannel(BaseChannel):
                     continue  # our own outbound, echoed back to us
                 text = message.get("text")
                 sender = (event.get("sender") or {}).get("id")
-                if not text or sender is None:
+                media = self._media(message)
+                if sender is None or not (text or media):
                     continue
-                return InboundMessage(external_user_id=str(sender), text=str(text), raw=payload)
+                return InboundMessage(
+                    external_user_id=str(sender), text=str(text or ""), raw=payload, media=media
+                )
         return None
+
+    @staticmethod
+    def _media(message: dict[str, Any]) -> list[MediaRef]:
+        """Attachments we can name. `story_mention`, shared posts/reels, `fallback`, locations and
+        templates are ignored: there is nothing a support bot can usefully do with them."""
+        out: list[MediaRef] = []
+        for att in message.get("attachments") or []:
+            if not isinstance(att, dict):
+                continue
+            kind = _ATTACHMENT_KINDS.get(str(att.get("type")))
+            payload = att.get("payload")
+            if kind is None or not isinstance(payload, dict):
+                continue
+            if kind == "image" and payload.get("sticker_id"):
+                kind = "sticker"
+            url = payload.get("url")
+            out.append(MediaRef(kind=kind, url=str(url) if url else None))
+        return out
 
     # ── outbound ─────────────────────────────────────────────────────────────
     def check_can_send(self, channel: Any, *, last_inbound_at: Any) -> None:
@@ -100,6 +127,54 @@ class MetaMessagingChannel(BaseChannel):
             )
             if code == META_TOKEN_REJECTED_CODE:
                 raise ChannelAuthRejected(code)
+
+    async def send_typing(self, channel: Any, to: str) -> None:
+        """`sender_action: typing_on` - Meta clears it by itself when the next message arrives."""
+        token = self.secret(channel, "page_access_token")
+        if not token or getattr(channel, "status", "active") != "active":
+            return
+        try:
+            async with self._client(base_url=graph_base()) as client:
+                await client.post(
+                    "/me/messages",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"recipient": {"id": to}, "sender_action": "typing_on"},
+                )
+        except Exception as exc:  # cosmetic: never let it hold up the reply
+            log.info("meta_typing_failed", channel_type=self.type, error=type(exc).__name__)
+
+    async def send_image(self, channel: Any, to: str, url: str, caption: str | None = None) -> bool:
+        self.ensure_active(channel)
+        token = self.secret(channel, "page_access_token")
+        if not token:
+            log.warning("meta_send_skipped_no_token", channel_type=self.type, channel=str(channel.id))
+            return False
+        async with self._client(base_url=graph_base()) as client:
+            resp = await client.post(
+                "/me/messages",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "recipient": {"id": to},
+                    "messaging_type": "RESPONSE",
+                    "message": {"attachment": {"type": "image", "payload": {"url": url, "is_reusable": False}}},
+                },
+            )
+        if resp.status_code >= 400:
+            code, message = meta_error_code(resp)
+            log.warning(
+                "media_send_rejected",
+                channel_type=self.type,
+                channel=str(channel.id),
+                status=resp.status_code,
+                code=code,
+                message=message,
+            )
+            if code == META_TOKEN_REJECTED_CODE:
+                raise ChannelAuthRejected(code)
+            return False
+        if caption:  # Messenger attachments carry no caption, so it goes as the next message
+            await self.send(channel, to, caption)
+        return True
 
     # ── identity ─────────────────────────────────────────────────────────────
     async def fetch_profile(self, channel: Any, external_id: str) -> ContactProfile | None:

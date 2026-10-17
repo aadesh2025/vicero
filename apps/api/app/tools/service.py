@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import automations as automation_rules
 from app.billing import usage
 from app.core import rbac
+from app.core.catalog import catalog_enabled
 from app.core.config import settings
 from app.core.crypto import encrypt
 from app.core.errors import AppError
@@ -28,7 +29,7 @@ from app.models import Agent, AgentVersion, MCPServer, Organization, Tool, ToolR
 from app.modules.orgs.deps import OrgContext
 from app.tools import schemas
 from app.tools.base import ToolContext, ToolResult
-from app.tools.builtins import BUILTINS
+from app.tools.builtins import BUILTINS, CATALOG_TOOLS
 from app.tools.compact import compact_description, compact_schema
 from app.tools.http_tool import execute_http_tool
 from app.tools.mcp_client import MCPToolError
@@ -212,27 +213,43 @@ async def build_tooling(
     conversation_id: uuid.UUID | None,
     *,
     include_mcp: bool = False,
+    outbound_media: list[uuid.UUID] | None = None,
 ) -> tuple[list[ToolSpec], Any]:
     """Return (ToolSpecs, executor) for an agent's enabled tools, or ([], None) when disabled.
 
     Takes `org_id` (not an OrgContext) so the public/widget chat can reuse it. `executor(call)`
     runs the tool and returns a plain dict {output, status, error} (the runtime stays decoupled
     from the tools package). `include_mcp` — see `resolve_agent_tools`.
+
+    `outbound_media` is the list a channel reply collects product photos in; only channels that can
+    send images pass it, so only they are offered `send_product_images` (docs/26 §M4).
     """
     features = version.features or {}
-    if not features.get("tools_enabled"):
-        return [], None
-    # Runtime entitlement check, independent of the CRUD gates above: an agent that somehow has
-    # tools attached (created before a downgrade, imported, or by a bug) must still not run
-    # them on a plan that excludes tool calling (docs/18 §9).
-    org = await session.get(Organization, org_id)
-    if org is not None and not usage.feature_allowed(org, "tool_calling"):
-        log.info("tooling_skipped_plan", org_id=str(org_id), agent_id=str(agent.id))
-        return [], None
-    specs, by_name = await resolve_agent_tools(session, org_id, agent.id, include_mcp=include_mcp)
-    if org is not None and not usage.feature_allowed(org, "n8n"):
-        by_name = {k: t for k, t in by_name.items() if t.type != "n8n"}
-        specs = [sp for sp in specs if sp.name in by_name]
+    specs: list[ToolSpec] = []
+    by_name: dict[str, Tool] = {}
+    if features.get("tools_enabled"):
+        # Runtime entitlement check, independent of the CRUD gates above: an agent that somehow has
+        # tools attached (created before a downgrade, imported, or by a bug) must still not run
+        # them on a plan that excludes tool calling (docs/18 §9).
+        org = await session.get(Organization, org_id)
+        if org is not None and not usage.feature_allowed(org, "tool_calling"):
+            log.info("tooling_skipped_plan", org_id=str(org_id), agent_id=str(agent.id))
+        else:
+            specs, by_name = await resolve_agent_tools(session, org_id, agent.id, include_mcp=include_mcp)
+            if org is not None and not usage.feature_allowed(org, "n8n"):
+                by_name = {k: t for k, t in by_name.items() if t.type != "n8n"}
+                specs = [sp for sp in specs if sp.name in by_name]
+
+    # Catalog tools are not `Tool` rows: they are not attached by hand, do not count toward the plan's tool
+    # limit, and are offered purely by the agent's "use product catalog" switch. A tool the owner named the
+    # same keeps precedence.
+    catalog_names: set[str] = set()
+    if catalog_enabled(version):
+        for name, tool in CATALOG_TOOLS.items():
+            if name in by_name or (name == "send_product_images" and outbound_media is None):
+                continue
+            catalog_names.add(name)
+            specs.append(ToolSpec(name=name, description=tool.description, parameters=tool.parameters))
     if not specs:
         return [], None
 
@@ -242,9 +259,13 @@ async def build_tooling(
         agent_id=agent.id,
         version=version,
         conversation_id=conversation_id,
+        outbound_media=outbound_media,
     )
 
     async def executor(call: ToolCall) -> dict[str, Any]:
+        if call.name in catalog_names:
+            catalog_res = await CATALOG_TOOLS[call.name].run(tool_ctx, call.arguments)
+            return {"output": catalog_res.output, "status": catalog_res.status, "error": catalog_res.error}
         res = await execute_tool_call(session, tool_ctx, by_name, call)
         return {"output": res.output, "status": res.status, "error": res.error}
 

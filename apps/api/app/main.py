@@ -21,6 +21,7 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from app.db.session import commit_before_response
 from app.llm import embeddings
+from app.media.router import router as media_router
 from app.modules.admin.router import router as admin_router
 from app.modules.agent_tests.router import test_run_router as agent_test_run_router
 from app.modules.agent_tests.router import test_runs_by_agent_router as agent_test_runs_by_agent_router
@@ -49,6 +50,7 @@ from app.modules.knowledge.router import router as knowledge_router
 from app.modules.macros.router import inbox_router as macros_inbox_router
 from app.modules.macros.router import router as macros_router
 from app.modules.orgs.router import router as orgs_router
+from app.modules.products.router import router as products_router
 from app.modules.public.cors import PublicCorsMiddleware
 from app.modules.public.router import router as public_router
 from app.modules.workflow_tests.router import test_run_router as workflow_test_run_router
@@ -236,6 +238,8 @@ def create_app() -> FastAPI:
     app.include_router(billing_router)
     app.include_router(apikeys_router)
     app.include_router(canned_responses_router)
+    app.include_router(media_router)
+    app.include_router(products_router)
     app.include_router(macros_router)
     app.include_router(macros_inbox_router)
     app.include_router(contacts_router)

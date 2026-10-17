@@ -40,6 +40,20 @@ Format each entry as below. Newest at the top.
   6. `list_versions()` returns newest first; the installer and seed scripts took `[-1]` (the oldest). They now take the highest version.
 - **Consequences:** answers draw on three chunks instead of five and the last six messages; the shortened prompt and tool text need the demo-knowledge comparison (see PROGRESS). A fallback model can behave differently from the primary.
 
+### ADR-124: Images on WhatsApp / Instagram / Messenger and a product catalog
+- **Date:** 2026-10-16
+- **Status:** accepted
+- **Context:** Customers send photos ("is this covered?", "do you have this?") and the adapters dropped everything that was not text. Owners also want the bot to show product photos. The plan is `docs/26-IMAGES-AND-PRODUCT-CATALOG.md`.
+- **Decision:**
+  1. **Describe-first vision.** A vision model (`VISION_PROVIDER` / `VISION_MODEL`, default Gemini 2.5 Flash, the org's own key when it has one) writes a short factual description of each customer photo; the agent model and every guard read plain text. The description is stored on the message, so later turns reuse it. It runs only after the plan gate and the human-handoff check, so a silenced or human-handled conversation never pays for it; the photo is still stored for the inbox. The description goes through L1/L2 like a typed message, and the vision prompt says to report, never follow, text inside the image.
+  2. **Images are sent by link.** `send_image` gives Meta a signed, one-hour URL (`/v1/media/public/{id}?exp=&sig=`, HMAC-SHA256, constant-time compare). One call per image, no Meta media upload. Text goes first, then up to `MAX_IMAGES_PER_REPLY` (3) photos; one rejected photo does not stop the others, a dead token or a closed WhatsApp window ends the loop.
+  3. **Catalog tools are not `Tool` rows.** `search_products` and `send_product_images` are offered by the agent's own switch (`features.product_catalog_enabled`) and the platform switch (`MEDIA_FEATURE_ENABLED`), so they do not count against the plan's tool limit and cannot be mis-attached. `send_product_images` is offered only on channels that can send images and re-checks the organisation, that the product is live and the per-reply cap, because a model can invent ids.
+  4. **Every image is untrusted.** Magic-byte allow-list (JPEG, PNG, WebP, GIF first frame), pixel cap, always re-encoded with Pillow (strips EXIF/GPS and any appended payload), longest side 1600 px. Downloads: HTTPS only, Meta host allow-list on every redirect hop, 10 s timeout, byte cap enforced while streaming.
+  5. **Storage and billing.** Product photos count toward the plan's `storage_bytes` and are returned on delete. Customer photos are not billed and are deleted after `INBOUND_MEDIA_RETENTION_DAYS` (30) by a daily job, and with a Meta data-deletion request. A customer photo is one visitor message; the bot's text plus its photos is one bot reply.
+  6. **Search** is Postgres full text (any-term, prefix) plus pgvector, fused by rank; an exact SKU always ranks first; a failed embedding falls back to keyword search.
+- **Alternatives considered:** native multimodal to the agent model (breaks on models without vision, hides text in pixels from the guards, resends the image every turn; kept as a later per-agent option); uploading to Meta first (two calls, per-channel code); Meta Commerce catalog sync (heavy per-client onboarding).
+- **Consequences:** one more storage volume to back up (`MEDIA_DIR`); the API must be reachable over public HTTPS for Meta to fetch images; the catalog instruction added to the system prompt of catalog-enabled agents has **not** been through the no-context fabrication A/B (it needs a live model); vision adds roughly 1-3 s to a photo turn; a Meta-side failure to fetch our link is only visible in logs (`media_send_rejected`).
+
 ### ADR-123: Model fallback within one provider; failed model calls are logged
 - **Date:** 2026-10-16
 - **Status:** accepted

@@ -111,9 +111,19 @@ _GEMINI = ProviderSpec(
     key_hint="AIza…",
     description="Generous free tier; large context windows.",
     models=(
-        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000, vision=True),
+        # Current lineup first. Google retires models for NEW keys without much notice (2.5 Flash and 2.0
+        # Flash answered 404 "no longer available" on 2026-10-17), so the `-latest` aliases come first: they
+        # follow Google's current Flash / Flash-Lite and cannot be retired out from under a default.
+        ModelSpec("gemini-flash-latest", "Gemini Flash (always the latest)", 1_000_000, vision=True,
+                  note="alias that follows Google's current Flash"),
+        ModelSpec("gemini-flash-lite-latest", "Gemini Flash-Lite (always the latest)", 1_000_000, vision=True,
+                  note="alias that follows Google's current Flash-Lite"),
+        ModelSpec("gemini-3.8-flash", "Gemini 3.8 Flash", 1_000_000, vision=True),
+        ModelSpec("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", 1_000_000, vision=True),
+        # Older ids stay listed so agents that already name them still resolve; new keys may get 404 on them.
+        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000, vision=True, note="retired for new keys"),
         ModelSpec("gemini-2.5-pro", "Gemini 2.5 Pro", 1_000_000, vision=True),
-        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000, vision=True),
+        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000, vision=True, note="retired"),
         ModelSpec("gemini-1.5-flash", "Gemini 1.5 Flash", 1_000_000, note="legacy"),
         ModelSpec("gemini-1.5-pro", "Gemini 1.5 Pro", 2_000_000, note="legacy"),
     ),

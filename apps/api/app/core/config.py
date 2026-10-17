@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     ollama_keep_alive: str = "24h"
     # After a 429 the same model is tried once more, after the provider's `Retry-After` (or this default) and only
     # when that wait is at most `llm_retry_after_max_seconds`; a longer wait goes straight to the next model.
+    # A tool turn makes two or more model calls; with this on, the follow-up calls do not re-send the retrieved
+    # context (the model already used it to choose the tool). Saves ~750 tokens per extra call (ADR-126).
+    tool_followup_drops_context: bool = True
     llm_retry_default_seconds: float = 1.0
     llm_retry_after_max_seconds: float = 3.0
     # Warm-up on worker start + every `warmup_interval_seconds` (beat): embedding model, database, and the

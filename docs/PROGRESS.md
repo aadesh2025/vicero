@@ -2247,3 +2247,5 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 ## Token diet, Retry-After, L3 on its own bucket (2026-10-17, ADR-125)
 
 - Per-turn size cut (context 3,000 chars / top 3, history 6, max output 400, compact tool definitions, shorter prompt); `turn_tokens` log line; one `Retry-After` retry per model; L3 on `gpt-oss-20b` (own bucket) with `qwen3.8-27b` fallback, or `gemini` with a key; installer/seed scripts pick the newest version.
+
+- **Measured on prod (agent v9-v11, `turn_tokens` log, same prompts):** plain question "what do you sell?" 2,544 -> 1,984 tokens; "how much does it cost?" 2,622 -> 2,009; out-of-knowledge question 2,293 -> 1,946 (answers unchanged in substance; the corrected shorter prompt gave 0/10 invented "we have/don't have an office" claims, the first shorter wording gave 2/6 and was fixed). A turn with one tool round was ~5,000+ and is ~4,000 before ADR-126; with a full booking flow (3 messages) 20,966 -> ~13,500. ADR-126 removes the re-sent context from tool follow-ups.

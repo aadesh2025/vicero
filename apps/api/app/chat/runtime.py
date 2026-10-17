@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.llm.base import ChatProvider, ProviderError
 from app.llm.pricing import compute_cost_micros
 from app.llm.types import ChatRequest, Message, StreamEvent, ToolCall, Usage
+from app.rag.context import CONTEXT_MARKER
 
 log = get_logger("chat.runtime")
 
@@ -232,6 +233,12 @@ async def run_turn(
             if budget is not None:
                 budget.record_tool_calls(len(tool_calls))
             messages.append(Message(role="assistant", content=pass_content or None, tool_calls=tool_calls))
+            if settings.tool_followup_drops_context:
+                # The model already read the retrieved context to decide on the tool; every further call of this
+                # turn would pay for it again (~750 tokens each). The persona prompt and history stay (ADR-126).
+                messages = [
+                    m for m in messages if not (m.role == "system" and (m.content or "").startswith(CONTEXT_MARKER))
+                ]
             for call in tool_calls:
                 out = await executor(call)
                 result.tool_runs.append({"name": call.name, **out})

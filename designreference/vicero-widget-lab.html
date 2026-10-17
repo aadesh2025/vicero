@@ -1,0 +1,1375 @@
+<title>Vicero Widget Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: SaaS builder shell. Style rail | live stage on a fake customer site | settings column. Gallery tab = every style live side by side. */
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --sunken:#eef0f3; --fg:#0f1115; --muted:#5f6878; --line:#e3e6eb;
+  --accent:#2563eb; --accent-fg:#ffffff; --accent-soft:#e8efff; --new:#0f766e; --new-soft:#e3f4f1;
+  --ui:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --shadow:0 1px 2px rgba(15,17,21,.05),0 1px 1px rgba(15,17,21,.03);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b0c0f; --panel:#14161a; --sunken:#1b1e23; --fg:#eef0f3; --muted:#9097a4; --line:#262a31;
+  --accent:#4b8bff; --accent-fg:#ffffff; --accent-soft:#17233d; --new:#5eead4; --new-soft:#10302c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0c0f; --panel:#14161a; --sunken:#1b1e23; --fg:#eef0f3; --muted:#9097a4; --line:#262a31;
+  --accent:#4b8bff; --accent-fg:#ffffff; --accent-soft:#17233d; --new:#5eead4; --new-soft:#10302c; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--ui);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--panel)}
+.topbar-in{display:flex;align-items:center;gap:16px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-weight:700;font-size:14px}
+.brand small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;background:var(--sunken);padding:3px;border-radius:9px;margin-left:auto}
+.tabs button{border:0;background:transparent;padding:6px 12px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:500;font-size:13px}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)}
+
+.wrap{padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1640px;margin:0 auto}
+
+/* Designer grid */
+.designer{display:grid;grid-template-columns:232px minmax(0,1fr) 336px;gap:16px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.rail{padding:10px;position:sticky;top:76px;max-height:calc(100vh - 92px);overflow:auto}
+.rail h2,.controls h2{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:4px 6px 10px;font-family:var(--mono)}
+.stylelist{display:flex;flex-direction:column;gap:4px}
+.sitem{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;align-items:center;text-align:left;border:1px solid transparent;background:transparent;border-radius:9px;padding:8px;cursor:pointer}
+.sitem:hover{background:var(--sunken)}
+.sitem[aria-pressed="true"]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.sitem b{display:block;font-weight:600;font-size:13.5px}
+.sitem span.t{display:block;color:var(--muted);font-size:12px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw{width:34px;height:34px;border-radius:8px;position:relative;overflow:hidden;border:1px solid var(--line)}
+.sw i{position:absolute;display:block}
+.sw .a{inset:auto 5px 5px auto;width:14px;height:9px;border-radius:5px}
+.sw .b{left:5px;top:6px;width:16px;height:7px;border-radius:4px;opacity:.9}
+
+.stagecol{min-width:0;display:flex;flex-direction:column;gap:10px}
+.stagebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.stagebar .title{font-weight:600;font-size:15px;margin-right:auto;min-width:0}
+.stagebar .title small{color:var(--muted);font-weight:400;margin-left:6px;font-size:13px}
+.seg{display:inline-flex;background:var(--sunken);border-radius:8px;padding:3px;gap:2px}
+.seg{flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:5px 9px;border-radius:6px;font-size:12.5px;cursor:pointer;color:var(--muted);font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* Fake customer site */
+.stage{position:relative;height:740px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#fbfbfa;container-type:inline-size;transition:width .25s}
+.stage.is-mobile{width:390px;max-width:100%;margin-inline:auto;height:760px;border-radius:28px;border:8px solid #16181c}
+.site{color:#1d2a22;font-family:"Plus Jakarta Sans",system-ui,sans-serif;height:100%;overflow:hidden}
+.site-nav{display:flex;align-items:center;gap:22px;padding:18px 28px;border-bottom:1px solid #ecebe6;font-size:13px}
+.site-logo{font-weight:800;letter-spacing:-.02em;font-size:16px;margin-right:auto;color:#1f3d2b}
+.site-nav span{color:#4a564e}
+.site-hero{display:grid;grid-template-columns:1.05fr .95fr;gap:28px;padding:40px 28px 28px;align-items:center}
+.site-eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#3f7a57;font-weight:700}
+.site h1{font-size:40px;line-height:1.05;letter-spacing:-.03em;margin:10px 0 12px;font-weight:800;color:#13261a;text-wrap:balance}
+.site p{color:#4a564e;font-size:14.5px;max-width:42ch;margin:0 0 18px}
+.site-cta{display:flex;gap:10px}
+.site-cta span{padding:10px 16px;border-radius:999px;font-size:13px;font-weight:700}
+.site-cta .p{background:#1f3d2b;color:#fff}.site-cta .s{border:1px solid #cfd6d0}
+.site-art{aspect-ratio:4/3.4;max-width:100%;border-radius:22px;position:relative;overflow:hidden;
+  background:radial-gradient(circle at 30% 28%,#f2b56b 0 18%,transparent 19%),radial-gradient(circle at 72% 64%,#2f6d4c 0 26%,transparent 27%),radial-gradient(circle at 22% 80%,#e66b3c 0 14%,transparent 15%),linear-gradient(150deg,#f6dcc0,#e9c39b 55%,#c98a5a)}
+.site-art::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(115deg,rgba(255,255,255,.08) 0 2px,transparent 2px 14px)}
+.site-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:6px 28px 28px}
+.site-p{border:1px solid #ecebe6;border-radius:16px;padding:12px;background:#fff}
+.site-p i{display:block;height:72px;border-radius:10px;margin-bottom:10px}
+.site-p b{display:block;font-size:13px}.site-p small{color:#6a756d}
+@container (max-width:620px){
+  .site-hero{grid-template-columns:1fr;padding:24px 18px}.site h1{font-size:30px}.site-nav span{display:none}.site-nav{padding:16px 18px}
+  .site-row{grid-template-columns:1fr 1fr;padding:6px 18px}.site-row .site-p:nth-child(3){display:none}
+}
+
+/* Controls */
+.controls{padding:6px 0 10px;min-width:0}
+.grp{padding:12px 16px;border-top:1px solid var(--line)}
+.grp:first-of-type{border-top:0}
+.grp h3{font-size:13px;margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:8px}
+.newtag{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.04em;color:var(--new);background:var(--new-soft);padding:1px 6px;border-radius:5px;text-transform:uppercase}
+.field{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:10px;margin-bottom:9px}
+.field>label{color:var(--muted);font-size:12.5px}
+.field.stack{grid-template-columns:1fr}
+.in{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:7px 9px;font-size:13px;min-width:0}
+textarea.in{resize:vertical;min-height:58px}
+.swatches{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.swatches button{width:22px;height:22px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0}
+.swatches button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--fg)}
+input[type=color]{width:28px;height:24px;border:1px solid var(--line);border-radius:6px;padding:0;background:none;cursor:pointer}
+.colorrow{display:flex;align-items:center;gap:8px}
+.colorrow code{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.autobtn{margin-left:auto;border:0;background:transparent;color:var(--accent);font-size:12px;cursor:pointer;padding:2px 4px}
+.autobtn[disabled]{color:var(--muted);cursor:default}
+.range{display:flex;align-items:center;gap:10px}
+.range input{flex:1;accent-color:var(--accent)}
+.range code{font-family:var(--mono);font-size:12px;min-width:34px;text-align:right}
+.lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.lopt{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 4px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.lopt[aria-pressed="true"]{border-color:var(--accent);color:var(--fg);background:var(--accent-soft)}
+.lopt .mini{height:26px;display:grid;place-items:center}
+.lopt .mini span{background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;width:26px;height:26px;border-radius:50%}
+.lopt .mini span svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lopt .mini .sq{border-radius:8px}.lopt .mini .pill{width:auto;padding:0 9px;border-radius:13px;font-size:10px;gap:4px;display:flex}
+.lopt .mini .ring{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}
+.checks{display:flex;flex-wrap:wrap;gap:6px}
+.check{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12.5px;cursor:pointer;user-select:none}
+.check input{accent-color:var(--accent);margin:0}
+.check:has(input:checked){border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+.code{position:relative;margin:0;background:var(--sunken);border-radius:9px;padding:12px;font-family:var(--mono);font-size:11.5px;line-height:1.55;max-height:280px;overflow:auto;white-space:pre}
+.code .k{color:var(--accent)}.code .n{color:var(--new)}
+.copyrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.copyrow span{color:var(--muted);font-size:12px;margin-right:auto}
+.note{color:var(--muted);font-size:12px;margin:0 0 10px}
+
+/* Gallery */
+.gal-head{display:flex;align-items:end;gap:16px;flex-wrap:wrap;margin:4px 0 16px}
+.gal-head h1{font-size:22px;letter-spacing:-.02em;margin:0;font-weight:600}
+.gal-head p{margin:4px 0 0;color:var(--muted);max-width:70ch}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:16px}
+.gcard{display:flex;flex-direction:column;overflow:hidden}
+.gcard-h{display:flex;align-items:start;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.gcard-h b{font-size:15px}.gcard-h p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.gcard-h .btn{margin-left:auto;flex:none}
+.traits{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.traits span{font-family:var(--mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.gframe{position:relative;padding:22px 16px;display:flex;justify-content:center;flex:1;
+  background:radial-gradient(circle at 18% 22%,rgba(242,181,107,.55),transparent 34%),radial-gradient(circle at 85% 70%,rgba(47,109,76,.45),transparent 38%),radial-gradient(circle at 60% 10%,rgba(230,107,60,.3),transparent 30%),var(--sunken)}
+
+/* ───────────────────────── WIDGET ───────────────────────── */
+.vw-host{display:flex;flex-direction:column;align-items:flex-end;gap:14px;font-size:14px}
+.vw-host.pos-left{align-items:flex-start}
+.stage .vw-host{position:absolute;right:20px;bottom:20px;max-width:calc(100% - 40px);--w-h:560px;z-index:2}
+.stage .vw-host.pos-left{right:auto;left:20px}
+.stage .vw-host[data-style="drawer"]:not(.is-closed){top:0;bottom:0;right:0;max-width:100%;--w-h:100%;gap:0}
+.stage .vw-host.pos-left[data-style="drawer"]:not(.is-closed){left:0;right:auto}
+.stage .vw-host[data-style="drawer"]:not(.is-closed) .vw-launcher{display:none}
+.stage .vw-host[data-style="drawer"] .vw{border-radius:0;border-width:0 0 0 1px}
+.stage .vw-host[data-style="spotlight"]{right:50%;left:auto;transform:translateX(50%);align-items:center}
+.stage.is-mobile .vw-host:not(.is-closed){inset:0;max-width:none;--w-h:100%;gap:0;transform:none}
+.stage.is-mobile .vw-host:not(.is-closed) .vw{width:100%;border-radius:0;border:0;box-shadow:none}
+.stage.is-mobile .vw-host:not(.is-closed) .vw-launcher{display:none}
+.gframe .vw-host,.gframe .vw-host.pos-left{width:100%;max-width:440px;--w-h:540px;align-items:center}
+
+.vw-host.is-closed .vw{display:none}
+.vw{
+  --w-bg2:color-mix(in srgb,var(--w-fg) 5%,var(--w-bg));
+  --w-border:color-mix(in srgb,var(--w-fg) 11%,var(--w-bg));
+  --w-muted:color-mix(in srgb,var(--w-fg) 58%,var(--w-bg));
+  --w-soft:color-mix(in srgb,var(--w-accent) 12%,var(--w-bg));
+  --w-rm:min(var(--w-r),18px); --w-rc:min(var(--w-r),14px); --w-rb:min(var(--w-r),10px);
+  --w-pad:16px; --w-gap:10px; --w-mp:9px 13px; --w-fs:14px;
+  width:var(--w-w,372px);max-width:100%;height:var(--w-h,560px);display:flex;flex-direction:column;position:relative;
+  background:var(--w-bg);color:var(--w-fg);font-family:var(--w-font);font-size:var(--w-fs);line-height:1.5;
+  border:1px solid var(--w-border);border-radius:var(--w-r);overflow:hidden;
+  box-shadow:0 30px 70px -24px rgba(10,14,20,.38),0 4px 14px -4px rgba(10,14,20,.12);
+  animation:vwIn .22s ease-out;
+}
+.vw.d-compact{--w-pad:12px;--w-gap:6px;--w-mp:7px 11px;--w-fs:13.5px}
+.vw.d-roomy{--w-pad:20px;--w-gap:14px;--w-mp:11px 15px;--w-fs:14.5px}
+@keyframes vwIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.vw svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.vw button{cursor:pointer}
+.vw button:disabled{cursor:default}
+
+.vw-head{display:flex;align-items:center;gap:10px;padding:13px var(--w-pad);border-bottom:1px solid var(--w-border);flex-wrap:wrap;position:relative;transition:padding .3s}
+.vw-ava{width:34px;height:34px;border-radius:50%;background:var(--w-accent);color:var(--w-on-accent);display:grid;place-items:center;font-weight:600;font-size:13px;flex:none;position:relative}
+.vw-ava::after{content:"";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:#22c55e;border:2px solid var(--w-bg)}
+.vw-id{min-width:0;flex:1}
+.vw-title{font-weight:600;font-size:14.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vw-sub{font-size:12px;color:var(--w-muted);display:flex;align-items:center;gap:6px}
+.vw-dot{display:none;width:7px;height:7px;border-radius:50%;background:#22c55e}
+.vw-hacts{display:flex;gap:2px;margin-left:auto}
+.vw-ib{border:0;background:transparent;color:inherit;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;opacity:.75}
+.vw-ib:hover{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+.vw-ib svg{width:17px;height:17px}
+.vw-tl,.vw-team,.vw-hero,.vw-tabs,.vw-kbd{display:none}
+
+.vw-body{flex:1;overflow-y:auto;padding:var(--w-pad);display:flex;flex-direction:column;gap:var(--w-gap);scrollbar-width:thin}
+.vw-row{display:flex;gap:8px;align-items:flex-end;animation:vwMsg .2s ease-out}
+@keyframes vwMsg{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.vw-row.user{justify-content:flex-end}
+.vw-msg{max-width:84%;padding:var(--w-mp);border-radius:var(--w-rm);word-wrap:break-word}
+.vw-row.bot .vw-msg{background:var(--w-bg2)}
+.vw-row.user .vw-msg{background:var(--w-bubble);color:var(--w-on-bubble)}
+.vw-msg b{font-weight:600}
+.vw-blockrow{display:block}
+.vw-agent{display:flex;gap:8px;align-items:flex-end}
+.vw-agent-ava{width:26px;height:26px;border-radius:50%;background:#f59e0b;color:#1c1306;font-size:10.5px;font-weight:700;display:grid;place-items:center;flex:none}
+.vw-agent-lb{font-size:11.5px;color:var(--w-muted);margin:0 0 3px 34px}
+.vw-typing{display:inline-flex;gap:4px;padding:12px 14px;background:var(--w-bg2);border-radius:var(--w-rm)}
+.vw-typing i{width:6px;height:6px;border-radius:50%;background:var(--w-muted);animation:vwDot 1s infinite}
+.vw-typing i:nth-child(2){animation-delay:.15s}.vw-typing i:nth-child(3){animation-delay:.3s}
+@keyframes vwDot{0%,60%,100%{opacity:.3;transform:none}30%{opacity:1;transform:translateY(-3px)}}
+
+/* chips */
+.vw-chips{display:flex;flex-wrap:wrap;gap:6px}
+.vw-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid color-mix(in srgb,var(--w-accent) 40%,var(--w-border));background:var(--w-bg);color:var(--w-accent);padding:7px 12px;border-radius:min(999px,calc(var(--w-r)*2 + 2px));font-size:13px;font-weight:500;text-align:left;transition:background .15s,transform .15s}
+.vw-chip:hover{background:var(--w-soft)}
+.vw-chip.on{background:var(--w-accent);color:var(--w-on-accent);border-color:var(--w-accent)}
+.vw-chip .ic,.vw-chip .go{display:none}
+.vw-chip .ic svg,.vw-chip .go svg{width:16px;height:16px}
+.vw-chips .vw-btn{margin-left:2px}
+
+/* buttons, options */
+.vw-btn{border:0;background:var(--w-accent);color:var(--w-on-accent);border-radius:var(--w-rb);padding:9px 14px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:filter .15s}
+.vw-btn:hover:not(:disabled){filter:brightness(1.08)}
+.vw-btn.sm{padding:7px 12px;font-size:12.5px}
+.vw-btn.ghost{background:transparent;color:var(--w-fg);border:1px solid var(--w-border)}
+.vw-btn.ok{background:#16a34a;color:#fff}
+.vw-btn:disabled:not(.ok):not(.on){opacity:.5}
+.vw-opts{display:flex;flex-direction:column;gap:6px}
+.vw-opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--w-border);background:var(--w-bg);color:var(--w-fg);border-radius:var(--w-rc);padding:10px 12px;font-size:13.5px;transition:border-color .15s,background .15s}
+.vw-opt:hover:not(:disabled){border-color:var(--w-accent)}
+.vw-opt small{display:block;color:var(--w-muted);font-size:12px}
+.vw-opt .rad{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--w-border);flex:none;display:grid;place-items:center}
+.vw-opt.on{border-color:var(--w-accent);background:var(--w-soft)}
+.vw-opt.on .rad{border-color:var(--w-accent);background:var(--w-accent);box-shadow:inset 0 0 0 3px var(--w-bg)}
+.vw-opts.is-done .vw-opt:not(.on){opacity:.45}
+.vw-prog{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--w-muted);margin-bottom:2px}
+.vw-prog i{flex:1;height:4px;border-radius:2px;background:var(--w-border);overflow:hidden;position:relative}
+.vw-prog i b{position:absolute;inset:0 auto 0 0;background:var(--w-accent);border-radius:2px}
+.vw-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* product cards */
+.vw-carwrap{position:relative}
+.vw-carnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--w-muted)}
+.vw-carnav div{display:flex;gap:4px}
+.vw-carnav .vw-ib{width:26px;height:26px;border:1px solid var(--w-border);border-radius:50%;opacity:1}
+.vw-carnav .vw-ib svg{width:14px;height:14px}
+.vw-carousel{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:6px;scrollbar-width:none}
+.vw-carousel::-webkit-scrollbar{display:none}
+.vw-card{flex:0 0 78%;scroll-snap-align:start;border:1px solid var(--w-border);border-radius:var(--w-rc);background:var(--w-bg);overflow:hidden;display:flex;flex-direction:column}
+.vw-card.solo{flex-basis:100%}
+.vw-art{height:84px;position:relative;background:radial-gradient(circle at 78% 30%,rgba(255,255,255,.22) 0 16%,transparent 17%),radial-gradient(circle at 20% 90%,rgba(0,0,0,.18) 0 22%,transparent 23%),linear-gradient(135deg,var(--c1),var(--c2))}
+.vw-art span{position:absolute;font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:3px 8px;border-radius:999px}
+.vw-art .roast{left:10px;bottom:10px;background:rgba(255,255,255,.88);color:#2a1a10}
+.vw-art .match{right:10px;top:10px;background:#16a34a;color:#fff}
+.vw-cb{padding:11px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.vw-ct{font-weight:600;font-size:14px;line-height:1.25}
+.vw-cn{font-size:12px;color:var(--w-muted);margin-top:2px}
+.vw-gr{display:flex;background:var(--w-bg2);border-radius:var(--w-rb);padding:2px;gap:2px}
+.vw-gr button{flex:1;border:0;background:transparent;color:var(--w-muted);font-size:11.5px;padding:5px 2px;border-radius:calc(var(--w-rb) - 2px);font-weight:500}
+.vw-gr button.on{background:var(--w-bg);color:var(--w-fg);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.vw-cf{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.vw-price{font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.vw-price small{font-weight:400;color:var(--w-muted);font-size:11.5px}
+
+/* booking */
+.vw-days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.vw-day{flex:0 0 auto;width:54px;border:1px solid var(--w-border);background:var(--w-bg);color:var(--w-fg);border-radius:var(--w-rc);padding:7px 0;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px}
+.vw-day b{font-size:17px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.vw-day small{color:var(--w-muted);font-size:10px}
+.vw-day:hover:not(:disabled){border-color:var(--w-accent)}
+.vw-day.on{background:var(--w-accent);color:var(--w-on-accent);border-color:var(--w-accent)}
+.vw-day.on small{color:inherit;opacity:.8}
+.vw-day:disabled:not(.on){opacity:.4;text-decoration:line-through}
+.vw-slots{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.vw-slot{border:1px solid var(--w-border);background:var(--w-bg);color:var(--w-fg);border-radius:var(--w-rb);padding:9px 6px;font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.vw-slot small{display:block;font-size:10.5px;color:var(--w-muted);font-weight:400}
+.vw-slot:hover:not(:disabled){border-color:var(--w-accent);color:var(--w-accent)}
+.vw-slot.on{background:var(--w-accent);color:var(--w-on-accent);border-color:var(--w-accent)}
+.vw-slot:disabled:not(.on){opacity:.4}
+.vw-counter{display:flex;align-items:center;gap:12px;border:1px solid var(--w-border);border-radius:var(--w-rc);padding:8px 8px 8px 14px;background:var(--w-bg)}
+.vw-counter span{flex:1;font-size:13px}
+.vw-counter b{font-size:18px;min-width:20px;text-align:center;font-variant-numeric:tabular-nums}
+.vw-counter .vw-ib{border:1px solid var(--w-border);opacity:1;width:30px;height:30px;border-radius:50%}
+
+/* forms */
+.vw-form{border:1px solid var(--w-border);border-radius:var(--w-rc);padding:12px;background:var(--w-bg);display:grid;gap:9px}
+.vw-form label{display:grid;gap:4px;font-size:12px;color:var(--w-muted);font-weight:500}
+.vw-input{width:100%;background:var(--w-input);color:var(--w-fg);border:1px solid var(--w-border);border-radius:var(--w-rb);padding:9px 11px;font-size:13.5px;font-family:inherit;outline:none}
+.vw-input:focus{border-color:var(--w-accent);box-shadow:0 0 0 3px var(--w-soft)}
+.vw-input.bad{border-color:#dc2626}
+.vw-err{color:#dc2626;font-size:11.5px;min-height:0}
+.vw-form.is-done{opacity:.7}
+
+/* receipt / stepper / handoff / stars */
+.vw-rc{border:1px solid var(--w-border);border-radius:var(--w-rc);background:var(--w-bg);padding:14px}
+.vw-rc-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.vw-rc-h .ok{width:30px;height:30px;border-radius:50%;background:#16a34a;color:#fff;display:grid;place-items:center;flex:none}
+.vw-rc-h .ok svg{width:16px;height:16px;stroke-width:2.4}
+.vw-rc-h b{font-size:14px;display:block}.vw-rc-h small{color:var(--w-muted);font-size:12px}
+.vw-rc dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;border-top:1px dashed var(--w-border);padding-top:10px}
+.vw-rc dt{color:var(--w-muted)}.vw-rc dd{margin:0;text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
+.vw-rc .vw-actions{margin-top:12px}
+.vw-steps{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:0}
+.vw-steps li{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:start;position:relative;padding-bottom:12px;font-size:13px}
+.vw-steps li:last-child{padding-bottom:0}
+.vw-steps li::before{content:"";position:absolute;left:8px;top:16px;bottom:-2px;width:2px;background:var(--w-border)}
+.vw-steps li.done::before{background:var(--w-accent)}
+.vw-steps li:last-child::before{display:none}
+.vw-steps .pt{width:18px;height:18px;border-radius:50%;border:2px solid var(--w-border);background:var(--w-bg);display:grid;place-items:center;position:relative;z-index:1}
+.vw-steps .done .pt{background:var(--w-accent);border-color:var(--w-accent);color:var(--w-on-accent)}
+.vw-steps .done .pt svg{width:11px;height:11px;stroke-width:3}
+.vw-steps .now .pt{border-color:var(--w-accent);box-shadow:0 0 0 4px var(--w-soft)}
+.vw-steps .now .pt::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--w-accent)}
+.vw-steps small{color:var(--w-muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+.vw-steps li:not(.done):not(.now) span{color:var(--w-muted)}
+.vw-eta{display:inline-block;font-size:11.5px;background:var(--w-soft);color:color-mix(in srgb,var(--w-accent) 45%,var(--w-fg));padding:2px 8px;border-radius:999px;font-weight:600}
+.vw-ho{display:flex;align-items:center;gap:11px;border:1px solid var(--w-border);border-radius:var(--w-rc);padding:11px 12px;background:var(--w-bg)}
+.vw-ho .vw-agent-ava{width:36px;height:36px;font-size:12.5px}
+.vw-ho b{display:block;font-size:13.5px}.vw-ho small{color:var(--w-muted);font-size:12px;display:flex;align-items:center;gap:6px}
+.vw-ho .vw-typing{padding:0;background:none}
+.vw-ho .vw-typing i{width:4px;height:4px}
+.vw-stars{display:flex;gap:4px}
+.vw-star{border:0;background:transparent;color:var(--w-border);padding:2px;width:34px;height:34px;display:grid;place-items:center;transition:transform .12s,color .12s}
+.vw-star svg{width:26px;height:26px;fill:currentColor;stroke:none}
+.vw-star.lit{color:#f5a524}
+.vw-star:hover:not(:disabled){transform:scale(1.12)}
+
+/* footer */
+.vw-foot{padding:10px var(--w-pad) 6px;position:relative;margin:0}
+.vw-inwrap{display:flex;align-items:center;gap:2px;background:var(--w-input);border:1px solid var(--w-border);border-radius:min(var(--w-r),22px);padding:4px 4px 4px 13px;transition:border-color .15s,box-shadow .15s}
+.vw-inwrap:focus-within{border-color:color-mix(in srgb,var(--w-accent) 60%,var(--w-border));box-shadow:0 0 0 3px var(--w-soft)}
+.vw-text{flex:1;min-width:0;border:0;background:transparent;outline:none;padding:7px 0;color:var(--w-fg);font-size:14px;font-family:inherit}
+.vw-text::placeholder{color:var(--w-muted)}
+.vw-send{border:0;width:34px;height:34px;border-radius:min(var(--w-r),17px);background:var(--w-accent);color:var(--w-on-accent);display:grid;place-items:center;flex:none}
+.vw-send svg{width:17px;height:17px;stroke-width:2.2}
+.vw-emo{position:absolute;bottom:58px;right:var(--w-pad);background:var(--w-bg);border:1px solid var(--w-border);border-radius:12px;padding:6px;display:flex;gap:2px;box-shadow:0 10px 30px -10px rgba(0,0,0,.3);z-index:3}
+.vw-emo button{border:0;background:transparent;font-size:18px;width:32px;height:32px;border-radius:8px}
+.vw-emo button:hover{background:var(--w-bg2)}
+.vw-brand{text-align:center;font-size:11px;color:var(--w-muted);padding:4px 0 9px}
+.vw-brand b{font-weight:600;color:var(--w-fg)}
+
+/* panes (drawer tabs) */
+.vw-pane{flex:1;overflow:auto;padding:var(--w-pad)}
+.vw-pane h4{margin:0 0 10px;font-size:12px;color:var(--w-muted);font-weight:500}
+.vw-art-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--w-border);padding:12px 2px;color:var(--w-fg);font-size:13.5px}
+.vw-art-row svg{margin-left:auto;color:var(--w-muted);width:16px;height:16px}
+.vw-stat{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--w-border);font-size:13.5px}
+.vw-stat i{width:8px;height:8px;border-radius:50%;background:#22c55e;flex:none}
+.vw-stat small{margin-left:auto;color:var(--w-muted);font-size:12px}
+
+/* launcher */
+.vw-launcher{border:0;background:var(--w-launch);color:var(--w-on-launch);width:58px;height:58px;border-radius:50%;display:grid;place-items:center;box-shadow:0 14px 30px -10px rgba(10,14,20,.45);position:relative;transition:transform .18s;font-family:var(--w-font);font-weight:600;font-size:14px;cursor:pointer;flex:none}
+.vw-launcher:hover{transform:translateY(-2px)}
+.vw-launcher svg{width:25px;height:25px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.vw-launcher svg circle.f{fill:currentColor;stroke:none}
+.vw-launcher.sq{border-radius:18px}
+.vw-launcher.pill{width:auto;padding:0 20px 0 16px;border-radius:29px;display:flex;gap:9px;height:54px}
+.vw-launcher.pill svg{width:21px;height:21px}
+.vw-launcher.ring::after{content:"";position:absolute;inset:0;border-radius:inherit;border:2px solid var(--w-launch);animation:vwRing 1.8s ease-out infinite}
+@keyframes vwRing{from{transform:scale(1);opacity:.7}to{transform:scale(1.55);opacity:0}}
+
+/* ── Style: classic ── */
+.st-classic .vw-head{background:var(--w-accent);color:var(--w-on-accent);border-bottom:0;padding-block:16px}
+.st-classic .vw-ava{background:color-mix(in srgb,var(--w-on-accent) 20%,transparent);color:var(--w-on-accent)}
+.st-classic .vw-ava::after{border-color:var(--w-accent)}
+.st-classic .vw-sub{color:color-mix(in srgb,var(--w-on-accent) 78%,transparent)}
+
+/* ── Style: glass ── */
+.vw.st-glass{background:color-mix(in srgb,var(--w-bg) 58%,transparent);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);border-color:color-mix(in srgb,var(--w-bg) 60%,transparent)}
+.st-glass .vw-head{border-bottom-color:color-mix(in srgb,var(--w-fg) 8%,transparent)}
+.st-glass .vw-row.bot .vw-msg,.st-glass .vw-card,.st-glass .vw-form,.st-glass .vw-rc,.st-glass .vw-opt,.st-glass .vw-ho,.st-glass .vw-day,.st-glass .vw-slot,.st-glass .vw-counter,.st-glass .vw-chip{background:color-mix(in srgb,var(--w-bg) 70%,transparent);border-color:color-mix(in srgb,var(--w-fg) 9%,transparent)}
+.st-glass .vw-inwrap{background:color-mix(in srgb,var(--w-fg) 85%,transparent);border:0;border-radius:999px}
+.st-glass .vw-inwrap .vw-text{color:var(--w-bg)}
+.st-glass .vw-inwrap .vw-text::placeholder{color:color-mix(in srgb,var(--w-bg) 60%,transparent)}
+.st-glass .vw-inwrap .vw-ib{color:var(--w-bg)}
+.st-glass .vw-send{border-radius:50%}
+
+/* ── Style: line (hairline) ── */
+.vw.st-line{box-shadow:0 20px 50px -30px rgba(10,14,20,.35)}
+.st-line .vw-head{border-bottom:0;padding-top:18px}
+.st-line .vw-ava{width:26px;height:26px;border-radius:7px;font-size:11px}
+.st-line .vw-ava::after{display:none}
+.st-line .vw-dot{display:inline-block}
+.st-line .vw-row.bot .vw-msg{background:transparent;padding:0 2px}
+.st-line .vw-row.user .vw-msg{background:transparent;color:var(--w-fg);border:1px solid var(--w-border);border-radius:var(--w-rm)}
+.st-line .vw-chips{flex-direction:column;gap:0;border-top:1px solid var(--w-border)}
+.st-line .vw-chip{border:0;border-bottom:1px solid var(--w-border);border-radius:0;background:transparent;color:var(--w-fg);padding:11px 2px;justify-content:space-between;width:100%}
+.st-line .vw-chip .go{display:inline-flex;color:var(--w-muted);transition:transform .15s}
+.st-line .vw-chip:hover{background:transparent}
+.st-line .vw-chip:hover .go{transform:translateX(3px);color:var(--w-accent)}
+.st-line .vw-chip.on{background:transparent;color:var(--w-accent)}
+.st-line .vw-chips .vw-btn{margin:10px 0 0;align-self:flex-start}
+.st-line .vw-foot{padding-top:6px}
+.st-line .vw-inwrap{background:transparent;border:0;border-top:1px solid var(--w-border);border-radius:0;padding:8px 0 4px;box-shadow:none}
+.st-line .vw-send{background:transparent;color:var(--w-accent)}
+.st-line .vw-typing{background:transparent;padding-left:2px}
+
+/* ── Style: paper ── */
+.st-paper .vw-head{justify-content:center;text-align:center;border-bottom:1px solid var(--w-border);padding-block:18px 14px}
+.st-paper .vw-ava{display:none}
+.st-paper .vw-id{flex:none}
+.st-paper .vw-title{font-size:19px;font-weight:400;letter-spacing:-.01em}
+.st-paper .vw-sub{justify-content:center;font-style:italic}
+.st-paper .vw-hacts{position:absolute;right:10px;top:12px}
+.st-paper .vw-body{--w-gap:14px}
+.st-paper .vw-row.bot .vw-msg{background:transparent;padding:0;font-size:15.5px;line-height:1.6;max-width:100%}
+.st-paper .vw-row.user .vw-msg{background:transparent;color:var(--w-muted);font-style:italic;padding:0;border-radius:0;text-align:right}
+.st-paper .vw-row.user .vw-msg::after{content:" \2014 you";font-size:12px}
+.st-paper .vw-chips{counter-reset:p;flex-direction:column;gap:2px}
+.st-paper .vw-chip{counter-increment:p;border:0;background:transparent;color:var(--w-fg);padding:5px 0;border-radius:0;font-size:15px}
+.st-paper .vw-chip .lb{text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--w-accent) 55%,transparent);text-underline-offset:4px;text-decoration-thickness:1px}
+.st-paper .vw-chip::before{content:counter(p,lower-alpha) ".";color:var(--w-accent);font-style:italic;min-width:16px}
+.st-paper .vw-chip:hover{background:transparent;color:var(--w-accent)}
+.st-paper .vw-chip.on .lb{text-decoration-thickness:2px}
+.st-paper .vw-chip.on{background:transparent;color:var(--w-accent)}
+.st-paper .vw-btn{font-family:inherit;letter-spacing:.02em}
+.st-paper .vw-inwrap{background:transparent;border:0;border-bottom:1px solid var(--w-fg);border-radius:0;padding-left:0;box-shadow:none}
+.st-paper .vw-send{background:transparent;color:var(--w-accent)}
+.st-paper .vw-typing{background:transparent;padding-left:0}
+
+/* ── Style: pebble ── */
+.st-pebble .vw-head{flex-direction:column;justify-content:center;text-align:center;gap:6px;padding-block:16px 12px;background:var(--w-bg2);border-bottom-color:transparent}
+.st-pebble .vw-ava{width:46px;height:46px;font-size:16px}
+.st-pebble .vw-id{flex:none}
+.st-pebble .vw-sub{justify-content:center}
+.st-pebble .vw-hacts{position:absolute;right:8px;top:8px}
+.st-pebble .vw-msg{border-radius:20px;padding:10px 15px}
+.st-pebble .vw-row.bot .vw-msg{border-bottom-left-radius:6px}
+.st-pebble .vw-row.user .vw-msg{border-bottom-right-radius:6px}
+.st-pebble .vw-chip{border:0;background:var(--w-soft)}
+.st-pebble .vw-chip.on{background:var(--w-accent)}
+.st-pebble .vw-card,.st-pebble .vw-rc,.st-pebble .vw-form,.st-pebble .vw-ho{border-radius:20px}
+.st-pebble .vw-inwrap{border-radius:999px;background:var(--w-bg2);border-color:transparent}
+.st-pebble .vw-send{border-radius:50%}
+
+/* ── Style: terminal ── */
+.vw.st-terminal{box-shadow:0 30px 70px -24px rgba(0,0,0,.55)}
+.st-terminal .vw-head{padding-block:10px;background:var(--w-bg2)}
+.st-terminal .vw-tl{display:flex;gap:6px}
+.st-terminal .vw-tl i{width:10px;height:10px;border-radius:50%;background:var(--w-border)}
+.st-terminal .vw-tl i:first-child{background:var(--w-accent)}
+.st-terminal .vw-ava{display:none}
+.st-terminal .vw-id{text-align:center}
+.st-terminal .vw-title{font-size:12.5px;font-weight:500}
+.st-terminal .vw-title::before{content:"~/";color:var(--w-muted)}
+.st-terminal .vw-sub{justify-content:center;font-size:11px}
+.st-terminal .vw-body{--w-gap:8px;font-size:13px}
+.st-terminal .vw-row{justify-content:flex-start}
+.st-terminal .vw-msg{background:transparent!important;padding:0;border-radius:0;max-width:100%}
+.st-terminal .vw-row.bot .vw-msg::before{content:"bot  ";color:var(--w-muted)}
+.st-terminal .vw-row.user .vw-msg{color:var(--w-accent)}
+.st-terminal .vw-row.user .vw-msg::before{content:"you \203A ";color:var(--w-muted)}
+.st-terminal .vw-chips{flex-direction:column;gap:1px;counter-reset:t}
+.st-terminal .vw-chip{counter-increment:t;border:0;border-radius:0;background:transparent;color:var(--w-fg);padding:3px 6px;margin-left:-6px;font-size:13px}
+.st-terminal .vw-chip::before{content:"[" counter(t) "]";color:var(--w-accent)}
+.st-terminal .vw-chip:hover,.st-terminal .vw-chip.on{background:var(--w-soft);color:var(--w-fg)}
+.st-terminal .vw-btn{border-radius:0;background:transparent;color:var(--w-accent);border:1px solid var(--w-accent)}
+.st-terminal .vw-btn::before{content:"[ "}.st-terminal .vw-btn::after{content:" ]"}
+.st-terminal .vw-btn.ghost{color:var(--w-muted);border-color:var(--w-border)}
+.st-terminal .vw-btn.ok{background:var(--w-accent);color:var(--w-on-accent)}
+.st-terminal .vw-card,.st-terminal .vw-rc,.st-terminal .vw-form,.st-terminal .vw-opt,.st-terminal .vw-ho,.st-terminal .vw-counter{border-style:dashed;background:transparent}
+.st-terminal .vw-art{height:44px}
+.st-terminal .vw-inwrap{background:transparent;border:0;border-top:1px dashed var(--w-border);border-radius:0;padding:8px 0 2px;box-shadow:none}
+.st-terminal .vw-inwrap::before{content:"\203A";color:var(--w-accent);margin-right:8px;font-weight:600}
+.st-terminal .vw-send{background:transparent;color:var(--w-accent);border-radius:0}
+.st-terminal .vw-typing{background:transparent;padding:4px 0}
+.st-terminal .vw-typing i{border-radius:0;width:7px;height:12px;background:var(--w-accent);animation:vwBlink 1s steps(1) infinite}
+.st-terminal .vw-typing i+i{display:none}
+@keyframes vwBlink{50%{opacity:0}}
+
+/* ── Style: concierge ── */
+.st-concierge .vw-head{background:var(--w-accent);color:var(--w-on-accent);border-bottom:0}
+.st-concierge .vw-ava{display:none}
+.st-concierge .vw-team{display:flex}
+.st-concierge .vw-team span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px solid var(--w-accent);margin-left:-8px;background:#fde68a;color:#3b2a06}
+.st-concierge .vw-team span:first-child{margin-left:0;background:#fbcfe8;color:#4a0d2a}
+.st-concierge .vw-team span:last-child{background:#bae6fd;color:#08304a}
+.st-concierge .vw-sub{color:color-mix(in srgb,var(--w-on-accent) 78%,transparent)}
+.st-concierge .vw-hero{width:100%;order:5}
+.st-concierge.is-home .vw-head{padding:20px var(--w-pad) 26px}
+.st-concierge.is-home .vw-id{display:none}
+.st-concierge.is-home .vw-hero{display:block;margin-top:14px}
+.vw-hero-h{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.vw-hero-p{opacity:.85;font-size:13.5px;margin-top:4px}
+.st-concierge .vw-chip .ic{display:inline-flex}
+.st-concierge .vw-chips.main{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.st-concierge .vw-chips.main .vw-chip{flex-direction:column;align-items:flex-start;gap:10px;padding:13px;border-radius:var(--w-rc);border:1px solid var(--w-border);color:var(--w-fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.st-concierge .vw-chips.main .vw-chip .ic{width:30px;height:30px;border-radius:9px;background:var(--w-soft);color:var(--w-accent);display:grid;place-items:center}
+.st-concierge .vw-chips.main .vw-chip:last-child:nth-child(odd){grid-column:span 2;flex-direction:row;align-items:center}
+.st-concierge .vw-chips.main .vw-chip:hover{border-color:var(--w-accent);background:var(--w-bg);transform:translateY(-1px)}
+
+/* ── Style: spotlight / command ── */
+.vw.st-spotlight{--w-w:440px}
+.st-spotlight .vw-head{display:none}
+.st-spotlight .vw-foot{order:-1;padding:10px 10px 0}
+.st-spotlight .vw-inwrap{background:transparent;border:0;border-bottom:1px solid var(--w-border);border-radius:0;padding:8px 6px 12px;box-shadow:none}
+.st-spotlight .vw-inwrap::before{content:"";width:20px;height:20px;flex:none;margin-right:10px;background:var(--w-accent);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E") center/contain no-repeat}
+.st-spotlight .vw-text{font-size:16.5px}
+.st-spotlight .vw-send{border-radius:8px;width:30px;height:30px}
+.st-spotlight .vw-emo{bottom:auto;top:58px}
+.st-spotlight .vw-chips{flex-direction:column;gap:2px}
+.st-spotlight .vw-chip{border:0;background:transparent;color:var(--w-fg);border-radius:var(--w-rb);padding:9px 10px;width:100%;font-weight:500}
+.st-spotlight .vw-chip .ic{display:inline-flex;color:var(--w-muted)}
+.st-spotlight .vw-chip .go{display:inline-flex;margin-left:auto;color:var(--w-muted);opacity:0}
+.st-spotlight .vw-chip:hover,.st-spotlight .vw-chip:focus-visible{background:var(--w-soft)}
+.st-spotlight .vw-chip:hover .go{opacity:1}
+.st-spotlight .vw-chip.on{background:var(--w-soft);color:var(--w-accent)}
+.st-spotlight .vw-row.bot .vw-msg{background:transparent;padding:2px 4px;color:var(--w-muted);font-size:13px}
+.st-spotlight .vw-row.user .vw-msg{border-radius:var(--w-rb)}
+.st-spotlight .vw-kbd{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--w-border);font-size:11px;color:var(--w-muted)}
+.st-spotlight .vw-kbd kbd{font-family:inherit;font-size:10.5px;border:1px solid var(--w-border);border-radius:4px;padding:0 5px;margin-right:4px;background:var(--w-bg2)}
+.st-spotlight .vw-brand{position:absolute;right:14px;bottom:0;padding:8px 0}
+
+/* ── Style: drawer ── */
+.vw.st-drawer{--w-w:400px}
+.st-drawer .vw-head{padding-bottom:0;row-gap:12px}
+.st-drawer .vw-tabs{display:flex;width:100%;gap:18px;order:6}
+.st-drawer .vw-tabs button{border:0;background:transparent;color:var(--w-muted);padding:6px 0 10px;font-size:13px;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.st-drawer .vw-tabs button.on{color:var(--w-fg);border-bottom-color:var(--w-accent)}
+.st-drawer .vw-ava{border-radius:10px}
+.st-drawer .vw-ava::after{display:none}
+.st-drawer .vw-dot{display:inline-block}
+
+/* ── Style: block ── */
+.vw.st-block{border:2px solid var(--w-fg);box-shadow:7px 7px 0 var(--w-fg);font-weight:500}
+.st-block .vw-head{background:var(--w-accent);color:var(--w-on-accent);border-bottom:2px solid var(--w-fg)}
+.st-block .vw-title{text-transform:uppercase;letter-spacing:.04em;font-weight:800;font-size:14px}
+.st-block .vw-sub{color:inherit;opacity:.8}
+.st-block .vw-ava{border:2px solid var(--w-fg);background:var(--w-bg);color:var(--w-fg);border-radius:var(--w-rb)}
+.st-block .vw-ava::after{display:none}
+.st-block .vw-msg{border:2px solid var(--w-fg)}
+.st-block .vw-row.bot .vw-msg{background:var(--w-bg)}
+.st-block .vw-row.user .vw-msg{box-shadow:3px 3px 0 var(--w-fg)}
+.st-block .vw-chip,.st-block .vw-opt,.st-block .vw-card,.st-block .vw-form,.st-block .vw-rc,.st-block .vw-ho,.st-block .vw-day,.st-block .vw-slot,.st-block .vw-counter{border:2px solid var(--w-fg);color:var(--w-fg);box-shadow:3px 3px 0 var(--w-fg)}
+.st-block .vw-chip:hover,.st-block .vw-opt:hover:not(:disabled),.st-block .vw-slot:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--w-fg);background:var(--w-bg)}
+.st-block .vw-chip.on,.st-block .vw-day.on,.st-block .vw-slot.on{background:var(--w-accent);color:var(--w-on-accent)}
+.st-block .vw-btn{border:2px solid var(--w-fg);box-shadow:3px 3px 0 var(--w-fg);color:var(--w-on-accent)}
+.st-block .vw-btn.ghost{color:var(--w-fg)}
+.st-block .vw-inwrap{border:2px solid var(--w-fg);box-shadow:none}
+.st-block .vw-send{border:2px solid var(--w-fg)}
+.st-block .vw-art{border-bottom:2px solid var(--w-fg)}
+.vw-host[data-style="block"] .vw-launcher{border:2px solid #0a0a0a;box-shadow:4px 4px 0 #0a0a0a}
+
+/* Responsive shell */
+@media (max-width:1240px){
+  .designer{grid-template-columns:minmax(0,1fr) 320px}
+  .rail{grid-column:1 / -1;position:static;max-height:none}
+  .stylelist{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .sitem{flex:0 0 200px}
+}
+@media (max-width:860px){
+  .designer{grid-template-columns:minmax(0,1fr)}
+  .stage{height:680px}
+  .tabs{margin-left:0}
+}
+@media (max-width:520px){
+  .stage .vw-host{right:10px;bottom:10px;max-width:calc(100% - 20px);--w-h:520px}
+  .stage .vw-host.pos-left{left:10px}
+  .site h1{font-size:26px}
+}
+@media (prefers-reduced-motion:reduce){
+  .vw,.vw-row,.vw-typing i,.vw-launcher.ring::after{animation:none!important}
+  .vw-launcher,.vw-chip,.stage{transition:none}
+}
+</style>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><span class="brand-mark">V</span><div>Widget Lab<small>Vicero · design + interaction preview</small></div></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-designer" aria-selected="true" aria-controls="view-designer">Designer</button>
+      <button role="tab" id="tab-gallery" aria-selected="false" aria-controls="view-gallery">All 10 styles</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="view-designer" role="tabpanel" aria-labelledby="tab-designer">
+    <div class="designer">
+      <aside class="card rail">
+        <h2>Styles</h2>
+        <div class="stylelist" id="stylelist"></div>
+      </aside>
+
+      <div class="stagecol">
+        <div class="stagebar">
+          <div class="title" id="stagetitle">Classic</div>
+          <div class="seg" id="device" role="group" aria-label="Preview device">
+            <button type="button" data-v="desktop" aria-pressed="true">Desktop</button>
+            <button type="button" data-v="mobile" aria-pressed="false">Mobile</button>
+          </div>
+          <button class="btn" id="replay" type="button"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Replay</button>
+        </div>
+        <div class="stage" id="stage">
+          <div class="site" aria-hidden="true">
+            <nav class="site-nav"><span class="site-logo">Kaapi &amp; Co.</span><span>Shop</span><span>Subscriptions</span><span>Brew guides</span><span>Cart (2)</span></nav>
+            <div class="site-hero">
+              <div>
+                <div class="site-eyebrow">Nilgiris · single estate</div>
+                <h1>Coffee roasted the week you order it</h1>
+                <p>Small-batch beans from three estates in the Western Ghats, roasted in Porur and shipped across India in 2 to 4 days.</p>
+                <div class="site-cta"><span class="p">Shop beans</span><span class="s">Find my roast</span></div>
+              </div>
+              <div class="site-art"></div>
+            </div>
+            <div class="site-row">
+              <div class="site-p"><i style="background:linear-gradient(135deg,#6b3e26,#c9894f)"></i><b>Attikan Estate</b><small>Medium · ₹540</small></div>
+              <div class="site-p"><i style="background:linear-gradient(135deg,#2d1d16,#7a4a2a)"></i><b>Monsoon Malabar</b><small>Dark · ₹480</small></div>
+              <div class="site-p"><i style="background:linear-gradient(135deg,#b4643a,#f0b46f)"></i><b>Baba Budan Peaberry</b><small>Light · ₹620</small></div>
+            </div>
+          </div>
+          <div id="live"></div>
+        </div>
+      </div>
+
+      <aside class="card controls" id="controls">
+        <div class="grp">
+          <h3>Style</h3>
+          <div class="field"><label for="c-style">Layout</label><select class="in" id="c-style"></select></div>
+          <button class="btn" type="button" id="c-reset">Reset to style defaults</button>
+        </div>
+        <div class="grp">
+          <h3>Colors</h3>
+          <div class="field"><label>Mode</label><div class="seg" id="c-mode" role="group" aria-label="Mode"><button type="button" data-v="light">Light</button><button type="button" data-v="dark">Dark</button></div></div>
+          <div class="field"><label>Brand color</label><div class="swatches" id="c-swatches"></div></div>
+          <div class="field"><label for="c-bg">Background</label><div class="colorrow"><input type="color" id="c-bg"><code id="c-bg-v"></code><button class="autobtn" data-auto="bg" type="button">Auto</button></div></div>
+          <div class="field"><label for="c-fg">Text</label><div class="colorrow"><input type="color" id="c-fg"><code id="c-fg-v"></code><button class="autobtn" data-auto="fg" type="button">Auto</button></div></div>
+          <div class="field"><label for="c-bubble">Your bubble</label><div class="colorrow"><input type="color" id="c-bubble"><code id="c-bubble-v"></code><button class="autobtn" data-auto="bubble" type="button">Auto</button></div></div>
+          <div class="field"><label for="c-input">Typing area</label><div class="colorrow"><input type="color" id="c-input"><code id="c-input-v"></code><button class="autobtn" data-auto="input" type="button">Auto</button></div></div>
+        </div>
+        <div class="grp">
+          <h3>Type &amp; shape</h3>
+          <div class="field"><label for="c-font">Font</label><select class="in" id="c-font"></select></div>
+          <div class="field"><label for="c-radius">Corners <span class="newtag">new</span></label><div class="range"><input type="range" id="c-radius" min="0" max="28" step="1"><code id="c-radius-v"></code></div></div>
+          <div class="field"><label>Spacing <span class="newtag">new</span></label><div class="seg" id="c-density" role="group" aria-label="Spacing"><button type="button" data-v="compact">Compact</button><button type="button" data-v="comfortable">Default</button><button type="button" data-v="roomy">Roomy</button></div></div>
+        </div>
+        <div class="grp">
+          <h3>Header &amp; greeting</h3>
+          <div class="field"><label for="c-name">Bot name</label><input class="in" id="c-name"></div>
+          <div class="field"><label for="c-subtitle">Subtitle</label><input class="in" id="c-subtitle"></div>
+          <div class="field stack"><label for="c-welcome">Welcome message</label><textarea class="in" id="c-welcome"></textarea></div>
+        </div>
+        <div class="grp">
+          <h3>Launcher</h3>
+          <div class="lgrid" id="c-launcher"></div>
+          <div class="field" style="margin-top:10px"><label for="c-ltext">Button text</label><input class="in" id="c-ltext"></div>
+          <div class="field"><label for="c-lcolor">Button color</label><div class="colorrow"><input type="color" id="c-lcolor"><code id="c-lcolor-v"></code><button class="autobtn" data-auto="launcherColor" type="button">Auto</button></div></div>
+          <div class="field"><label>Position</label><div class="seg" id="c-pos" role="group" aria-label="Position"><button type="button" data-v="left">Left</button><button type="button" data-v="right">Right</button></div></div>
+        </div>
+        <div class="grp">
+          <h3>Input bar</h3>
+          <div class="checks">
+            <label class="check"><input type="checkbox" id="c-attach">Attachment</label>
+            <label class="check"><input type="checkbox" id="c-emoji">Emoji</label>
+            <label class="check"><input type="checkbox" id="c-branding">“Powered by Vicero”</label>
+          </div>
+        </div>
+        <div class="grp">
+          <h3>Interactive blocks <span class="newtag">new</span></h3>
+          <p class="note">What the bot can show instead of plain text. Turn one off and the bot asks in text instead.</p>
+          <div class="checks" id="c-blocks"></div>
+        </div>
+        <div class="grp">
+          <h3>Saved config</h3>
+          <div class="copyrow"><span>Same camelCase shape as <code>WidgetConfigIn</code>. Green keys are new.</span><button class="btn" type="button" id="c-copy"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg><span id="c-copy-l">Copy</span></button></div>
+          <pre class="code" id="c-json"></pre>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="view-gallery" role="tabpanel" aria-labelledby="tab-gallery" hidden>
+    <div class="gal-head">
+      <div><h1>Ten styles, one config</h1><p>Every widget below is live. Click the options, fill the forms, type a message. Each one starts mid-conversation so you can see a different interactive block.</p></div>
+    </div>
+    <div class="gallery" id="gallery"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+/* ───────── Icons ───────── */
+const ICONS = {
+  chat:'<path d="M21 12a8.5 8.5 0 0 1-12.3 7.6L3 21l1.4-5.4A8.5 8.5 0 1 1 21 12z"/>',
+  msg:'<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+  dots:'<circle class="f" cx="7" cy="12" r="1.6"/><circle class="f" cx="12" cy="12" r="1.6"/><circle class="f" cx="17" cy="12" r="1.6"/><path d="M21 12a8.5 8.5 0 0 1-12.3 7.6L3 21l1.4-5.4A8.5 8.5 0 1 1 21 12z"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  send:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  clip:'<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
+  smile:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  bag:'<path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  box:'<path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7"/>',
+  star:'<path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.3L12 17.1l-5.7 3.1 1.2-6.3L2.8 9.5l6.4-.8z"/>',
+  arrowR:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  left:'<path d="M15 6l-6 6 6 6"/>',
+  right:'<path d="M9 6l6 6-6 6"/>',
+  minus:'<path d="M5 12h14"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>'
+};
+const svg = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const clone = o => JSON.parse(JSON.stringify(o));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function lum(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return 1;
+  const n = parseInt(m[1], 16), ch = [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+  return .2126 * ch[0] + .7152 * ch[1] + .0722 * ch[2];
+}
+const onColor = hex => lum(hex) > .42 ? '#0b0d10' : '#ffffff';
+
+/* ───────── Data ───────── */
+const FONTS = {
+  system:{label:'System', css:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'},
+  inter:{label:'Inter', css:'"Inter",system-ui,sans-serif'},
+  geist:{label:'Geist (new)', css:'"Geist",system-ui,sans-serif'},
+  jakarta:{label:'Plus Jakarta (new)', css:'"Plus Jakarta Sans",system-ui,sans-serif'},
+  arial:{label:'Arial', css:'Arial,Helvetica,sans-serif'},
+  georgia:{label:'Georgia', css:'Georgia,"Times New Roman",serif'},
+  courier:{label:'Mono', css:'"JetBrains Mono","Courier New",ui-monospace,monospace'}
+};
+const BASE = { light:{bg:'#ffffff', fg:'#111318'}, dark:{bg:'#131417', fg:'#eceef1'} };
+const STYLES = [
+  {id:'classic', name:'Classic', tag:'Brand-color header, clean bubbles. The safe default.', traits:['solid header','bubbles'], preset:{mode:'light', accent:'#2563eb', font:'inter', radius:16, launcher:'circle-chat'}},
+  {id:'glass', name:'Glass', tag:'Frosted panel that lets the site show through.', traits:['blur','dark input pill'], preset:{mode:'light', accent:'#0f172a', font:'geist', radius:22, launcher:'circle-message'}, pal:{light:{bg:'#ffffff', fg:'#0f1115'}, dark:{bg:'#101114', fg:'#f3f4f6'}}},
+  {id:'line', name:'Hairline', tag:'No bubbles, thin rules, lots of air.', traits:['minimal','list options'], preset:{mode:'light', accent:'#111111', font:'geist', radius:12, launcher:'pill-text'}},
+  {id:'paper', name:'Paper', tag:'Reads like a letter. Serif type, no chrome.', traits:['serif','lettered options'], preset:{mode:'light', accent:'#1e4fd8', font:'georgia', radius:4, launcher:'rounded-square'}, pal:{light:{bg:'#f7f7f4', fg:'#1c1b18'}, dark:{bg:'#191815', fg:'#ecebe6'}}},
+  {id:'pebble', name:'Pebble', tag:'Soft round bubbles with a messenger feel.', traits:['round','centered header'], preset:{mode:'light', accent:'#0a84ff', font:'system', radius:24, launcher:'circle-message'}},
+  {id:'terminal', name:'Console', tag:'Monospace and keyboard first. For dev tools.', traits:['mono','numbered options'], preset:{mode:'dark', accent:'#3ddc84', font:'courier', radius:6, launcher:'rounded-square'}, pal:{light:{bg:'#f4f6f4', fg:'#14211a'}, dark:{bg:'#0b0f0d', fg:'#cfe3d5'}}},
+  {id:'concierge', name:'Concierge', tag:'Big welcome screen with topic tiles.', traits:['home screen','tiles','team faces'], preset:{mode:'light', accent:'#0d7a6c', font:'jakarta', radius:18, launcher:'pill-text'}},
+  {id:'spotlight', name:'Command', tag:'Search bar on top, like a command palette.', traits:['search first','keyboard hints'], preset:{mode:'dark', accent:'#f59e0b', font:'geist', radius:14, launcher:'circle-dots'}, pal:{light:{bg:'#ffffff', fg:'#111318'}, dark:{bg:'#151517', fg:'#ededef'}}},
+  {id:'drawer', name:'Side drawer', tag:'Full-height panel with Chat, Help and Status tabs.', traits:['full height','tabs'], preset:{mode:'light', accent:'#2563eb', font:'inter', radius:10, launcher:'circle-chat'}},
+  {id:'block', name:'Bold block', tag:'Thick outlines and hard shadows.', traits:['brutalist','high contrast'], preset:{mode:'light', accent:'#ffd43b', font:'jakarta', radius:0, launcher:'rounded-square'}, pal:{light:{bg:'#ffffff', fg:'#0a0a0a'}, dark:{bg:'#0a0a0a', fg:'#fafafa'}}}
+];
+const STYLE = Object.fromEntries(STYLES.map(s => [s.id, s]));
+const LAUNCHERS = [
+  {id:'circle-chat', label:'Chat'}, {id:'circle-message', label:'Message'}, {id:'circle-dots', label:'Dots'},
+  {id:'rounded-square', label:'Square'}, {id:'pill-text', label:'Pill + text'}, {id:'pulse-ring', label:'Pulse'}
+];
+const SWATCHES = ['#2563eb','#0a84ff','#0d7a6c','#16a34a','#3ddc84','#f59e0b','#ffd43b','#e11d48','#7c3aed','#0f172a','#111111'];
+const BLOCKS = [
+  {id:'quick', label:'Quick replies'}, {id:'cards', label:'Product cards'}, {id:'forms', label:'Inline forms'},
+  {id:'booking', label:'Date & time picker'}, {id:'rating', label:'Rating'}, {id:'typing', label:'Typing dots'}
+];
+const DEFAULT = {
+  style:'classic', mode:'light', accent:'#2563eb', bg:null, fg:null, bubble:null, input:null,
+  font:'inter', radius:16, density:'comfortable', launcher:'circle-chat', launcherColor:null,
+  launcherText:'Chat with us', position:'right', branding:true, buttons:['attachment','emoji'],
+  botName:'Mira from Kaapi & Co.', subtitle:'Usually replies in seconds',
+  welcome:"Hi, I'm Mira. I can help you pick beans, book a tasting at our Porur roastery, or find your order.",
+  blocks:{quick:true, cards:true, forms:true, booking:true, rating:true, typing:true}
+};
+function withPreset(cfg, styleId) {
+  const p = STYLE[styleId].preset;
+  return Object.assign(clone(cfg), {style:styleId, mode:p.mode, accent:p.accent, font:p.font, radius:p.radius, launcher:p.launcher, bg:null, fg:null, bubble:null, input:null, launcherColor:null});
+}
+function resolved(cfg) {
+  const st = STYLE[cfg.style], pal = (st.pal || BASE)[cfg.mode] || BASE[cfg.mode];
+  const bg = cfg.bg || pal.bg, fg = cfg.fg || pal.fg, bubble = cfg.bubble || cfg.accent, launch = cfg.launcherColor || cfg.accent;
+  return {bg, fg, bubble, launch, input:cfg.input};
+}
+
+const PRODUCTS = [
+  {id:'attikan', name:'Attikan Estate', roast:'Medium roast', notes:'Jaggery, orange peel, cocoa', price:540, size:'250 g', c1:'#6b3e26', c2:'#c9894f'},
+  {id:'malabar', name:'Monsoon Malabar', roast:'Dark roast', notes:'Spice, cedar, very low acid', price:480, size:'250 g', c1:'#2d1d16', c2:'#7a4a2a'},
+  {id:'peaberry', name:'Baba Budan Peaberry', roast:'Light roast', notes:'Jasmine, honey, stone fruit', price:620, size:'250 g', c1:'#b4643a', c2:'#f0b46f'},
+  {id:'filter', name:'Filter Kaapi 80/20', roast:'With chicory', notes:'Bold, malty, made for milk', price:420, size:'500 g', c1:'#4a2c1d', c2:'#a8743f'}
+];
+const MAIN = [
+  {id:'shop', label:'Shop coffee', icon:'bag'},
+  {id:'quiz', label:'Find my roast', icon:'spark'},
+  {id:'book', label:'Book a tasting', icon:'cal'},
+  {id:'order', label:'Track my order', icon:'box'},
+  {id:'human', label:'Talk to a person', icon:'user'}
+];
+const DAYNAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = d => `${DAYNAMES[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+
+/* ───────── Widget ───────── */
+class Widget {
+  constructor(host, cfg, seed) {
+    this.host = host; this.cfg = clone(cfg); this.open = true; this.gen = 0; this.cart = [];
+    this.build(); this.applyConfig(cfg); this.restart(seed);
+  }
+  build() {
+    const host = this.host; host.classList.add('vw-host'); host.innerHTML = `
+      <section class="vw" role="dialog" aria-label="Chat">
+        <header class="vw-head">
+          <span class="vw-tl" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div class="vw-ava" data-r="ava"></div>
+          <div class="vw-team" aria-hidden="true"><span>PR</span><span>AK</span><span>JS</span></div>
+          <div class="vw-id"><div class="vw-title" data-r="title"></div><div class="vw-sub"><span class="vw-dot"></span><span data-r="sub"></span></div></div>
+          <div class="vw-hero"><div class="vw-hero-h">Hi there</div><div class="vw-hero-p">Ask us anything, or pick a topic to start.</div></div>
+          <div class="vw-hacts"><button class="vw-ib" data-a="restart" type="button" title="Start over" aria-label="Start over">${svg('refresh')}</button><button class="vw-ib" data-a="close" type="button" title="Close" aria-label="Close chat">${svg('x')}</button></div>
+          <nav class="vw-tabs" aria-label="Sections"><button type="button" class="on" data-tab="chat">Chat</button><button type="button" data-tab="help">Help</button><button type="button" data-tab="status">Status</button></nav>
+        </header>
+        <div class="vw-body" data-r="body" aria-live="polite"></div>
+        <div class="vw-pane" data-pane="help" hidden><h4>Popular articles</h4></div>
+        <div class="vw-pane" data-pane="status" hidden><h4>Right now</h4>
+          <div class="vw-stat"><i></i>Website &amp; checkout<small>Working</small></div>
+          <div class="vw-stat"><i></i>Order tracking<small>Working</small></div>
+          <div class="vw-stat"><i></i>Porur roastery café<small>Open till 9 pm</small></div>
+          <div class="vw-stat"><i style="background:#f59e0b"></i>Deliveries to Kerala<small>+1 day (rain)</small></div>
+        </div>
+        <form class="vw-foot" data-r="foot">
+          <div class="vw-inwrap">
+            <input class="vw-text" data-r="input" placeholder="Type a message…" autocomplete="off" aria-label="Message">
+            <button type="button" class="vw-ib" data-btn="attachment" title="Attach a file" aria-label="Attach a file">${svg('clip')}</button>
+            <button type="button" class="vw-ib" data-btn="emoji" title="Emoji" aria-label="Emoji">${svg('smile')}</button>
+            <button class="vw-send" type="submit" title="Send" aria-label="Send">${svg('send')}</button>
+          </div>
+        </form>
+        <div class="vw-kbd" aria-hidden="true"><span><kbd>↵</kbd>select</span><span><kbd>esc</kbd>close</span></div>
+        <div class="vw-brand" data-r="brand">Powered by <b>Vicero</b></div>
+      </section>
+      <button class="vw-launcher" type="button" data-r="launcher"></button>`;
+    const q = s => host.querySelector(s);
+    this.el = {panel:q('.vw'), ava:q('[data-r=ava]'), title:q('[data-r=title]'), sub:q('[data-r=sub]'), body:q('[data-r=body]'),
+      foot:q('[data-r=foot]'), input:q('[data-r=input]'), brand:q('[data-r=brand]'), launcher:q('[data-r=launcher]'),
+      attach:q('[data-btn=attachment]'), emoji:q('[data-btn=emoji]')};
+    const help = q('[data-pane=help]');
+    ['How fresh is my coffee when it ships?','Which grind should I pick?','Delivery times across India','Returns and refunds'].forEach(t => {
+      const b = h('button', 'vw-art-row', esc(t) + svg('right')); b.type = 'button';
+      b.onclick = () => { this.tab('chat'); this.user(t); this.bot(this.answer(t)); }; help.appendChild(b);
+    });
+    q('[data-a=restart]').onclick = () => this.restart();
+    q('[data-a=close]').onclick = () => this.setOpen(false);
+    this.el.launcher.onclick = () => this.setOpen(!this.open);
+    host.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => this.tab(b.dataset.tab));
+    this.el.foot.addEventListener('submit', e => { e.preventDefault(); this.onText(); });
+    this.el.attach.onclick = () => { this.user('📎 receipt-1048.jpg'); this.bot('Got **receipt-1048.jpg**. Someone from our team will look at it and reply here.'); };
+    this.el.emoji.onclick = () => this.toggleEmoji();
+    host.addEventListener('keydown', e => { if (e.key === 'Escape' && this.cfg.style === 'spotlight') this.setOpen(false); });
+  }
+  tab(id) {
+    this.host.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+    this.el.body.hidden = id !== 'chat'; this.el.foot.hidden = id !== 'chat';
+    this.host.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== id);
+  }
+  toggleEmoji() {
+    if (this.emo) { this.emo.remove(); this.emo = null; return; }
+    this.emo = h('div', 'vw-emo');
+    ['☕','👍','🙂','🙏','🎉','❤️'].forEach(x => { const b = h('button', '', x); b.type = 'button'; b.onclick = () => { this.el.input.value += x; this.el.input.focus(); this.toggleEmoji(); }; this.emo.appendChild(b); });
+    this.el.foot.appendChild(this.emo);
+  }
+  applyConfig(cfg) {
+    const old = this.cfg; this.cfg = clone(cfg);
+    const r = resolved(cfg), p = this.el.panel, s = p.style;
+    s.setProperty('--w-accent', cfg.accent); s.setProperty('--w-on-accent', onColor(cfg.accent));
+    s.setProperty('--w-bg', r.bg); s.setProperty('--w-fg', r.fg);
+    s.setProperty('--w-bubble', r.bubble); s.setProperty('--w-on-bubble', onColor(r.bubble));
+    s.setProperty('--w-input', r.input || 'color-mix(in srgb, var(--w-fg) 4%, var(--w-bg))');
+    s.setProperty('--w-r', cfg.radius + 'px'); s.setProperty('--w-font', FONTS[cfg.font].css);
+    const ls = this.el.launcher.style;
+    ls.setProperty('--w-launch', r.launch); ls.setProperty('--w-on-launch', onColor(r.launch)); ls.setProperty('--w-font', FONTS[cfg.font].css);
+    p.className = `vw st-${cfg.style} m-${cfg.mode} d-${cfg.density}` + (this.home ? ' is-home' : '');
+    this.host.dataset.style = cfg.style;
+    this.host.classList.toggle('pos-left', cfg.position === 'left');
+    const initials = cfg.botName.replace(/[^A-Za-z ]/g, '').trim().split(/\s+/)[0]?.[0] || 'V';
+    this.el.ava.textContent = initials.toUpperCase();
+    this.el.title.textContent = cfg.botName; this.el.sub.textContent = cfg.subtitle;
+    this.el.attach.hidden = !cfg.buttons.includes('attachment'); this.el.emoji.hidden = !cfg.buttons.includes('emoji');
+    this.el.brand.hidden = !cfg.branding;
+    this.el.input.placeholder = cfg.style === 'spotlight' ? 'Ask anything or search…' : cfg.style === 'terminal' ? 'type a command or question' : 'Type a message…';
+    if (cfg.style !== 'drawer') this.tab('chat');
+    if (this.welcomeEl && old && old.welcome !== cfg.welcome) this.welcomeEl.innerHTML = fmt(cfg.welcome);
+    this.renderLauncher();
+  }
+  renderLauncher() {
+    const l = this.el.launcher, kind = this.cfg.launcher;
+    l.className = 'vw-launcher' + (kind === 'rounded-square' ? ' sq' : '') + (kind === 'pulse-ring' && !this.open ? ' ring' : '');
+    l.setAttribute('aria-label', this.open ? 'Close chat' : this.cfg.launcherText);
+    l.setAttribute('aria-expanded', String(this.open));
+    if (this.open) { l.innerHTML = svg('x'); return; }
+    const icon = {'circle-chat':'chat','circle-message':'msg','circle-dots':'dots','rounded-square':'chat','pill-text':'chat','pulse-ring':'chat'}[kind];
+    if (kind === 'pill-text') { l.classList.add('pill'); l.innerHTML = svg(icon) + `<span>${esc(this.cfg.launcherText)}</span>`; }
+    else l.innerHTML = svg(icon);
+  }
+  setOpen(v) { this.open = v; this.host.classList.toggle('is-closed', !v); this.renderLauncher(); if (v) this.scroll(); }
+  setHome(v) { this.home = v; this.el.panel.classList.toggle('is-home', v); }
+
+  /* queue */
+  enqueue(fn) { const g = this.gen; this.q = this.q.then(() => g === this.gen ? fn(g) : null).catch(e => console.error(e)); return this.q; }
+  scroll() { const b = this.el.body; requestAnimationFrame(() => b.scrollTo({top:b.scrollHeight, behavior:(this.instant || reduced) ? 'auto' : 'smooth'})); }
+  addMsg(who, text, o = {}) {
+    const row = h('div', `vw-row ${who}`), msg = h('div', 'vw-msg', who === 'bot' ? fmt(text) : esc(text));
+    if (o.agent) {
+      const wrap = h('div'); wrap.appendChild(h('div', 'vw-agent-lb', `${esc(o.agent)} · Customer care`));
+      const line = h('div', 'vw-agent'); line.appendChild(h('div', 'vw-agent-ava', 'PR')); line.appendChild(msg); wrap.appendChild(line); row.appendChild(wrap);
+    } else row.appendChild(msg);
+    this.el.body.appendChild(row); this.scroll(); return msg;
+  }
+  bot(text, o = {}) {
+    return this.enqueue(async g => {
+      if (!this.instant) {
+        if (this.cfg.blocks.typing) {
+          const t = h('div', 'vw-row bot', '<div class="vw-typing"><i></i><i></i><i></i></div>');
+          this.el.body.appendChild(t); this.scroll();
+          await wait(450 + Math.min(text.length * 9, 800)); t.remove();
+        } else await wait(220);
+        if (g !== this.gen) return;
+      }
+      return this.addMsg('bot', text, o);
+    });
+  }
+  user(text) { this.setHome(false); return this.enqueue(() => this.addMsg('user', text)); }
+  block(make) {
+    return this.enqueue(async g => {
+      if (!this.instant) { await wait(140); if (g !== this.gen) return; }
+      const row = h('div', 'vw-row bot vw-blockrow'), el = make(); row.appendChild(el);
+      this.el.body.appendChild(row); this.scroll(); return el;
+    });
+  }
+  done(el) { el.classList.add('is-done'); el.querySelectorAll('button,input,select').forEach(x => x.disabled = true); }
+
+  restart(seed) {
+    this.gen++; this.q = Promise.resolve(); this.el.body.innerHTML = ''; this.awaiting = null; this.agentMode = false; this.cart = [];
+    if (this.emo) this.toggleEmoji();
+    this.setHome(true); this.tab('chat'); this.instant = !!seed;
+    this.bot(this.cfg.welcome).then(el => { if (el) this.welcomeEl = el; });
+    this.menu('What can I help you with today?');
+    if (seed) seed(this);
+    this.enqueue(() => { this.instant = false; });
+  }
+
+  /* building blocks */
+  chips(items, onPick, o = {}) {
+    const wrap = h('div', 'vw-chips' + (o.main ? ' main' : ''));
+    items.forEach(it => {
+      const b = h('button', 'vw-chip', (it.icon ? `<span class="ic">${svg(it.icon)}</span>` : '') + `<span class="lb">${esc(it.label)}</span>` + `<span class="go">${svg('arrowR')}</span>`);
+      b.type = 'button';
+      b.onclick = () => {
+        if (o.multi) { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); return; }
+        wrap.closest('.vw-row')?.remove(); onPick(it);
+      };
+      wrap.appendChild(b);
+    });
+    if (o.multi) {
+      const s = h('button', 'vw-btn sm', esc(o.submit || 'Send')); s.type = 'button';
+      s.onclick = () => { const picked = [...wrap.querySelectorAll('.vw-chip.on .lb')].map(x => x.textContent); this.done(wrap); onPick(picked); };
+      wrap.appendChild(s);
+    }
+    return wrap;
+  }
+  options(items, onPick, prog) {
+    const wrap = h('div');
+    if (prog) wrap.appendChild(h('div', 'vw-prog', `<span>Step ${prog[0]} of ${prog[1]}</span><i><b style="width:${prog[0] / prog[1] * 100}%"></b></i>`));
+    const list = h('div', 'vw-opts'); wrap.appendChild(list);
+    items.forEach(it => {
+      const b = h('button', 'vw-opt', `<span class="rad"></span><span>${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>`); b.type = 'button';
+      b.onclick = () => { b.classList.add('on'); this.done(list); onPick(it); };
+      list.appendChild(b);
+    });
+    return wrap;
+  }
+  actions(items) {
+    const wrap = h('div', 'vw-actions');
+    items.forEach((it, i) => {
+      const b = h('button', 'vw-btn sm' + (i ? ' ghost' : ''), esc(it.label)); b.type = 'button';
+      b.onclick = () => { this.done(wrap); b.classList.remove('ghost'); b.classList.add('on'); this.user(it.label); it.run(); };
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+  product(p, o = {}) {
+    const card = h('div', 'vw-card' + (o.solo ? ' solo' : ''));
+    card.innerHTML = `<div class="vw-art" style="--c1:${p.c1};--c2:${p.c2}"><span class="roast">${esc(p.roast)}</span>${o.match ? `<span class="match">${o.match}% match</span>` : ''}</div>
+      <div class="vw-cb"><div><div class="vw-ct">${esc(p.name)}</div><div class="vw-cn">${esc(p.notes)}</div></div>
+      <div class="vw-gr" role="group" aria-label="Grind"><button type="button">Whole bean</button><button type="button" class="on">Filter</button><button type="button">Espresso</button></div>
+      <div class="vw-cf"><span class="vw-price">₹${p.price}<small> / ${p.size}</small></span><button type="button" class="vw-btn sm">Add to cart</button></div></div>`;
+    const grind = [...card.querySelectorAll('.vw-gr button')];
+    grind.forEach(b => b.onclick = () => grind.forEach(x => x.classList.toggle('on', x === b)));
+    const add = card.querySelector('.vw-cf .vw-btn');
+    add.onclick = () => {
+      const g = card.querySelector('.vw-gr .on').textContent;
+      this.done(card); add.classList.add('ok'); add.innerHTML = svg('check') + 'Added';
+      this.cart.push({...p, grind:g}); this.added(p, g);
+    };
+    return card;
+  }
+  carousel(list) {
+    const wrap = h('div', 'vw-carwrap');
+    const nav = h('div', 'vw-carnav', `<span>${list.length} coffees</span><div><button type="button" class="vw-ib" aria-label="Previous">${svg('left')}</button><button type="button" class="vw-ib" aria-label="Next">${svg('right')}</button></div>`);
+    const track = h('div', 'vw-carousel'); list.forEach(p => track.appendChild(this.product(p)));
+    const [prev, next] = nav.querySelectorAll('button');
+    prev.onclick = () => track.scrollBy({left:-track.clientWidth * .8, behavior:'smooth'});
+    next.onclick = () => track.scrollBy({left:track.clientWidth * .8, behavior:'smooth'});
+    wrap.append(nav, track); return wrap;
+  }
+  days(onPick) {
+    const wrap = h('div', 'vw-days'), now = new Date();
+    for (let i = 1; i <= 8; i++) {
+      const d = new Date(now); d.setDate(now.getDate() + i);
+      const closed = d.getDay() === 1;
+      const b = h('button', 'vw-day', `<small>${DAYNAMES[d.getDay()]}</small><b>${d.getDate()}</b><small>${closed ? 'Closed' : MONTHS[d.getMonth()]}</small>`);
+      b.type = 'button'; b.disabled = closed;
+      b.onclick = () => { b.classList.add('on'); this.done(wrap); onPick(d); };
+      wrap.appendChild(b);
+    }
+    return wrap;
+  }
+  slots(onPick) {
+    const wrap = h('div', 'vw-slots');
+    [['10:00 am','6 seats left'],['11:30 am','Full'],['3:00 pm','2 seats left'],['5:30 pm','8 seats left']].forEach(([t, s]) => {
+      const b = h('button', 'vw-slot', `${t}<small>${s}</small>`); b.type = 'button'; b.disabled = s === 'Full';
+      b.onclick = () => { b.classList.add('on'); this.done(wrap); onPick(t); };
+      wrap.appendChild(b);
+    });
+    return wrap;
+  }
+  counter(label, onPick) {
+    let n = 2; const wrap = h('div');
+    const c = h('div', 'vw-counter', `<span>${esc(label)}</span><button type="button" class="vw-ib" aria-label="Fewer">${svg('minus')}</button><b>2</b><button type="button" class="vw-ib" aria-label="More">${svg('plus')}</button>`);
+    const [minus, plus] = c.querySelectorAll('button'), out = c.querySelector('b');
+    minus.onclick = () => { n = Math.max(1, n - 1); out.textContent = n; };
+    plus.onclick = () => { n = Math.min(8, n + 1); out.textContent = n; };
+    const ok = h('button', 'vw-btn sm', 'Confirm'); ok.type = 'button'; ok.style.marginTop = '8px';
+    ok.onclick = () => { this.done(wrap); onPick(n); };
+    wrap.append(c, ok); return wrap;
+  }
+  form(fields, submit, onSubmit) {
+    const f = h('form', 'vw-form'); f.noValidate = true;
+    fields.forEach(fd => {
+      const l = h('label', '', `${esc(fd.label)}<input class="vw-input" name="${fd.id}" type="${fd.type || 'text'}" placeholder="${esc(fd.ph || '')}" autocomplete="${fd.ac || 'off'}"><span class="vw-err" hidden></span>`);
+      f.appendChild(l);
+    });
+    const b = h('button', 'vw-btn', esc(submit)); b.type = 'submit'; f.appendChild(b);
+    f.addEventListener('submit', e => {
+      e.preventDefault(); let okAll = true; const vals = {};
+      fields.forEach(fd => {
+        const inp = f.querySelector(`[name=${fd.id}]`), err = inp.nextElementSibling, v = inp.value.trim();
+        const bad = fd.check ? fd.check(v) : (v ? '' : 'Required');
+        inp.classList.toggle('bad', !!bad); err.hidden = !bad; err.textContent = bad || ''; if (bad) okAll = false; vals[fd.id] = v;
+      });
+      if (!okAll) return;
+      this.done(f); b.innerHTML = svg('check') + 'Sent'; b.classList.add('ok'); onSubmit(vals);
+    });
+    const inst = this.instant; setTimeout(() => { if (!inst) f.querySelector('input')?.focus({preventScroll:true}); }, 60);
+    return f;
+  }
+  ask(fields, submit, cb) {
+    if (this.cfg.blocks.forms) { this.block(() => this.form(fields, submit, cb)); return; }
+    const vals = {};
+    const next = i => {
+      if (i >= fields.length) { this.awaiting = null; cb(vals); return; }
+      const fd = fields[i]; this.bot(fd.ask);
+      this.awaiting = v => { const bad = fd.check ? fd.check(v) : ''; if (bad) { this.bot(bad + ' Try again?'); return; } vals[fd.id] = v; next(i + 1); };
+    };
+    next(0);
+  }
+  receipt(title, sub, rows, acts) {
+    const r = h('div', 'vw-rc', `<div class="vw-rc-h"><span class="ok">${svg('check')}</span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div></div><dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`);
+    if (acts) r.appendChild(this.actions(acts));
+    return r;
+  }
+  stars(onPick) {
+    const wrap = h('div', 'vw-stars', ''), btns = [];
+    for (let i = 1; i <= 5; i++) {
+      const b = h('button', 'vw-star', svg('star')); b.type = 'button'; b.setAttribute('aria-label', `${i} star${i > 1 ? 's' : ''}`);
+      b.onmouseenter = () => btns.forEach((x, j) => x.classList.toggle('lit', j < i));
+      b.onclick = () => { btns.forEach((x, j) => x.classList.toggle('lit', j < i)); wrap.onmouseleave = null; this.done(wrap); onPick(i); };
+      btns.push(b); wrap.appendChild(b);
+    }
+    wrap.onmouseleave = () => btns.forEach(x => x.classList.remove('lit'));
+    return wrap;
+  }
+
+  /* flows */
+  menu(prompt) {
+    this.bot(prompt);
+    if (this.cfg.blocks.quick) this.block(() => this.chips(MAIN, it => { this.user(it.label); this.flow(it.id); }, {main:true}));
+    else this.bot('Type what you need, for example **track my order** or **book a tasting**.');
+  }
+  flow(id) {
+    const F = {
+      shop:() => this.shop(), quiz:() => this.quiz(), book:() => this.book(), order:() => this.order(), human:() => this.human(),
+      over:() => this.restart()
+    };
+    (F[id] || (() => this.menu('What else can I help with?')))();
+  }
+  shop() {
+    if (this.cfg.blocks.cards) { this.bot('Here are this week\'s roasts. Swipe to see all four, pick a grind, then add.'); this.block(() => this.carousel(PRODUCTS)); }
+    else {
+      this.bot('This week: Attikan Estate ₹540, Monsoon Malabar ₹480, Baba Budan Peaberry ₹620, Filter Kaapi 80/20 ₹420. Which one?');
+      if (this.cfg.blocks.quick) this.block(() => this.chips(PRODUCTS.map(p => ({id:p.id, label:p.name})), it => { const p = PRODUCTS.find(x => x.id === it.id); this.user(p.name); this.cart.push({...p, grind:'Filter'}); this.added(p, 'Filter'); }));
+    }
+  }
+  added(p, grind) {
+    this.bot(`Added **${p.name}** (${grind.toLowerCase()} grind) to your cart.`);
+    this.block(() => this.actions([{label:'Checkout', run:() => this.checkout()}, {label:'Keep browsing', run:() => this.shop()}]));
+  }
+  checkout() {
+    const items = this.cart.length ? this.cart : [{...PRODUCTS[0], grind:'Filter'}];
+    const sub = items.reduce((a, b) => a + b.price, 0), ship = sub >= 999 ? 0 : 60;
+    this.bot('Here\'s your cart.');
+    this.block(() => this.receipt('Ready to check out', `${items.length} item${items.length > 1 ? 's' : ''} · roasted on dispatch`,
+      [...items.map(i => [`${i.name} (${i.grind})`, `₹${i.price}`]), ['Delivery', ship ? `₹${ship}` : 'Free'], ['Total', `₹${sub + ship}`]],
+      [{label:'Go to checkout', run:() => { this.bot('This is a demo, so it stops here. On a live site this button opens the cart page.'); this.end(); }}]));
+  }
+  quiz() {
+    const brew = [{id:'filter', label:'South Indian filter', sub:'Davara tumbler, with milk'}, {id:'espresso', label:'Espresso or moka pot'}, {id:'pour', label:'French press or pour-over'}];
+    this.bot('Three quick questions. How do you usually brew?');
+    this.block(() => this.options(brew, a => {
+      this.user(a.label);
+      this.bot('How strong do you like it?');
+      this.block(() => this.options([{id:'mild', label:'Smooth and mild'}, {id:'bal', label:'Balanced'}, {id:'bold', label:'Bold and strong'}], b => {
+        this.user(b.label);
+        this.bot('Last one. Which flavours sound good?');
+        this.block(() => this.options([{id:'choc', label:'Chocolate and jaggery'}, {id:'fruit', label:'Fruity and floral'}, {id:'spice', label:'Spicy and earthy'}], c => {
+          this.user(c.label);
+          const pick = a.id === 'filter' ? PRODUCTS[3] : c.id === 'fruit' ? PRODUCTS[2] : c.id === 'spice' || b.id === 'bold' ? PRODUCTS[1] : PRODUCTS[0];
+          this.bot('Your best match:');
+          if (this.cfg.blocks.cards) this.block(() => this.product(pick, {solo:true, match:92}));
+          else { this.bot(`**${pick.name}**: ${pick.notes}. ₹${pick.price} for ${pick.size}.`); this.end(); }
+        }, [3, 3]));
+      }, [2, 3]));
+    }, [1, 3]));
+  }
+  book() {
+    this.bot('Tastings run at our Porur roastery: 45 minutes, four coffees, ₹350 a person. Pick a day.');
+    const afterSlot = (d, t) => {
+      this.user(`${fmtDate(d)}, ${t}`);
+      this.bot('How many people are coming?');
+      this.block(() => this.counter('Guests', n => {
+        this.user(`${n} ${n > 1 ? 'people' : 'person'}`);
+        this.bot('Almost done. Where should we send the confirmation?');
+        this.ask([
+          {id:'name', label:'Name', ph:'Your name', ask:'What\'s your name?', ac:'name'},
+          {id:'phone', label:'Mobile number', ph:'98400 12345', type:'tel', ask:'And your mobile number?', ac:'tel', check:v => /^[+\d][\d\s-]{8,14}$/.test(v) ? '' : 'Enter a 10-digit mobile number.'}
+        ], 'Confirm booking', v => {
+          this.bot(`Booked, ${v.name.split(' ')[0]}. A WhatsApp confirmation is on its way.`);
+          this.block(() => this.receipt('Tasting booked', 'Kaapi & Co. Roastery, Porur', [['Date', fmtDate(d)], ['Time', t], ['Guests', String(n)], ['Pay at café', `₹${350 * n}`]],
+            [{label:'Add to calendar', run:() => { this.bot('Calendar invite sent to your phone.'); this.end(); }}, {label:'Get directions', run:() => { this.bot('We\'re at 14 Arcot Road, Porur, next to the metro pillar 118. Parking at the back.'); this.end(); }}]));
+        });
+      }));
+    };
+    if (this.cfg.blocks.booking) {
+      this.block(() => this.days(d => {
+        this.bot(`${fmtDate(d)}. Which time?`);
+        this.block(() => this.slots(t => afterSlot(d, t)));
+      }));
+    } else {
+      const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
+      this.bot('Next open sessions:');
+      if (this.cfg.blocks.quick) this.block(() => this.chips([{id:'a', label:`${fmtDate(d)}, 10:00 am`}, {id:'b', label:`${fmtDate(d)}, 3:00 pm`}], it => afterSlot(d, it.label.split(', ')[1])));
+      else afterSlot(d, '10:00 am');
+    }
+  }
+  order() {
+    this.ask([{id:'no', label:'Order number', ph:'KC-10482', ask:'What\'s your order number? It starts with KC.', check:v => /^kc-?\d{4,6}$/i.test(v) ? '' : 'Order numbers look like KC-10482.'}], 'Find my order', v => {
+      this.trackResult(v.no.toUpperCase().replace(/^KC-?/, 'KC-'));
+    });
+  }
+  trackResult(no) {
+    const now = new Date(), d = n => { const x = new Date(now); x.setDate(now.getDate() + n); return `${x.getDate()} ${MONTHS[x.getMonth()]}`; };
+    this.bot(`Found **${no}**. It left our roastery yesterday.`);
+    this.block(() => {
+      const r = h('div', 'vw-rc', `<div class="vw-rc-h"><div style="flex:1"><b>Order ${esc(no)}</b><small>Attikan Estate + Filter Kaapi 80/20</small></div><span class="vw-eta">Arrives ${d(2)}</span></div>
+        <ol class="vw-steps">
+          <li class="done"><span class="pt">${svg('check')}</span><span>Ordered</span><small>${d(-3)}</small></li>
+          <li class="done"><span class="pt">${svg('check')}</span><span>Roasted &amp; packed</span><small>${d(-2)}</small></li>
+          <li class="now"><span class="pt"></span><span>On the way · Blue Dart</span><small>${d(-1)}</small></li>
+          <li><span class="pt"></span><span>Delivered</span><small>${d(2)}</small></li>
+        </ol>`);
+      r.appendChild(this.actions([{label:'Change delivery slot', run:() => { this.bot('I\'ve asked Blue Dart to deliver after 6 pm. You\'ll get an SMS when it\'s confirmed.'); this.end(); }}, {label:'All good, thanks', run:() => this.end()}]));
+      r.querySelector('.vw-actions').style.marginTop = '12px';
+      return r;
+    });
+  }
+  human() {
+    this.bot('Connecting you to our team. Your messages so far will be shared.');
+    let card;
+    this.block(() => { card = h('div', 'vw-ho', `<div class="vw-agent-ava">PR</div><div><b>Priya R.</b><small><span data-s>Joining</span><span class="vw-typing"><i></i><i></i><i></i></span></small></div>`); return card; });
+    this.enqueue(async g => {
+      if (!this.instant) await wait(1600);
+      if (g !== this.gen || !card) return;
+      card.querySelector('small').innerHTML = `<span style="color:#16a34a;display:inline-flex">${svg('check')}</span>Joined the chat`;
+      card.querySelector('small svg').style.cssText = 'width:13px;height:13px';
+    });
+    this.agentMode = true;
+    this.bot('Hi, I\'m Priya. I can see your earlier messages. What\'s up?', {agent:'Priya'});
+    if (this.cfg.blocks.quick) this.block(() => this.chips([{id:'w', label:'Wholesale for my café'}, {id:'p', label:'Problem with an order'}, {id:'g', label:'Gift subscription'}], it => { this.user(it.label); this.agentReply(); }));
+  }
+  agentReply() {
+    this.bot('Got it. Let me check and I\'ll reply here in a few minutes. You can close this window, I\'ll also email you.', {agent:'Priya'});
+    this.agentMode = false; this.end(true);
+  }
+  end(skipThanks) {
+    if (!this.cfg.blocks.rating) { if (this.cfg.blocks.quick) this.block(() => this.chips([{id:'over', label:'Start over'}, {id:'more', label:'Something else'}], it => it.id === 'over' ? this.restart() : (this.user(it.label), this.menu('Sure. What do you need?')))); return; }
+    this.bot('How was this chat?');
+    this.block(() => this.stars(n => {
+      this.user(`${n} out of 5`);
+      const good = n >= 4;
+      this.bot(good ? 'Glad it helped. What worked well?' : 'Sorry about that. What went wrong?');
+      this.block(() => this.chips((good ? ['Quick answers', 'Easy booking', 'Friendly', 'Good picks'] : ['Too slow', 'Didn\'t understand me', 'Wrong info', 'Hard to use']).map(l => ({id:l, label:l})), picked => {
+        this.user(picked.length ? picked.join(', ') : 'No comment');
+        this.bot('Thanks, that helps us improve.');
+        this.block(() => this.chips([{id:'over', label:'Start over'}], () => this.restart()));
+      }, {multi:true, submit:'Send feedback'}));
+    }));
+  }
+  answer(t) {
+    return ({
+      'How fresh is my coffee when it ships?':'We roast on Mondays and Thursdays and ship within 48 hours, so beans reach you 3 to 6 days after roasting.',
+      'Which grind should I pick?':'Filter grind for a davara or drip, Espresso for moka pots and machines, Whole bean if you have a grinder.',
+      'Delivery times across India':'Chennai: next day. Metro cities: 2 to 3 days. Everywhere else: 3 to 5 days. Free over ₹999.',
+      'Returns and refunds':'If a bag arrives damaged or tastes off, send a photo within 7 days and we\'ll replace it.'
+    })[t];
+  }
+  onText() {
+    const v = this.el.input.value.trim(); if (!v) return;
+    this.el.input.value = ''; this.user(v);
+    if (this.awaiting) { this.awaiting(v); return; }
+    if (this.agentMode) { this.agentReply(); return; }
+    const t = v.toLowerCase();
+    const route = [[/order|track|deliver|where is|kc-?\d/, 'order'], [/book|tasting|visit|session|cupping/, 'book'], [/quiz|recommend|which|suggest|roast for/, 'quiz'], [/shop|buy|bean|coffee|price|cart/, 'shop'], [/human|person|agent|call|talk|someone/, 'human']].find(([re]) => re.test(t));
+    if (/kc-?\d{4,6}/i.test(v)) { this.trackResult(v.match(/kc-?\d{4,6}/i)[0].toUpperCase().replace(/^KC-?/, 'KC-')); return; }
+    if (route) { this.flow(route[1]); return; }
+    if (/^(hi|hello|hey|vanakkam)\b/.test(t)) { this.menu('Hello! What can I do for you?'); return; }
+    this.menu('I\'m a demo bot, so I only know a few things. Try one of these:');
+  }
+}
+
+/* ───────── Seeds for the gallery ───────── */
+const SEEDS = {
+  classic: w => { w.user('Shop coffee'); w.flow('shop'); },
+  glass: w => { w.user('Book a tasting'); w.flow('book'); },
+  line: w => { w.user('Find my roast'); w.flow('quiz'); },
+  paper: w => { w.user('Track my order'); w.user('KC-10482'); w.trackResult('KC-10482'); },
+  pebble: w => { w.user('Talk to a person'); w.flow('human'); },
+  terminal: w => { w.user('Shop coffee'); w.flow('shop'); },
+  concierge: null,
+  spotlight: null,
+  drawer: w => { w.user('Track my order'); w.flow('order'); },
+  block: w => { w.user('Track my order'); w.user('KC-20931'); w.trackResult('KC-20931'); w.user('All good, thanks'); w.end(); }
+};
+function seedFor(id) {
+  const s = SEEDS[id]; if (!s) return null;
+  return w => { w.enqueue(() => { w.el.body.querySelector('.vw-chips.main')?.closest('.vw-row')?.remove(); }); s(w); };
+}
+
+/* ───────── Designer wiring ───────── */
+const $ = s => document.querySelector(s);
+let cfg;
+try { const saved = JSON.parse(localStorage.getItem('vicero-widget-lab') || 'null'); if (saved && STYLE[saved.style]) cfg = Object.assign(clone(DEFAULT), saved, {blocks:Object.assign(clone(DEFAULT.blocks), saved.blocks || {})}); } catch (e) {}
+if (!cfg) cfg = withPreset(DEFAULT, 'classic');
+const live = new Widget($('#live'), cfg);
+
+const swatchFor = s => {
+  const pal = (s.pal || BASE)[s.preset.mode] || BASE[s.preset.mode];
+  return `<span class="sw" style="background:${pal.bg}"><i class="b" style="background:${pal.fg};opacity:.18"></i><i class="a" style="background:${s.preset.accent}"></i></span>`;
+};
+STYLES.forEach(s => {
+  const b = h('button', 'sitem', `${swatchFor(s)}<span style="min-width:0"><b>${esc(s.name)}</b><span class="t">${esc(s.tag)}</span></span>`);
+  b.type = 'button'; b.dataset.id = s.id; b.onclick = () => pickStyle(s.id);
+  $('#stylelist').appendChild(b);
+  $('#c-style').appendChild(new Option(s.name, s.id));
+});
+Object.entries(FONTS).forEach(([k, f]) => $('#c-font').appendChild(new Option(f.label, k)));
+SWATCHES.forEach(c => { const b = h('button'); b.type = 'button'; b.style.background = c; b.dataset.c = c; b.title = c; b.setAttribute('aria-label', 'Brand color ' + c); b.onclick = () => set({accent:c}); $('#c-swatches').appendChild(b); });
+const custom = h('input'); custom.type = 'color'; custom.id = 'c-accent'; custom.title = 'Custom brand color'; custom.oninput = () => set({accent:custom.value}); $('#c-swatches').appendChild(custom);
+LAUNCHERS.forEach(l => {
+  const icon = {'circle-chat':'chat','circle-message':'msg','circle-dots':'dots','rounded-square':'chat','pill-text':'chat','pulse-ring':'chat'}[l.id];
+  const cls = l.id === 'rounded-square' ? 'sq' : l.id === 'pill-text' ? 'pill' : l.id === 'pulse-ring' ? 'ring' : '';
+  const b = h('button', 'lopt', `<span class="mini"><span class="${cls}">${svg(icon)}${l.id === 'pill-text' ? 'Chat' : ''}</span></span>${esc(l.label)}`);
+  b.type = 'button'; b.dataset.v = l.id; b.onclick = () => set({launcher:l.id}); $('#c-launcher').appendChild(b);
+});
+BLOCKS.forEach(bl => {
+  const l = h('label', 'check', `<input type="checkbox" id="b-${bl.id}">${esc(bl.label)}`);
+  l.querySelector('input').onchange = e => { cfg.blocks[bl.id] = e.target.checked; set({}, true); };
+  $('#c-blocks').appendChild(l);
+});
+
+function pickStyle(id) { cfg = withPreset(cfg, id); live.applyConfig(cfg); live.restart(); sync(); save(); }
+function set(patch, replay) { Object.assign(cfg, patch); live.applyConfig(cfg); if (replay) live.restart(); if (!live.open) live.setOpen(true); sync(); save(); }
+function save() { try { localStorage.setItem('vicero-widget-lab', JSON.stringify(cfg)); } catch (e) {} }
+
+const segSet = (sel, v) => document.querySelectorAll(sel + ' button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+document.querySelectorAll('#c-mode button').forEach(b => b.onclick = () => set({mode:b.dataset.v}));
+document.querySelectorAll('#c-density button').forEach(b => b.onclick = () => set({density:b.dataset.v}));
+document.querySelectorAll('#c-pos button').forEach(b => b.onclick = () => set({position:b.dataset.v}));
+$('#c-style').onchange = e => pickStyle(e.target.value);
+$('#c-reset').onclick = () => pickStyle(cfg.style);
+$('#c-font').onchange = e => set({font:e.target.value});
+$('#c-radius').oninput = e => set({radius:+e.target.value});
+[['#c-bg','bg'],['#c-fg','fg'],['#c-bubble','bubble'],['#c-input','input'],['#c-lcolor','launcherColor']].forEach(([s, k]) => $(s).oninput = e => set({[k]:e.target.value}));
+document.querySelectorAll('[data-auto]').forEach(b => b.onclick = () => set({[b.dataset.auto]:null}));
+$('#c-name').oninput = e => set({botName:e.target.value || 'Assistant'});
+$('#c-subtitle').oninput = e => set({subtitle:e.target.value});
+$('#c-welcome').oninput = e => set({welcome:e.target.value || 'Hi there!'});
+$('#c-ltext').oninput = e => set({launcherText:e.target.value || 'Chat with us'});
+const btnToggle = (id, key) => $(id).onchange = () => { const s = new Set(cfg.buttons); $(id).checked ? s.add(key) : s.delete(key); set({buttons:['attachment','emoji'].filter(x => s.has(x))}); };
+btnToggle('#c-attach', 'attachment'); btnToggle('#c-emoji', 'emoji');
+$('#c-branding').onchange = e => set({branding:e.target.checked});
+$('#replay').onclick = () => { live.restart(); live.setOpen(true); };
+document.querySelectorAll('#device button').forEach(b => b.onclick = () => { segSet('#device', b.dataset.v); $('#stage').classList.toggle('is-mobile', b.dataset.v === 'mobile'); live.setOpen(true); });
+
+function configJSON() {
+  const r = resolved(cfg);
+  return {
+    widgetStyle:cfg.style, mode:cfg.mode, primaryColor:cfg.accent,
+    backgroundColor:cfg.bg || r.bg, textColor:cfg.fg || r.fg, bubbleColor:cfg.bubble || cfg.accent, typingAreaColor:cfg.input,
+    fontFamily:cfg.font, floatingButtonStyle:cfg.launcher, floatingButtonColor:cfg.launcherColor || cfg.accent,
+    launcherText:cfg.launcherText, position:cfg.position === 'left' ? 'bottom-left' : 'bottom-right', branding:cfg.branding, inputBarButtons:cfg.buttons,
+    cornerRadius:cfg.radius, density:cfg.density, botName:cfg.botName, subtitle:cfg.subtitle, interactiveBlocks:cfg.blocks
+  };
+}
+const NEWKEYS = ['cornerRadius','density','botName','subtitle','interactiveBlocks'];
+function sync() {
+  document.querySelectorAll('.sitem').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.id === cfg.style)));
+  $('#stagetitle').innerHTML = `${esc(STYLE[cfg.style].name)}<small>${esc(STYLE[cfg.style].tag)}</small>`;
+  $('#c-style').value = cfg.style; $('#c-font').value = cfg.font;
+  segSet('#c-mode', cfg.mode); segSet('#c-density', cfg.density); segSet('#c-pos', cfg.position);
+  document.querySelectorAll('#c-swatches button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === cfg.accent)));
+  $('#c-accent').value = cfg.accent;
+  const r = resolved(cfg);
+  const inputShown = cfg.input || (lum(r.bg) > .4 ? '#f6f7f8' : '#1c1e22');
+  [['bg', r.bg], ['fg', r.fg], ['bubble', r.bubble], ['input', inputShown], ['lcolor', r.launch]].forEach(([k, v]) => { $('#c-' + k).value = v; });
+  [['bg','bg'],['fg','fg'],['bubble','bubble'],['input','input'],['lcolor','launcherColor']].forEach(([id, key]) => {
+    $(`#c-${id}-v`).textContent = cfg[key] ? cfg[key] : 'auto';
+    document.querySelector(`[data-auto="${key}"]`).disabled = !cfg[key];
+  });
+  $('#c-radius').value = cfg.radius; $('#c-radius-v').textContent = cfg.radius + 'px';
+  if (document.activeElement !== $('#c-name')) $('#c-name').value = cfg.botName;
+  if (document.activeElement !== $('#c-subtitle')) $('#c-subtitle').value = cfg.subtitle;
+  if (document.activeElement !== $('#c-welcome')) $('#c-welcome').value = cfg.welcome;
+  if (document.activeElement !== $('#c-ltext')) $('#c-ltext').value = cfg.launcherText;
+  document.querySelectorAll('#c-launcher .lopt').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === cfg.launcher)));
+  $('#c-attach').checked = cfg.buttons.includes('attachment'); $('#c-emoji').checked = cfg.buttons.includes('emoji'); $('#c-branding').checked = cfg.branding;
+  BLOCKS.forEach(bl => { $('#b-' + bl.id).checked = !!cfg.blocks[bl.id]; });
+  const json = JSON.stringify(configJSON(), null, 2);
+  $('#c-json').innerHTML = esc(json).replace(/^(\s*)&quot;([A-Za-z]+)&quot;:/gm, (m, sp, k) => `${sp}<span class="${NEWKEYS.includes(k) || (k === 'widgetStyle' && !['solid','transparent'].includes(cfg.style)) ? 'n' : 'k'}">"${k}"</span>:`);
+}
+$('#c-copy').onclick = async () => {
+  const txt = JSON.stringify(configJSON(), null, 2);
+  try { await navigator.clipboard.writeText(txt); $('#c-copy-l').textContent = 'Copied'; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($('#c-json')); getSelection().removeAllRanges(); getSelection().addRange(r); $('#c-copy-l').textContent = 'Selected'; }
+  setTimeout(() => $('#c-copy-l').textContent = 'Copy', 1600);
+};
+sync();
+
+/* ───────── Gallery ───────── */
+let galleryBuilt = false;
+function buildGallery() {
+  if (galleryBuilt) return; galleryBuilt = true;
+  STYLES.forEach(s => {
+    const card = h('article', 'card gcard');
+    card.innerHTML = `<div class="gcard-h"><div style="min-width:0"><b>${esc(s.name)}</b><p>${esc(s.tag)}</p><div class="traits">${s.traits.map(t => `<span>${esc(t)}</span>`).join('')}</div></div><button class="btn" type="button">Customize</button></div><div class="gframe"><div></div></div>`;
+    card.querySelector('.btn').onclick = () => { showTab('designer'); pickStyle(s.id); window.scrollTo({top:0, behavior:'smooth'}); };
+    $('#gallery').appendChild(card);
+    const c = withPreset(DEFAULT, s.id);
+    new Widget(card.querySelector('.gframe > div'), c, seedFor(s.id) || (() => {}));
+  });
+}
+function showTab(id) {
+  ['designer', 'gallery'].forEach(t => { $('#tab-' + t).setAttribute('aria-selected', String(t === id)); $('#view-' + t).hidden = t !== id; });
+  if (id === 'gallery') buildGallery();
+  try { history.replaceState(null, '', id === 'gallery' ? '#gallery' : '#designer'); } catch (e) {}
+}
+$('#tab-designer').onclick = () => showTab('designer');
+$('#tab-gallery').onclick = () => showTab('gallery');
+if (location.hash === '#gallery') showTab('gallery');
+})();
+</script>

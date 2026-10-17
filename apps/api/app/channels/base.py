@@ -121,9 +121,17 @@ class BaseChannel:
     async def send(self, channel: Channel, to: str, text: str) -> None:
         raise NotImplementedError
 
-    async def send_image(self, channel: Channel, to: str, url: str, caption: str | None = None) -> None:
-        """Send one image the platform downloads from `url` (a signed, short-lived link)."""
+    async def send_image(self, channel: Channel, to: str, url: str, caption: str | None = None) -> bool:
+        """Send one image the platform downloads from `url` (a signed, short-lived link).
+
+        True when the platform accepted it. A rejected token raises `ChannelAuthRejected`; any other
+        rejection is logged as `media_send_rejected` and returns False, like a text send.
+        """
         raise NotImplementedError
+
+    async def send_typing(self, channel: Channel, to: str) -> None:
+        """Show a typing indicator while a slow turn (a photo) is processed. A no-op where unsupported."""
+        return None
 
     def check_can_send(self, channel: Channel, *, last_inbound_at: dt.datetime | None) -> None:
         """Raise if the platform forbids a free-form send right now.

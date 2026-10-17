@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Loader2, Send } from "lucide-react";
+import { AlertTriangle, ImagePlus, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { replyInbox, sendTemplate, type ApiSendWindow } from "@/lib/api/inbox";
+import { replyInbox, sendInboxImage, sendTemplate, type ApiSendWindow } from "@/lib/api/inbox";
 import { listCannedResponses } from "@/lib/api/canned-responses";
 import { useSession } from "@/lib/store/session";
 
@@ -37,10 +37,13 @@ export function ReplyBox({
   cid,
   sendWindow,
   onSent,
+  canSendImages = false,
 }: {
   cid: string;
   sendWindow: ApiSendWindow | null;
   onSent: () => void;
+  /** WhatsApp, Instagram and Messenger can receive a photo from the operator (docs/26 M5). */
+  canSendImages?: boolean;
 }) {
   const activeOrgId = useSession((s) => s.activeOrgId);
   const [text, setText] = useState("");
@@ -73,6 +76,17 @@ export function ReplyBox({
       onSent();
     },
     // The window can close between page load and send; say so instead of failing silently.
+    onError: (e) => setError((e as Error).message),
+  });
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const doImage = useMutation({
+    mutationFn: (file: File) => sendInboxImage(cid, file, text),
+    onSuccess: () => {
+      setText(""); // the text went along as the caption
+      setError(null);
+      onSent();
+    },
     onError: (e) => setError((e as Error).message),
   });
 
@@ -160,6 +174,31 @@ export function ReplyBox({
           autoComplete="off"
           className="h-[38px] flex-1 rounded-lg border border-border-strong bg-surface px-3 text-sm font-medium text-text placeholder:font-normal placeholder:text-faint focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
         />
+        {canSendImages && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="sr-only"
+              aria-label="Attach a photo"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) doImage.mutate(file);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Send a photo"
+              disabled={doImage.isPending}
+              onClick={() => fileRef.current?.click()}
+            >
+              {doImage.isPending ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+            </Button>
+          </>
+        )}
         <Button type="submit" variant="primary" disabled={!text.trim() || doReply.isPending} aria-label="Send reply">
           {doReply.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         </Button>

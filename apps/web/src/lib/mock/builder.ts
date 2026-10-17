@@ -45,6 +45,8 @@ export interface FeatureToggles {
   tools: boolean;
   memory: boolean;
   handoff: boolean;
+  /** Let the agent look up the product catalog and send product photos (docs/26). */
+  catalog: boolean;
 }
 
 export type FloatingButtonStyle =

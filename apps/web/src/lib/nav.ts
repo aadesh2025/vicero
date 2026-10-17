@@ -3,6 +3,7 @@ import {
   Bot,
   BookOpen,
   Contact,
+  Package,
   CreditCard,
   Inbox,
   BarChart3,
@@ -32,6 +33,7 @@ export const nav: NavGroup[] = [
     items: [
       { label: "Agents", href: "/agents", icon: Bot },
       { label: "Knowledge", href: "/knowledge", icon: BookOpen },
+      { label: "Products", href: "/products", icon: Package },
       { label: "Automations", href: "/automations", icon: Workflow },
     ],
   },

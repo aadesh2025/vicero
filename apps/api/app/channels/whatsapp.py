@@ -183,6 +183,28 @@ class WhatsAppChannel(BaseChannel):
             {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}},
         )
 
+    async def send_image(self, channel: Any, to: str, url: str, caption: str | None = None) -> bool:
+        """Send one image by link. Same window and token handling as a text send (`_post`)."""
+        self.ensure_active(channel)
+        token = self.secret(channel, "access_token")
+        phone_number_id = channel.config.get("phone_number_id")
+        if not token or not phone_number_id:
+            log.warning("whatsapp_send_skipped_missing_config", channel=str(channel.id))
+            return False
+        image: dict[str, str] = {"link": url}
+        if caption:
+            image["caption"] = caption
+        resp = await self._post(
+            channel,
+            token,
+            phone_number_id,
+            {"messaging_product": "whatsapp", "to": to, "type": "image", "image": image},
+        )
+        if resp.status_code >= 400:
+            log.warning("media_send_rejected", channel_type=self.type, channel=str(channel.id), status=resp.status_code)
+            return False
+        return True
+
     async def send_template(
         self,
         channel: Any,
@@ -215,7 +237,9 @@ class WhatsAppChannel(BaseChannel):
             {"messaging_product": "whatsapp", "to": to, "type": "template", "template": template},
         )
 
-    async def _post(self, channel: Any, token: str, phone_number_id: str, body: dict[str, Any]) -> None:
+    async def _post(
+        self, channel: Any, token: str, phone_number_id: str, body: dict[str, Any]
+    ) -> httpx.Response:
         async with self._client(base_url=graph_base()) as client:
             resp = await client.post(
                 f"/{phone_number_id}/messages",
@@ -223,6 +247,7 @@ class WhatsAppChannel(BaseChannel):
                 json=body,
             )
         self._raise_for_meta_error(channel, resp)
+        return resp
 
     @staticmethod
     def _raise_for_meta_error(channel: Any, resp: httpx.Response) -> None:

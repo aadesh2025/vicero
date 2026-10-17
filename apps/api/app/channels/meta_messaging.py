@@ -38,6 +38,7 @@ class MetaMessagingChannel(BaseChannel):
     """Base for Facebook Messenger / Instagram DM adapters."""
 
     secret_fields = ("page_access_token", "app_secret")
+    supports_images = True
     #: The ``object`` value Meta stamps on this surface's webhook deliveries.
     webhook_object: str = ""
     #: Graph fields to request when resolving a sender's profile.
@@ -126,6 +127,54 @@ class MetaMessagingChannel(BaseChannel):
             )
             if code == META_TOKEN_REJECTED_CODE:
                 raise ChannelAuthRejected(code)
+
+    async def send_typing(self, channel: Any, to: str) -> None:
+        """`sender_action: typing_on` - Meta clears it by itself when the next message arrives."""
+        token = self.secret(channel, "page_access_token")
+        if not token or getattr(channel, "status", "active") != "active":
+            return
+        try:
+            async with self._client(base_url=graph_base()) as client:
+                await client.post(
+                    "/me/messages",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"recipient": {"id": to}, "sender_action": "typing_on"},
+                )
+        except Exception as exc:  # cosmetic: never let it hold up the reply
+            log.info("meta_typing_failed", channel_type=self.type, error=type(exc).__name__)
+
+    async def send_image(self, channel: Any, to: str, url: str, caption: str | None = None) -> bool:
+        self.ensure_active(channel)
+        token = self.secret(channel, "page_access_token")
+        if not token:
+            log.warning("meta_send_skipped_no_token", channel_type=self.type, channel=str(channel.id))
+            return False
+        async with self._client(base_url=graph_base()) as client:
+            resp = await client.post(
+                "/me/messages",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "recipient": {"id": to},
+                    "messaging_type": "RESPONSE",
+                    "message": {"attachment": {"type": "image", "payload": {"url": url, "is_reusable": False}}},
+                },
+            )
+        if resp.status_code >= 400:
+            code, message = meta_error_code(resp)
+            log.warning(
+                "media_send_rejected",
+                channel_type=self.type,
+                channel=str(channel.id),
+                status=resp.status_code,
+                code=code,
+                message=message,
+            )
+            if code == META_TOKEN_REJECTED_CODE:
+                raise ChannelAuthRejected(code)
+            return False
+        if caption:  # Messenger attachments carry no caption, so it goes as the next message
+            await self.send(channel, to, caption)
+        return True
 
     # ── identity ─────────────────────────────────────────────────────────────
     async def fetch_profile(self, channel: Any, external_id: str) -> ContactProfile | None:

@@ -40,6 +40,9 @@ settings.docling_enabled = False
 # run one and burning the timeout in CI, which is a test suite whose result depends on the host.
 # `test_embedding_probe.py` turns it on with a mock transport.
 settings.embedding_probe_enabled = False
+# And the product-embedding enqueue after every catalog save (a broker round-trip).
+# `test_products.py` calls `embed_product` directly with the fake embedder.
+settings.product_embedding_enabled = False
 # And the disposable-email MX heuristic, which is a live DNS lookup on every self-serve signup.
 # `test_disposable.py` turns it on with a stubbed resolver.
 settings.disposable_mx_check_enabled = False

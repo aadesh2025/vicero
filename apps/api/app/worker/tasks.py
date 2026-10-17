@@ -421,3 +421,18 @@ async def _run_media_retention() -> int:
 def purge_inbound_media_task() -> int:
     """Daily (Celery beat): delete customer photos past INBOUND_MEDIA_RETENTION_DAYS (docs/26 section 3.4)."""
     return _run(_run_media_retention())
+
+
+async def _run_embed_product(product_id: str) -> bool:
+    from app.modules.products.service import embed_product
+
+    async with SessionFactory() as session:
+        ok = await embed_product(session, uuid.UUID(product_id))
+        await session.commit()
+        return ok
+
+
+@celery_app.task(name="products.embed")  # type: ignore[untyped-decorator]
+def embed_product_task(product_id: str) -> bool:
+    """Embed one product for catalog search. Best effort: keyword search works without it."""
+    return _run(_run_embed_product(product_id))

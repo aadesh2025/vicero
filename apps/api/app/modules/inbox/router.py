@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import decode_access_token
 from app.db.session import SessionFactory, get_session
@@ -73,6 +74,19 @@ async def reply(
     ctx: OrgContext = Depends(current_org),
 ) -> MessageOut:
     return await service.operator_reply(session, ctx, cid, data.text)
+
+
+@router.post("/conversations/{cid}/images", response_model=MessageOut)
+async def send_image(
+    cid: uuid.UUID,
+    file: UploadFile = File(...),
+    caption: str | None = Form(default=None, max_length=1000),
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> MessageOut:
+    """Send one photo to the customer from the operator's reply box."""
+    raw = await file.read(settings.media_max_upload_bytes + 1)
+    return await service.operator_image(session, ctx, cid, raw, caption)
 
 
 @router.post("/conversations/{cid}/template", response_model=MessageOut)

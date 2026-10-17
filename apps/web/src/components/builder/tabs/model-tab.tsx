@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Wrench, Brain, Plus, UserRound, X } from "lucide-react";
+import { BookOpen, Wrench, Brain, Package, Plus, UserRound, X } from "lucide-react";
 import { Field, SectionCard, SliderField } from "@/components/builder/field";
 import { ChipInput } from "@/components/builder/chip-input";
 import { Button } from "@/components/ui/button";
@@ -326,6 +326,12 @@ export function ModelTab() {
           desc="Escalate to a human operator when stuck."
           k="handoff"
         />
+        <FeatureRow
+          icon={<Package className="size-4" />}
+          label="Use product catalog"
+          desc="Look up your Products and send their photos on WhatsApp, Instagram and Messenger."
+          k="catalog"
+        />
       </SectionCard>
     </div>
   );
@@ -355,6 +361,7 @@ function FeatureRow({
         <div className="text-xs text-muted">{desc}</div>
       </div>
       <Switch
+        aria-label={label}
         checked={draft.features[k]}
         onCheckedChange={(v) => update((d) => void (d.features[k] = v))}
       />

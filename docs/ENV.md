@@ -280,6 +280,8 @@ for prod; local default in dev.
 - `INBOUND_MEDIA_RETENTION_DAYS` (default `30`) — customer photos are deleted after this long.
 - `VISION_PROVIDER` / `VISION_MODEL` (default `gemini` / `gemini-2.5-flash`) — model that describes customer photos.
 - `MAX_IMAGES_PER_REPLY` (default `3`) — product photos sent after one bot reply.
+- `PRODUCT_EMBEDDING_ENABLED` (default `true`) — embed products in the worker after a save for semantic catalog
+  search; off = keyword search only.
 - `RAG_CONTEXT_CHAR_BUDGET` (default `8000`) — ceiling on characters of retrieved context
   injected into a prompt (token budgeting; oldest/lowest-ranked citations are trimmed first).
 - `RAG_RRF_FTS_WEIGHT` (default `0.05`) — weight of the keyword (Postgres FTS) list in the

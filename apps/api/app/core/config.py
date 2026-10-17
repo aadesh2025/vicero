@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     vision_provider: str = "gemini"
     vision_model: str = "gemini-2.5-flash"
     max_images_per_reply: int = 3
+    # Compute a product's embedding in the worker after a save. Off in the test suite (no broker traffic).
+    product_embedding_enabled: bool = True
     # Ceiling on characters of retrieved context injected into a prompt (token budgeting).
     rag_context_char_budget: int = 3000  # ~750 tokens: three chunks (was 8000, ADR-125)
     # Weight of the keyword (Postgres FTS) list in the hybrid RRF fusion; the dense list is

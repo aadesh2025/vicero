@@ -281,3 +281,71 @@ async def test_l3_without_its_providers_key_is_unavailable_and_says_why(
     transport, seen = _capture()
     assert await policy_guard.classify("hello", transport=transport) is None
     assert seen == []
+
+
+# ── a tool turn does not re-send the retrieved context on its follow-up calls (ADR-126) ─────────────────
+class _ToolThenText:
+    """First call asks for a tool, the second answers. Records the messages each call received."""
+
+    name = "groq"
+    active_model: str | None = None
+
+    def __init__(self) -> None:
+        self.calls: list[list[Message]] = []
+
+    async def chat(self, req: ChatRequest) -> Any:  # pragma: no cover
+        raise NotImplementedError
+
+    async def stream(self, req: ChatRequest) -> AsyncIterator[StreamEvent]:
+        from app.llm.types import ToolCall
+
+        self.calls.append(list(req.messages))
+        if len(self.calls) == 1:
+            yield StreamEvent(type="tool_call", tool_call=ToolCall(id="c1", name="check_availability", arguments={}))
+            yield StreamEvent(
+                type="done", usage=Usage(prompt_tokens=10, completion_tokens=1), finish_reason="tool_calls"
+            )
+        else:
+            yield StreamEvent(type="token", delta="Here are the slots.")
+            yield StreamEvent(type="done", usage=Usage(prompt_tokens=10, completion_tokens=3), finish_reason="stop")
+
+    def supports_tools(self) -> bool:
+        return True
+
+    async def list_models(self) -> list[ModelInfo]:
+        return []
+
+
+async def _tool_turn() -> _ToolThenText:
+    from app.rag.context import CONTEXT_MARKER
+
+    provider = _ToolThenText()
+
+    async def executor(_call: Any) -> dict[str, Any]:
+        return {"output": {"ok": True, "slots": []}, "status": "success", "error": None}
+
+    req = _req(
+        messages=[
+            Message(role="system", content="PERSONA prompt"),
+            Message(role="system", content=f"{CONTEXT_MARKER} [1] pricing text"),
+            Message(role="user", content="book me"),
+        ],
+        tools=[ToolSpec(name="check_availability", description="d", parameters={"type": "object"})],
+    )
+    _ = [ev async for ev in run_turn(provider, req, [], TurnResult(), executor=executor, max_iters=3)]
+    return provider
+
+
+async def test_the_follow_up_call_of_a_tool_turn_leaves_the_retrieved_context_out() -> None:
+    provider = await _tool_turn()
+    first, second = provider.calls
+    assert any("pricing text" in (m.content or "") for m in first), "the first call has the context"
+    assert not any("pricing text" in (m.content or "") for m in second)
+    assert any(m.content == "PERSONA prompt" for m in second), "the persona prompt stays"
+    assert any(m.role == "tool" for m in second), "and so does the tool result"
+
+
+async def test_the_context_stays_when_the_setting_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "tool_followup_drops_context", False)
+    provider = await _tool_turn()
+    assert any("pricing text" in (m.content or "") for m in provider.calls[1])

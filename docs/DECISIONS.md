@@ -18,6 +18,14 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** After ADR-125 a plain question costs about 1,900-2,200 tokens, but a turn that calls a tool makes two or more model calls and each one re-sends the whole prompt, including the retrieved-context message (header plus up to 3,000 characters, ~750 tokens): 4,000 tokens for one tool round, 7,100 for two. Groq's free tier allows 8,000 a minute per model.
+- **Decision:** after the model has asked for a tool, the follow-up calls of that turn drop the system message that starts with `CONTEXT_MARKER` (`rag/context.py`). The persona prompt, history and tool results stay. `TOOL_FOLLOWUP_DROPS_CONTEXT=false` restores the old behaviour.
+- **Alternatives considered:** shortening the context header (it exists to stop replies quoting sources; changing it risks that regression); a smaller context budget (hurts plain answers, the common case).
+- **Consequences:** if a tool follow-up needs knowledge-base facts the model did not use for the tool call, it no longer has them in that call; the persona prompt still tells it to hand over when it does not know.
+
 ### ADR-125: Smaller chat turns, one Retry-After retry, L3 on its own provider, tokens logged per turn
 - **Date:** 2026-10-17
 - **Status:** accepted

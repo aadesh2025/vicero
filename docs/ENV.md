@@ -508,3 +508,4 @@ to RRF ordering, logged, never an error and never an empty result set.
 | `GUARD_POLICY_FALLBACK_PROVIDER` | `groq` | Provider for `GUARD_POLICY_FALLBACK_MODEL` |
 | `GUARD_POLICY_MODEL` | `openai/gpt-oss-20b` | L3 model (own rate-limit bucket, not the chat's) |
 | `GUARD_POLICY_FALLBACK_MODEL` | `qwen/qwen3.8-27b` | Tried once when the L3 model is unavailable |
+| `TOOL_FOLLOWUP_DROPS_CONTEXT` | `true` | A tool turn's follow-up model calls do not re-send the retrieved context (ADR-126) |

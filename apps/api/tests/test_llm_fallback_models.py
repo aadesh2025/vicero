@@ -10,6 +10,7 @@ import pytest
 import structlog
 
 from app.chat.runtime import TurnResult, run_turn
+from app.core.config import settings
 from app.llm.base import ProviderError
 from app.llm.fallback import FallbackChatProvider
 from app.llm.registry import get_chat_provider_chain
@@ -84,10 +85,12 @@ async def test_the_primary_model_is_not_its_own_fallback() -> None:
             ],
         }
     )
-    assert not isinstance(chain, FallbackChatProvider)
+    # Nothing usable to fall back to: a single link (still wrapped, so a 429 gets its one Retry-After retry).
+    assert isinstance(chain, FallbackChatProvider) and len(chain._chain) == 1
 
 
-async def test_a_rate_limited_model_falls_back_to_the_second_model() -> None:
+async def test_a_rate_limited_model_falls_back_to_the_second_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "llm_retry_default_seconds", 0.0)  # the one 429 retry happens first, without waiting
     limited = ProviderError("provider returned 429: rate limit", retryable=True, status=429)
 
     class _PerModel(_Provider):
@@ -102,7 +105,7 @@ async def test_a_rate_limited_model_falls_back_to_the_second_model() -> None:
     chain = FallbackChatProvider([(p, "openai/gpt-oss-120b"), (p, "llama-3.3-70b-versatile")])
     events = [e async for e in chain.stream(_req())]
     assert "".join(e.delta or "" for e in events if e.type == "token") == "from the second model"
-    assert p.models_called == ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
+    assert p.models_called == ["openai/gpt-oss-120b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
     assert chain.active_model == "llama-3.3-70b-versatile"
 
 

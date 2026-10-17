@@ -18,7 +18,7 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
-### ADR-128: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
+### ADR-130: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** Block labels, card text and form labels come from the model, often from the knowledge base,
@@ -33,7 +33,7 @@ Format each entry as below. Newest at the top.
   any label asking for passwords, card numbers, ID numbers or one-time codes.
 - **Consequences:** a leaky or withdrawn turn shows plain text only; at most two blocks per reply.
 
-### ADR-127: A block tap is an ordinary user message (with `block_reply` beside it)
+### ADR-129: A block tap is an ordinary user message (with `block_reply` beside it)
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** The agent runtime, guardrails, metering and rate limits are tuned for text turns.
@@ -46,7 +46,7 @@ Format each entry as below. Newest at the top.
   conversation and enabled only for agents that opted in.
 - **Alternatives considered:** a dedicated block-reply turn type (a second path around every guard).
 
-### ADR-126: Interactive blocks are an additive `block` SSE event, opt-in per agent
+### ADR-128: Interactive blocks are an additive `block` SSE event, opt-in per agent
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** docs/27 wants tappable UI without risking any current agent, embed or channel.
@@ -62,7 +62,7 @@ Format each entry as below. Newest at the top.
   agents (prompt text is guidance — every limit is also enforced in code; the no-context A/B of ADR-045 was not
   re-run because `DEFAULT_SYSTEM_PROMPT`, the templates and the identity lock are untouched).
 
-### ADR-125: Layouts are a separate `widgetLayout` field; presets live in the designer; no web fonts
+### ADR-127: Layouts are a separate `widgetLayout` field; presets live in the designer; no web fonts
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** Ten new designs must ship without changing a single existing embed.
@@ -77,6 +77,27 @@ Format each entry as below. Newest at the top.
   (no status data exists) and Concierge hides its home screen once a conversation exists.
 - **Consequences:** the bundle grew from 12.4 KB to 27.1 KB gzip as shipped (unminified; see
   `packages/widget/README.md`). Rolling back is reverting the commits.
+### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Context:** After ADR-125 a plain question costs about 1,900-2,200 tokens, but a turn that calls a tool makes two or more model calls and each one re-sends the whole prompt, including the retrieved-context message (header plus up to 3,000 characters, ~750 tokens): 4,000 tokens for one tool round, 7,100 for two. Groq's free tier allows 8,000 a minute per model.
+- **Decision:** after the model has asked for a tool, the follow-up calls of that turn drop the system message that starts with `CONTEXT_MARKER` (`rag/context.py`). The persona prompt, history and tool results stay. `TOOL_FOLLOWUP_DROPS_CONTEXT=false` restores the old behaviour.
+- **Alternatives considered:** shortening the context header (it exists to stop replies quoting sources; changing it risks that regression); a smaller context budget (hurts plain answers, the common case).
+- **Consequences:** if a tool follow-up needs knowledge-base facts the model did not use for the tool call, it no longer has them in that call; the persona prompt still tells it to hand over when it does not know.
+
+### ADR-125: Smaller chat turns, one Retry-After retry, L3 on its own provider, tokens logged per turn
+- **Date:** 2026-10-17
+- **Status:** accepted
+- **Constraint:** free tiers only (no paid Groq).
+- **Context:** Groq's free tier gives each model its own tokens-per-minute bucket: 8,000 for `gpt-oss-120b`, `gpt-oss-20b` and `qwen3.8-27b`, and 2,000 for `gpt-oss-safeguard-20b`. The L3 guard sat on the 2,000 bucket with a ~1,450-token policy, so it could make about one call a minute and 429'd on nearly every turn. A plain question cost ~2,500 tokens (one model call); a turn that used a tool made two calls and cost 5,000-8,700, so two messages inside a minute exhausted the main model.
+- **Decision:**
+  1. **Smaller turns.** `rag_context_char_budget` 8000 -> 3000 chars and per-agent `top_k` 5 -> 3; `memory_window_messages` 12 -> 6; `max_tokens` 400 on the agent; a shorter system prompt; tool definitions sent compact (`tools/compact.py`: no `title`, `additionalProperties`, length limits or defaults; descriptions collapsed and capped; the server still validates every call).
+  2. **L3 off the chat's bucket.** `GUARD_POLICY_MODEL` defaults to `openai/gpt-oss-20b` (own 8,000 bucket; 5/5 on the labelled samples, where `qwen3.8-27b` missed the abuse one), fallback `qwen/qwen3.8-27b`; timeout 1.2 s -> 2.5 s because these models answer in 0.7-2.8 s. `GUARD_POLICY_PROVIDER=gemini` (+ `GEMINI_API_KEY`, free tier, model e.g. `gemini-2.5-flash-lite`) moves L3 to another provider entirely. Fail-closed alerting is unchanged: no key logs `guard_l3_unavailable_repeated` and shows in `unavailable_reason()`.
+  3. **A third main-chat provider.** Gemini's free tier (2.5 Flash / Flash-Lite, 250k tokens/min, function calling) is the right one. OpenRouter's free models were rejected: 50 requests/day, tool support varies by model, and the list changes weekly. It activates when `GEMINI_API_KEY` is set; a fallback entry whose key is missing is skipped with a log line.
+  4. **429 handling.** `ProviderError.retry_after` carries the `Retry-After` header; the fallback chain waits that long (or `LLM_RETRY_DEFAULT_SECONDS`) and retries the same model once, only when the wait is at most `LLM_RETRY_AFTER_MAX_SECONDS` (3 s), then moves on. The chain now always wraps the primary so single-model agents get the retry too. Never after output has started.
+  5. **`turn_tokens` log line** per turn: provider-counted prompt/completion/total tokens (summed over the turn's model calls), tool rounds, and request sizes in characters (system, history messages, tools). No text.
+  6. `list_versions()` returns newest first; the installer and seed scripts took `[-1]` (the oldest). They now take the highest version.
+- **Consequences:** answers draw on three chunks instead of five and the last six messages; the shortened prompt and tool text need the demo-knowledge comparison (see PROGRESS). A fallback model can behave differently from the primary.
 
 ### ADR-124: Images on WhatsApp / Instagram / Messenger and a product catalog
 - **Date:** 2026-10-16

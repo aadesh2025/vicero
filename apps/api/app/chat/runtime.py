@@ -22,8 +22,25 @@ from app.core.logging import get_logger
 from app.llm.base import ChatProvider, ProviderError
 from app.llm.pricing import compute_cost_micros
 from app.llm.types import ChatRequest, Message, StreamEvent, ToolCall, Usage
+from app.rag.context import CONTEXT_MARKER
 
 log = get_logger("chat.runtime")
+
+
+def _request_sizes(req: ChatRequest) -> dict[str, int]:
+    """Where a turn's prompt comes from, in characters (about 4 per token). Sizes only, never text."""
+    system = [m for m in req.messages if m.role == "system"]
+    try:
+        tools_chars = len(json.dumps([t.model_dump() for t in req.tools])) if req.tools else 0
+    except (TypeError, ValueError):
+        tools_chars = 0
+    return {
+        "system_msgs": len(system),
+        "system_chars": sum(len(m.content or "") for m in system),
+        "history_msgs": len(req.messages) - len(system),
+        "tools_chars": tools_chars,
+        "max_tokens": req.max_tokens,
+    }
 
 
 def _log_llm_failure(provider: ChatProvider, req: ChatRequest, exc: ProviderError) -> None:
@@ -133,6 +150,7 @@ async def run_turn(
     if citations:
         yield StreamEvent(type="citations", citations=citations)
 
+    sizes = _request_sizes(req)
     messages = list(req.messages)
     base_iters = max_iters if (executor is not None and req.tools) else 1
     if budget is not None:
@@ -222,6 +240,12 @@ async def run_turn(
             if budget is not None:
                 budget.record_tool_calls(len(tool_calls))
             messages.append(Message(role="assistant", content=pass_content or None, tool_calls=tool_calls))
+            if settings.tool_followup_drops_context:
+                # The model already read the retrieved context to decide on the tool; every further call of this
+                # turn would pay for it again (~750 tokens each). The persona prompt and history stay (ADR-126).
+                messages = [
+                    m for m in messages if not (m.role == "system" and (m.content or "").startswith(CONTEXT_MARKER))
+                ]
             for call in tool_calls:
                 out = await executor(call)
                 result.tool_runs.append({"name": call.name, **out})
@@ -377,6 +401,18 @@ async def run_turn(
     # and usage/cost must be attributed to the provider that actually answered.
     result.provider = provider.name
     result.model = getattr(provider, "active_model", None) or req.model
+    # The real size of the turn, as the provider counted it (summed over every model call in the turn).
+    log.info(
+        "turn_tokens",
+        provider=result.provider,
+        model=result.model,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        total_tokens=result.prompt_tokens + result.completion_tokens,
+        tool_rounds=len(result.tool_runs),
+        error=bool(result.error),
+        **sizes,
+    )
 
     yield StreamEvent(
         type="done",

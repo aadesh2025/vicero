@@ -110,9 +110,9 @@ TOOL_SPECS: list[dict[str, Any]] = [
         "name": "book_appointment",
         "slug": "book-appointment",
         "description": (
-            "Book an appointment once you have the customer's name, an email address or phone number, and the exact "
-            "start time they agreed to (check_availability first). Returns a booking id. A confirmation message is "
-            "sent to the customer automatically; do not repeat the details, just close the conversation warmly."
+            "Book an appointment once you have the customer's name, an email or phone number, and the exact start "
+            "time they agreed to (check_availability first). A confirmation is sent automatically; do not repeat "
+            "the details, just close warmly."
         ),
         "input_schema": {
             "type": "object",

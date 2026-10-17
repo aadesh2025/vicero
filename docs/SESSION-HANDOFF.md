@@ -3,7 +3,7 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
-## ▶ WIDGET STYLES + INTERACTIVE BLOCKS — 2026-10-17 (newest; docs/27, ADR-125 to ADR-128)
+## ▶ WIDGET STYLES + INTERACTIVE BLOCKS — 2026-10-17 (newest; docs/27, ADR-127 to ADR-130)
 
 - Shipped in two commits: `feat(widget): 10 selectable layouts + corner radius + density` and `feat(widget): interactive blocks (opt-in)`. Everything is additive; reverting the commits is the rollback (migration 0037 drops `messages.blocks` on downgrade).
 - Pick-up points: widget code `packages/widget/src/widget.js` (layout engine and block renderers are marked sections; never edit `apps/web/public/widget.js`, run `node packages/widget/build.mjs`); backend rules `apps/api/app/chat/blocks.py`, tool execution `apps/api/app/tools/block_tools.py`; designer `apps/web/src/components/builder/tabs/channels-tab.tsx` and presets `apps/web/src/lib/widget-layouts.ts`.

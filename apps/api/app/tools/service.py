@@ -31,6 +31,7 @@ from app.modules.orgs.deps import OrgContext
 from app.tools import block_tools, schemas
 from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS, CATALOG_TOOLS
+from app.tools.compact import compact_description, compact_schema
 from app.tools.http_tool import execute_http_tool
 from app.tools.mcp_client import MCPToolError
 from app.tools.mcp_client import list_tools as mcp_list_tools
@@ -193,10 +194,10 @@ async def resolve_agent_tools(
     specs = [
         ToolSpec(
             name=t.name,
-            description=t.description or "",
+            description=compact_description(t.description),
             # n8n schemas are repaired on read so tools bound before the fix stop
             # breaking turns without needing a data migration.
-            parameters=(
+            parameters=compact_schema(
                 relax_n8n_schema(t.input_schema) if t.type == "n8n" else (t.input_schema or {})
             ),
         )
@@ -262,8 +263,13 @@ async def build_tooling(
             if name in by_name or name in catalog_names:
                 continue
             block_names.add(name)
+            # Same compaction as the owner's tools (ADR-125): the server re-validates every call anyway.
             specs.append(
-                ToolSpec(name=name, description=block_tool.description, parameters=block_tool.parameters)
+                ToolSpec(
+                    name=name,
+                    description=compact_description(block_tool.description),
+                    parameters=compact_schema(block_tool.parameters),
+                )
             )
     if not specs:
         return [], None

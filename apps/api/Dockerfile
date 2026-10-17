@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # including its ownership — but if the path does not exist in the image it creates the mountpoint
 # as root:root instead, and appuser then cannot write to its own upload directory. That failure
 # looks like a permissions bug at the first client upload, i.e. after deploy, not at build time.
-RUN mkdir -p /app/var/uploads \
+RUN mkdir -p /app/var/uploads /app/var/media \
     && useradd -m -u 10001 appuser \
     && chown -R appuser:appuser /app
 USER appuser

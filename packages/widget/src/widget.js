@@ -204,8 +204,9 @@
   // ── Layouts (docs/27) ─────────────────────────────────────────────────────
   // Everything below is inert for an agent that never sets widget_layout / corner_radius /
   // density: no class, no CSS variable, no extra <style> and no extra DOM is created, so the
-  // legacy widget renders exactly as before. The look of a layout lives in one scoped
-  // stylesheet (injected only for the ACTIVE layout) keyed on `.bf-l-<name>`.
+  // legacy widget renders exactly as before. The look of a layout is the approved artifact
+  // (designreference/vicero-widget-lab.html): its per-style CSS is ported with selectors renamed
+  // only, and injected for the ACTIVE layout alone, keyed on `.bf-l-<name>`.
   var LAYOUTS = ["classic", "glass", "hairline", "paper", "pebble", "console", "concierge", "command", "drawer", "block"];
   var DENSITY = {
     compact: { pad: "12px", gap: "6px", mp: "7px 11px", fs: "13.5px" },
@@ -214,7 +215,8 @@
   };
   var LAYOUT_VARS = [
     "--bf-r", "--bf-rm", "--bf-rc", "--bf-rb", "--bf-pad", "--bf-gap", "--bf-mp", "--bf-fs", "--bf-soft",
-    "--bf-aline", "--bf-acfg", "--bf-g1", "--bf-g2", "--bf-g3", "--bf-g4", "--bf-g5",
+    "--bf-aline", "--bf-aline2", "--bf-acfg", "--bf-ona20", "--bf-ona78", "--bf-aca55",
+    "--bf-g1", "--bf-g2", "--bf-g3", "--bf-g4", "--bf-g5", "--bf-g6", "--bf-aur1", "--bf-aur2", "--bf-aur3",
   ];
 
   function rgbOf(hex) {
@@ -250,6 +252,46 @@
     return theme && LAYOUTS.indexOf(theme.widget_layout) !== -1 ? theme.widget_layout : null;
   }
 
+  // Icons: the artifact's own set (stroke icons on a 24 grid), plus a few more for topic tiles.
+  var ICONS = {
+    chat: '<path d="M21 12a8.5 8.5 0 0 1-12.3 7.6L3 21l1.4-5.4A8.5 8.5 0 1 1 21 12z"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    clip: '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
+    smile: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+    bag: '<path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    box: '<path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    arrowR: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    pin: '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  };
+  function iconSvg(name) {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.chat) + "</svg>";
+  }
+  // A topic tile / suggestion row gets an icon picked by keyword; anything unmatched gets the chat bubble.
+  var ICON_KEYWORDS = [
+    ["cal", /book|appointment|schedule|reserve|tasting|visit|demo|meeting|call ?back|slot/i],
+    ["box", /track|order|deliver|shipping|parcel|dispatch|status/i],
+    ["refresh", /return|refund|exchange|cancel|replace/i],
+    ["tag", /\b(price|prices|pricing|cost|plans?|offers?|discounts?|fees?)\b/i],
+    ["clock", /\b(hours|open|opening|timings?|when)\b/i],
+    ["pin", /\b(where|location|address|directions)\b/i],
+    ["mail", /\be-?mail\b|\bnewsletter\b/i],
+    ["spark", /\b(find|recommend|quiz|match|suggest|discover|choose)\b/i],
+    ["user", /\b(person|human|agent|team|staff|talk|speak|contact|support|someone)\b/i],
+    ["bag", /\b(shop|buy|store|products?|purchase|cart|catalog|browse)\b/i],
+  ];
+  function iconFor(label) {
+    for (var i = 0; i < ICON_KEYWORDS.length; i++) if (ICON_KEYWORDS[i][1].test(label)) return ICON_KEYWORDS[i][0];
+    return "chat";
+  }
+
   // Corners + spacing only (no layout chosen): the legacy structure with new radii/padding.
   function tuneCss() {
     return (
@@ -262,222 +304,93 @@
     );
   }
 
-  // Shared by every layout; a layout then overrides what makes it different.
-  function layoutBaseCss() {
+  // Ported from designreference/vicero-widget-lab.html (selectors renamed only; color-mix() replaced by
+  // colours computed in JS). Do not hand-edit: re-port from the artifact.
+  var LAYOUT_CSS = {
+    "base": "@keyframes bfkIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}.bf-lay svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}.bf-lay button{cursor:pointer}.bf-lay button:disabled{cursor:default}.bf-lay .bf-head{display:flex;align-items:center;gap:10px;padding:13px var(--bf-pad);border-bottom:1px solid var(--bf-border);flex-wrap:wrap;position:relative;transition:padding .3s}.bf-lay .bf-ava{width:34px;height:34px;border-radius:50%;background:var(--bf-accent);color:var(--bf-on-accent);display:grid;place-items:center;font-weight:600;font-size:13px;flex:none;position:relative}.bf-lay .bf-ava::after{content:\"\";position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:#22c55e;border:2px solid var(--bf-bg)}.bf-lay .bf-id{min-width:0;flex:1}.bf-lay .bf-title{font-weight:600;font-size:14.5px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bf-lay .bf-sub{font-size:12px;color:var(--bf-muted);display:flex;align-items:center;gap:6px}.bf-lay .bf-dot{display:none;width:7px;height:7px;border-radius:50%;background:#22c55e}.bf-lay .bf-hacts{display:flex;gap:2px;margin-left:auto}.bf-lay .bf-ib{border:0;background:transparent;color:inherit;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;opacity:.75}.bf-lay .bf-ib:hover{opacity:1;background:rgba(127,127,127,.18)}.bf-lay .bf-ib svg{width:17px;height:17px}.bf-lay .bf-tl,.bf-lay .bf-team,.bf-lay .bf-hero,.bf-lay .bf-tabs,.bf-lay .bf-kbd{display:none}.bf-lay .bf-msgs{flex:1;overflow-y:auto;padding:var(--bf-pad);display:flex;flex-direction:column;gap:var(--bf-gap);scrollbar-width:thin}.bf-lay .bf-row{display:flex;gap:8px;align-items:flex-end;animation:bfkMsg .2s ease-out}@keyframes bfkMsg{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}.bf-lay .bf-row.bf-user{justify-content:flex-end}.bf-lay .bf-bubble{max-width:84%;padding:var(--bf-mp);border-radius:var(--bf-rm);word-wrap:break-word}.bf-lay .bf-row.bf-bot .bf-bubble{background:var(--bf-bg2)}.bf-lay .bf-row.bf-user .bf-bubble{background:var(--bf-bubble);color:var(--bf-on-bubble)}.bf-lay .bf-bubble b{font-weight:600}.bf-lay .bf-typing{display:inline-flex;gap:4px;padding:12px 14px;background:var(--bf-bg2);border-radius:var(--bf-rm)}.bf-lay .bf-typing i{width:6px;height:6px;border-radius:50%;background:var(--bf-muted);animation:bfkDot 1s infinite}.bf-lay .bf-typing i:nth-child(2){animation-delay:.15s}.bf-lay .bf-typing i:nth-child(3){animation-delay:.3s}@keyframes bfkDot{0%,60%,100%{opacity:.3;transform:none}30%{opacity:1;transform:translateY(-3px)}}.bf-lay .bf-chips{display:flex;flex-wrap:wrap;gap:6px}.bf-lay .bf-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--bf-aline);background:var(--bf-bg);color:var(--bf-accent);padding:7px 12px;border-radius:min(999px,calc(var(--bf-r)*2 + 2px));font-size:13px;font-weight:500;text-align:left;transition:background .15s,transform .15s}.bf-lay .bf-chip:hover{background:var(--bf-soft)}.bf-lay .bf-chip.bf-on{background:var(--bf-accent);color:var(--bf-on-accent);border-color:var(--bf-accent)}.bf-lay .bf-chip .bf-ic,.bf-lay .bf-chip .bf-go{display:none}.bf-lay .bf-chip .bf-ic svg,.bf-lay .bf-chip .bf-go svg{width:16px;height:16px}.bf-lay .bf-chips .bf-btn{margin-left:2px}.bf-lay .bf-foot{padding:10px var(--bf-pad) 6px;position:relative;margin:0}.bf-lay .bf-inrow{display:flex;align-items:center;gap:2px;background:var(--bf-input);border:1px solid var(--bf-border);border-radius:min(var(--bf-r),22px);padding:4px 4px 4px 13px;transition:border-color .15s,box-shadow .15s}.bf-lay .bf-inrow:focus-within{border-color:var(--bf-aline2);box-shadow:0 0 0 3px var(--bf-soft)}.bf-lay .bf-ta{flex:1;min-width:0;border:0;background:transparent;outline:none;padding:7px 0;color:var(--bf-text);font-size:14px;font-family:inherit}.bf-lay .bf-ta::placeholder{color:var(--bf-muted)}.bf-lay .bf-send{border:0;width:34px;height:34px;border-radius:min(var(--bf-r),17px);background:var(--bf-accent);color:var(--bf-on-accent);display:grid;place-items:center;flex:none}.bf-lay .bf-send svg{width:17px;height:17px;stroke-width:2.2}.bf-lay .bf-emoji-pop{position:absolute;bottom:58px;right:var(--bf-pad);background:var(--bf-bg);border:1px solid var(--bf-border);border-radius:12px;padding:6px;display:flex;gap:2px;box-shadow:0 10px 30px -10px rgba(0,0,0,.3);z-index:3}.bf-lay .bf-emoji-pop button{border:0;background:transparent;font-size:18px;width:32px;height:32px;border-radius:8px}.bf-lay .bf-emoji-pop button:hover{background:var(--bf-bg2)}.bf-lay .bf-brand{text-align:center;font-size:11px;color:var(--bf-muted);padding:4px 0 9px}.bf-lay .bf-brand b{font-weight:600;color:var(--bf-text)}.bf-lay .bf-pane{flex:1;overflow:auto;padding:var(--bf-pad)}.bf-lay .bf-pane h4{margin:0 0 10px;font-size:12px;color:var(--bf-muted);font-weight:500}.bf-lay .bf-artrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--bf-border);padding:12px 2px;color:var(--bf-text);font-size:13.5px}.bf-lay .bf-artrow svg{margin-left:auto;color:var(--bf-muted);width:16px;height:16px}.bf-lay .bf-stat{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--bf-border);font-size:13.5px}.bf-lay .bf-stat i{width:8px;height:8px;border-radius:50%;background:#22c55e;flex:none}.bf-lay .bf-stat small{margin-left:auto;color:var(--bf-muted);font-size:12px}",
+    "classic": ".bf-lay.bf-l-classic .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:0;padding-block:16px}.bf-lay.bf-l-classic .bf-ava{background:var(--bf-ona20);color:var(--bf-on-accent)}.bf-lay.bf-l-classic .bf-ava::after{border-color:var(--bf-accent)}.bf-lay.bf-l-classic .bf-sub{color:var(--bf-ona78)}",
+    "glass": ".bf-lay.bf-l-glass{background:var(--bf-g1);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);border-color:var(--bf-g5)}.bf-lay.bf-l-glass .bf-head{border-bottom-color:var(--bf-g6)}.bf-lay.bf-l-glass .bf-row.bf-bot .bf-bubble,.bf-lay.bf-l-glass .bf-card,.bf-lay.bf-l-glass .bf-form,.bf-lay.bf-l-glass .bf-rate,.bf-lay.bf-l-glass .bf-opt,.bf-lay.bf-l-glass .bf-ho,.bf-lay.bf-l-glass .bf-day,.bf-lay.bf-l-glass .bf-slot,.bf-lay.bf-l-glass .bf-counter,.bf-lay.bf-l-glass .bf-chip{background:var(--bf-g2);border-color:var(--bf-g3)}.bf-lay.bf-l-glass .bf-inrow{background:var(--bf-g4);border:0;border-radius:999px}.bf-lay.bf-l-glass .bf-inrow .bf-ta{color:var(--bf-bg)}.bf-lay.bf-l-glass .bf-inrow .bf-ta::placeholder{color:var(--bf-g5)}.bf-lay.bf-l-glass .bf-inrow .bf-ib{color:var(--bf-bg)}.bf-lay.bf-l-glass .bf-send{border-radius:50%}",
+    "hairline": ".bf-lay.bf-l-hairline{box-shadow:0 20px 50px -30px rgba(10,14,20,.35)}.bf-lay.bf-l-hairline .bf-head{border-bottom:0;padding-top:18px}.bf-lay.bf-l-hairline .bf-ava{width:26px;height:26px;border-radius:7px;font-size:11px}.bf-lay.bf-l-hairline .bf-ava::after{display:none}.bf-lay.bf-l-hairline .bf-dot{display:inline-block}.bf-lay.bf-l-hairline .bf-row.bf-bot .bf-bubble{background:transparent;padding:0 2px}.bf-lay.bf-l-hairline .bf-row.bf-user .bf-bubble{background:transparent;color:var(--bf-text);border:1px solid var(--bf-border);border-radius:var(--bf-rm)}.bf-lay.bf-l-hairline .bf-chips{flex-direction:column;gap:0;border-top:1px solid var(--bf-border)}.bf-lay.bf-l-hairline .bf-chip{border:0;border-bottom:1px solid var(--bf-border);border-radius:0;background:transparent;color:var(--bf-text);padding:11px 2px;justify-content:space-between;width:100%}.bf-lay.bf-l-hairline .bf-chip .bf-go{display:inline-flex;color:var(--bf-muted);transition:transform .15s}.bf-lay.bf-l-hairline .bf-chip:hover{background:transparent}.bf-lay.bf-l-hairline .bf-chip:hover .bf-go{transform:translateX(3px);color:var(--bf-accent)}.bf-lay.bf-l-hairline .bf-chip.bf-on{background:transparent;color:var(--bf-accent)}.bf-lay.bf-l-hairline .bf-chips .bf-btn{margin:10px 0 0;align-self:flex-start}.bf-lay.bf-l-hairline .bf-foot{padding-top:6px}.bf-lay.bf-l-hairline .bf-inrow{background:transparent;border:0;border-top:1px solid var(--bf-border);border-radius:0;padding:8px 0 4px;box-shadow:none}.bf-lay.bf-l-hairline .bf-send{background:transparent;color:var(--bf-accent)}.bf-lay.bf-l-hairline .bf-typing{background:transparent;padding-left:2px}",
+    "paper": ".bf-lay.bf-l-paper .bf-head{justify-content:center;text-align:center;border-bottom:1px solid var(--bf-border);padding-block:18px 14px}.bf-lay.bf-l-paper .bf-ava{display:none}.bf-lay.bf-l-paper .bf-id{flex:none}.bf-lay.bf-l-paper .bf-title{font-size:19px;font-weight:400;letter-spacing:-.01em}.bf-lay.bf-l-paper .bf-sub{justify-content:center;font-style:italic}.bf-lay.bf-l-paper .bf-hacts{position:absolute;right:10px;top:12px}.bf-lay.bf-l-paper .bf-msgs{--bf-gap:14px}.bf-lay.bf-l-paper .bf-row.bf-bot .bf-bubble{background:transparent;padding:0;font-size:15.5px;line-height:1.6;max-width:100%}.bf-lay.bf-l-paper .bf-row.bf-user .bf-bubble{background:transparent;color:var(--bf-muted);font-style:italic;padding:0;border-radius:0;text-align:right}.bf-lay.bf-l-paper .bf-row.bf-user .bf-bubble::after{content:\" \\2014 you\";font-size:12px}.bf-lay.bf-l-paper .bf-chips{counter-reset:p;flex-direction:column;gap:2px}.bf-lay.bf-l-paper .bf-chip{counter-increment:p;border:0;background:transparent;color:var(--bf-text);padding:5px 0;border-radius:0;font-size:15px}.bf-lay.bf-l-paper .bf-chip .bf-lb{text-decoration:underline;text-decoration-color:var(--bf-aca55);text-underline-offset:4px;text-decoration-thickness:1px}.bf-lay.bf-l-paper .bf-chip::before{content:counter(p,lower-alpha) \".\";color:var(--bf-accent);font-style:italic;min-width:16px}.bf-lay.bf-l-paper .bf-chip:hover{background:transparent;color:var(--bf-accent)}.bf-lay.bf-l-paper .bf-chip.bf-on .bf-lb{text-decoration-thickness:2px}.bf-lay.bf-l-paper .bf-chip.bf-on{background:transparent;color:var(--bf-accent)}.bf-lay.bf-l-paper .bf-btn{font-family:inherit;letter-spacing:.02em}.bf-lay.bf-l-paper .bf-inrow{background:transparent;border:0;border-bottom:1px solid var(--bf-text);border-radius:0;padding-left:0;box-shadow:none}.bf-lay.bf-l-paper .bf-send{background:transparent;color:var(--bf-accent)}.bf-lay.bf-l-paper .bf-typing{background:transparent;padding-left:0}",
+    "pebble": ".bf-lay.bf-l-pebble .bf-head{flex-direction:column;justify-content:center;text-align:center;gap:6px;padding-block:16px 12px;background:var(--bf-bg2);border-bottom-color:transparent}.bf-lay.bf-l-pebble .bf-ava{width:46px;height:46px;font-size:16px}.bf-lay.bf-l-pebble .bf-id{flex:none}.bf-lay.bf-l-pebble .bf-sub{justify-content:center}.bf-lay.bf-l-pebble .bf-hacts{position:absolute;right:8px;top:8px}.bf-lay.bf-l-pebble .bf-bubble{border-radius:20px;padding:10px 15px}.bf-lay.bf-l-pebble .bf-row.bf-bot .bf-bubble{border-bottom-left-radius:6px}.bf-lay.bf-l-pebble .bf-row.bf-user .bf-bubble{border-bottom-right-radius:6px}.bf-lay.bf-l-pebble .bf-chip{border:0;background:var(--bf-soft)}.bf-lay.bf-l-pebble .bf-chip.bf-on{background:var(--bf-accent)}.bf-lay.bf-l-pebble .bf-card,.bf-lay.bf-l-pebble .bf-rate,.bf-lay.bf-l-pebble .bf-form,.bf-lay.bf-l-pebble .bf-ho{border-radius:20px}.bf-lay.bf-l-pebble .bf-inrow{border-radius:999px;background:var(--bf-bg2);border-color:transparent}.bf-lay.bf-l-pebble .bf-send{border-radius:50%}",
+    "console": ".bf-lay.bf-l-console{box-shadow:0 30px 70px -24px rgba(0,0,0,.55)}.bf-lay.bf-l-console .bf-head{padding-block:10px;background:var(--bf-bg2)}.bf-lay.bf-l-console .bf-tl{display:flex;gap:6px}.bf-lay.bf-l-console .bf-tl i{width:10px;height:10px;border-radius:50%;background:var(--bf-border)}.bf-lay.bf-l-console .bf-tl i:first-child{background:var(--bf-accent)}.bf-lay.bf-l-console .bf-ava{display:none}.bf-lay.bf-l-console .bf-id{text-align:center}.bf-lay.bf-l-console .bf-title{font-size:12.5px;font-weight:500}.bf-lay.bf-l-console .bf-title::before{content:\"~/\";color:var(--bf-muted)}.bf-lay.bf-l-console .bf-sub{justify-content:center;font-size:11px}.bf-lay.bf-l-console .bf-msgs{--bf-gap:8px;font-size:13px}.bf-lay.bf-l-console .bf-row{justify-content:flex-start}.bf-lay.bf-l-console .bf-bubble{background:transparent!important;padding:0;border-radius:0;max-width:100%}.bf-lay.bf-l-console .bf-row.bf-bot .bf-bubble::before{content:\"bot \";color:var(--bf-muted)}.bf-lay.bf-l-console .bf-row.bf-user .bf-bubble{color:var(--bf-accent)}.bf-lay.bf-l-console .bf-row.bf-user .bf-bubble::before{content:\"you \\203A \";color:var(--bf-muted)}.bf-lay.bf-l-console .bf-chips{flex-direction:column;gap:1px;counter-reset:t}.bf-lay.bf-l-console .bf-chip{counter-increment:t;border:0;border-radius:0;background:transparent;color:var(--bf-text);padding:3px 6px;margin-left:-6px;font-size:13px}.bf-lay.bf-l-console .bf-chip::before{content:\"[\" counter(t) \"]\";color:var(--bf-accent)}.bf-lay.bf-l-console .bf-chip:hover,.bf-lay.bf-l-console .bf-chip.bf-on{background:var(--bf-soft);color:var(--bf-text)}.bf-lay.bf-l-console .bf-btn{border-radius:0;background:transparent;color:var(--bf-accent);border:1px solid var(--bf-accent)}.bf-lay.bf-l-console .bf-btn::before{content:\"[ \"}.bf-lay.bf-l-console .bf-btn::after{content:\" ]\"}.bf-lay.bf-l-console .bf-btn.bf-ghost{color:var(--bf-muted);border-color:var(--bf-border)}.bf-lay.bf-l-console .bf-btn.bf-ok{background:var(--bf-accent);color:var(--bf-on-accent)}.bf-lay.bf-l-console .bf-card,.bf-lay.bf-l-console .bf-rate,.bf-lay.bf-l-console .bf-form,.bf-lay.bf-l-console .bf-opt,.bf-lay.bf-l-console .bf-ho,.bf-lay.bf-l-console .bf-counter{border-style:dashed;background:transparent}.bf-lay.bf-l-console .bf-art{height:44px}.bf-lay.bf-l-console .bf-inrow{background:transparent;border:0;border-top:1px dashed var(--bf-border);border-radius:0;padding:8px 0 2px;box-shadow:none}.bf-lay.bf-l-console .bf-inrow::before{content:\"\\203A\";color:var(--bf-accent);margin-right:8px;font-weight:600}.bf-lay.bf-l-console .bf-send{background:transparent;color:var(--bf-accent);border-radius:0}.bf-lay.bf-l-console .bf-typing{background:transparent;padding:4px 0}.bf-lay.bf-l-console .bf-typing i{border-radius:0;width:7px;height:12px;background:var(--bf-accent);animation:bfkBlink 1s steps(1) infinite}.bf-lay.bf-l-console .bf-typing i+i{display:none}@keyframes bfkBlink{50%{opacity:0}}",
+    "concierge": ".bf-lay.bf-l-concierge .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:0}.bf-lay.bf-l-concierge .bf-ava{display:none}.bf-lay.bf-l-concierge .bf-team{display:flex}.bf-lay.bf-l-concierge .bf-team span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px solid var(--bf-accent);margin-left:-8px;background:#fde68a;color:#3b2a06}.bf-lay.bf-l-concierge .bf-team span:first-child{margin-left:0;background:#fbcfe8;color:#4a0d2a}.bf-lay.bf-l-concierge .bf-team span:last-child{background:#bae6fd;color:#08304a}.bf-lay.bf-l-concierge .bf-sub{color:var(--bf-ona78)}.bf-lay.bf-l-concierge .bf-hero{width:100%;order:5}.bf-lay.bf-l-concierge.bf-home .bf-head{padding:20px var(--bf-pad) 26px}.bf-lay.bf-l-concierge.bf-home .bf-id{display:none}.bf-lay.bf-l-concierge.bf-home .bf-hero{display:block;margin-top:14px}.bf-lay .bf-hero-h{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.bf-lay .bf-hero-p{opacity:.85;font-size:13.5px;margin-top:4px}.bf-lay.bf-l-concierge .bf-chip .bf-ic{display:inline-flex}.bf-lay.bf-l-concierge .bf-chips.bf-main{display:grid;grid-template-columns:1fr 1fr;gap:8px}.bf-lay.bf-l-concierge .bf-chips.bf-main .bf-chip{flex-direction:column;align-items:flex-start;gap:10px;padding:13px;border-radius:var(--bf-rc);border:1px solid var(--bf-border);color:var(--bf-text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05)}.bf-lay.bf-l-concierge .bf-chips.bf-main .bf-chip .bf-ic{width:30px;height:30px;border-radius:9px;background:var(--bf-soft);color:var(--bf-accent);display:grid;place-items:center}.bf-lay.bf-l-concierge .bf-chips.bf-main .bf-chip:last-child:nth-child(odd){grid-column:span 2;flex-direction:row;align-items:center}.bf-lay.bf-l-concierge .bf-chips.bf-main .bf-chip:hover{border-color:var(--bf-accent);background:var(--bf-bg);transform:translateY(-1px)}",
+    "command": ".bf-lay.bf-l-command{width:440px}.bf-lay.bf-l-command .bf-head{display:none}.bf-lay.bf-l-command .bf-foot{order:-1;padding:10px 10px 0}.bf-lay.bf-l-command .bf-inrow{background:transparent;border:0;border-bottom:1px solid var(--bf-border);border-radius:0;padding:8px 6px 12px;box-shadow:none}.bf-lay.bf-l-command .bf-inrow::before{content:\"\";width:20px;height:20px;flex:none;margin-right:10px;background:var(--bf-accent);-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E\") center/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E\") center/contain no-repeat}.bf-lay.bf-l-command .bf-ta{font-size:16.5px}.bf-lay.bf-l-command .bf-send{border-radius:8px;width:30px;height:30px}.bf-lay.bf-l-command .bf-emoji-pop{bottom:auto;top:58px}.bf-lay.bf-l-command .bf-chips{flex-direction:column;gap:2px}.bf-lay.bf-l-command .bf-chip{border:0;background:transparent;color:var(--bf-text);border-radius:var(--bf-rb);padding:9px 10px;width:100%;font-weight:500}.bf-lay.bf-l-command .bf-chip .bf-ic{display:inline-flex;color:var(--bf-muted)}.bf-lay.bf-l-command .bf-chip .bf-go{display:inline-flex;margin-left:auto;color:var(--bf-muted);opacity:0}.bf-lay.bf-l-command .bf-chip:hover,.bf-lay.bf-l-command .bf-chip:focus-visible{background:var(--bf-soft)}.bf-lay.bf-l-command .bf-chip:hover .bf-go{opacity:1}.bf-lay.bf-l-command .bf-chip.bf-on{background:var(--bf-soft);color:var(--bf-accent)}.bf-lay.bf-l-command .bf-row.bf-bot .bf-bubble{background:transparent;padding:2px 4px;color:var(--bf-muted);font-size:13px}.bf-lay.bf-l-command .bf-row.bf-user .bf-bubble{border-radius:var(--bf-rb)}.bf-lay.bf-l-command .bf-kbd{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--bf-border);font-size:11px;color:var(--bf-muted)}.bf-lay.bf-l-command .bf-kbd kbd{font-family:inherit;font-size:10.5px;border:1px solid var(--bf-border);border-radius:4px;padding:0 5px;margin-right:4px;background:var(--bf-bg2)}.bf-lay.bf-l-command .bf-brand{position:absolute;right:14px;bottom:0;padding:8px 0}",
+    "drawer": ".bf-lay.bf-l-drawer{width:400px}.bf-lay.bf-l-drawer .bf-head{padding-bottom:0;row-gap:12px}.bf-lay.bf-l-drawer .bf-tabs{display:flex;width:100%;gap:18px;order:6}.bf-lay.bf-l-drawer .bf-tabs button{border:0;background:transparent;color:var(--bf-muted);padding:6px 0 10px;font-size:13px;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}.bf-lay.bf-l-drawer .bf-tabs button.on{color:var(--bf-text);border-bottom-color:var(--bf-accent)}.bf-lay.bf-l-drawer .bf-ava{border-radius:10px}.bf-lay.bf-l-drawer .bf-ava::after{display:none}.bf-lay.bf-l-drawer .bf-dot{display:inline-block}",
+    "block": ".bf-lay.bf-l-block{border:2px solid var(--bf-text);box-shadow:7px 7px 0 var(--bf-text);font-weight:500}.bf-lay.bf-l-block .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:2px solid var(--bf-text)}.bf-lay.bf-l-block .bf-title{text-transform:uppercase;letter-spacing:.04em;font-weight:800;font-size:14px}.bf-lay.bf-l-block .bf-sub{color:inherit;opacity:.8}.bf-lay.bf-l-block .bf-ava{border:2px solid var(--bf-text);background:var(--bf-bg);color:var(--bf-text);border-radius:var(--bf-rb)}.bf-lay.bf-l-block .bf-ava::after{display:none}.bf-lay.bf-l-block .bf-bubble{border:2px solid var(--bf-text)}.bf-lay.bf-l-block .bf-row.bf-bot .bf-bubble{background:var(--bf-bg)}.bf-lay.bf-l-block .bf-row.bf-user .bf-bubble{box-shadow:3px 3px 0 var(--bf-text)}.bf-lay.bf-l-block .bf-chip,.bf-lay.bf-l-block .bf-opt,.bf-lay.bf-l-block .bf-card,.bf-lay.bf-l-block .bf-form,.bf-lay.bf-l-block .bf-rate,.bf-lay.bf-l-block .bf-ho,.bf-lay.bf-l-block .bf-day,.bf-lay.bf-l-block .bf-slot,.bf-lay.bf-l-block .bf-counter{border:2px solid var(--bf-text);color:var(--bf-text);box-shadow:3px 3px 0 var(--bf-text)}.bf-lay.bf-l-block .bf-chip:hover,.bf-lay.bf-l-block .bf-opt:hover:not(:disabled),.bf-lay.bf-l-block .bf-slot:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bf-text);background:var(--bf-bg)}.bf-lay.bf-l-block .bf-chip.bf-on,.bf-lay.bf-l-block .bf-day.bf-on,.bf-lay.bf-l-block .bf-slot.bf-on{background:var(--bf-accent);color:var(--bf-on-accent)}.bf-lay.bf-l-block .bf-btn{border:2px solid var(--bf-text);box-shadow:3px 3px 0 var(--bf-text);color:var(--bf-on-accent)}.bf-lay.bf-l-block .bf-btn.bf-ghost{color:var(--bf-text)}.bf-lay.bf-l-block .bf-inrow{border:2px solid var(--bf-text);box-shadow:none}.bf-lay.bf-l-block .bf-send{border:2px solid var(--bf-text)}.bf-lay.bf-l-block .bf-art{border-bottom:2px solid var(--bf-text)}"
+  };
+
+  // What the artifact's stage CSS did around the panel, plus resets for legacy rules the artifact never
+  // had to override (it has no legacy widget underneath).
+  function layoutSupplementCss() {
     return (
-      "@keyframes bfup{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}" +
-      "@keyframes bffade{from{opacity:0}to{opacity:1}}" +
-      "@keyframes bfmsg{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}" +
-      "@keyframes bfblink{50%{opacity:0}}" +
-      ".bf-lay{box-shadow:0 30px 70px -24px rgba(10,14,20,.38),0 4px 14px -4px rgba(10,14,20,.12);animation:bfup .22s ease-out;line-height:1.5}" +
+      ".bf-lay{width:372px;max-width:calc(100vw - 32px);height:560px;max-height:calc(100vh - 120px);" +
+      "background:var(--bf-bg);color:var(--bf-text);font-size:var(--bf-fs,14px);line-height:1.5;" +
+      "border:1px solid var(--bf-border);border-radius:var(--bf-r);" +
+      "box-shadow:0 30px 70px -24px rgba(10,14,20,.38),0 4px 14px -4px rgba(10,14,20,.12);animation:bfkIn .22s ease-out}" +
       ".bf-lay :focus-visible{outline:2px solid var(--bf-accent);outline-offset:2px}" +
-      ".bf-lay .bf-head{padding:13px var(--bf-pad,16px);gap:10px;position:relative;flex-wrap:wrap;background:var(--bf-bg);color:var(--bf-text);border-bottom:1px solid var(--bf-border)}" +
-      ".bf-lay .bf-title{font-weight:600;font-size:14.5px;line-height:1.25;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
-      ".bf-lay .bf-avatar{width:34px;height:34px}" +
-      ".bf-lay .bf-ini{display:none;width:34px;height:34px;border-radius:50%;background:var(--bf-accent);color:var(--bf-on-accent);place-items:center;font-weight:600;font-size:13px;flex:none}" +
-      ".bf-lay .bf-x{color:inherit;width:32px;height:32px;border-radius:8px;opacity:.75;font-size:20px}" +
-      ".bf-lay .bf-x:hover{opacity:1;background:" + "rgba(127,127,127,.18)}" +
-      ".bf-lay .bf-msgs{padding:var(--bf-pad,16px);gap:var(--bf-gap,10px);scrollbar-width:thin}" +
-      ".bf-lay .bf-row{align-items:flex-end;animation:bfmsg .2s ease-out}" +
-      ".bf-lay .bf-bubble{max-width:84%;padding:var(--bf-mp,9px 13px);border-radius:var(--bf-rm);font-size:var(--bf-fs,14px)}" +
-      ".bf-lay .bf-bot .bf-bubble{background:var(--bf-bg2);border:0}" +
-      ".bf-lay .bf-chips{padding:0 var(--bf-pad,16px) 8px}" +
-      ".bf-lay .bf-chip{border:1px solid var(--bf-aline);background:var(--bf-bg);color:var(--bf-acfg);padding:7px 12px;font-weight:500;font-size:13px;text-align:left;border-radius:min(999px,calc(var(--bf-r)*2 + 2px));transition:background .15s}" +
-      ".bf-lay .bf-chip:hover{background:var(--bf-soft)}" +
-      ".bf-lay .bf-foot{border:0;padding:10px var(--bf-pad,16px) 6px;gap:4px}" +
-      ".bf-lay .bf-inrow{align-items:center;gap:2px;background:var(--bf-input);border:1px solid var(--bf-border);border-radius:min(var(--bf-r),22px);padding:4px 4px 4px 8px;transition:border-color .15s,box-shadow .15s}" +
-      ".bf-lay .bf-inrow:focus-within{border-color:var(--bf-aline);box-shadow:0 0 0 3px var(--bf-soft)}" +
-      ".bf-lay .bf-ta{border:0;background:transparent;min-height:34px;padding:7px 6px;border-radius:0}" +
+      ".bf-lay .bf-head{background:transparent;color:inherit}" +
+      ".bf-lay .bf-msgs{background:transparent}" +
+      ".bf-lay .bf-bubble{border:0}" +
+      ".bf-lay .bf-chips{padding:0}" +
+      ".bf-lay .bf-chips:empty{display:none}" +
+      ".bf-lay.bf-started .bf-chips{display:none}" +
+      ".bf-lay .bf-foot{border:0;background:transparent;gap:0}" +
+      ".bf-lay .bf-inrow{position:relative}" +
+      ".bf-lay .bf-ta{order:1;flex:1;min-width:0;height:auto;min-height:0;max-height:120px;resize:none;border:0;border-radius:0;background:transparent;box-shadow:none;outline:none;padding:7px 0;color:var(--bf-text);font-size:14px}" +
       ".bf-lay .bf-ta:focus-visible{outline:none}" +
-      ".bf-lay .bf-iconbtn{width:32px;height:32px;border:0;background:transparent;border-radius:8px;color:var(--bf-muted);font-size:16px}" +
-      ".bf-lay .bf-iconbtn:hover{background:var(--bf-soft)}" +
-      ".bf-lay .bf-send{width:34px;height:34px;border-radius:min(var(--bf-r),17px)}" +
-      ".bf-lay .bf-brand{padding:4px 0 6px}" +
-      ".bf-lay .bf-kbd,.bf-lay .bf-hero,.bf-lay .bf-tabs,.bf-lay .bf-pane{display:none}" +
-      "@media (prefers-reduced-motion:reduce){.bf-lay,.bf-lay .bf-row{animation:none}.bf-lay .bf-typing i{animation:none}}"
+      ".bf-lay .bf-ta::placeholder{color:var(--bf-muted)}" +
+      ".bf-lay .bf-file{order:2}.bf-lay .bf-emoji{order:3}.bf-lay .bf-send{order:4}" +
+      ".bf-lay .bf-ib{font-size:0;padding:0}" +
+      ".bf-lay .bf-send{border:0;font-size:0;padding:0}" +
+      ".bf-lay .bf-send svg{width:17px;height:17px;stroke-width:2.2}" +
+      ".bf-lay .bf-ava{object-fit:cover}" +
+      ".bf-lay .bf-ava[hidden]{display:none}" +
+      ".bf-lay .bf-sub{line-height:1.4}" +
+      ".bf-lay .bf-id{min-width:0;max-width:100%}" +
+      ".bf-lay .bf-pane{display:none}" +
+      ".bf-lay.bf-tab-help .bf-pane.bf-help,.bf-lay.bf-tab-status .bf-pane.bf-status{display:block}" +
+      ".bf-lay.bf-tab-help .bf-msgs,.bf-lay.bf-tab-help .bf-foot,.bf-lay.bf-tab-status .bf-msgs,.bf-lay.bf-tab-status .bf-foot{display:none}" +
+      ".bf-lay .bf-stat i{width:8px;height:8px;border-radius:50%;background:#22c55e;flex:none}" +
+      ".bf-lay .bf-emoji-pop{bottom:44px;left:auto;right:0;width:220px;flex-wrap:wrap}" +
+      ".bf-lay .bf-hero-h{margin:0}" +
+      "@media (prefers-reduced-motion:reduce){.bf-lay,.bf-lay .bf-row,.bf-lay .bf-typing i{animation:none}}"
     );
   }
 
-  function layoutCss(name) {
-    var L = ".bf-l-" + name;
-    switch (name) {
-      case "classic":
-        return (
-          L + " .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:0;padding-top:16px;padding-bottom:16px}" +
-          L + " .bf-ini{display:grid;background:rgba(255,255,255,.22);color:var(--bf-on-accent)}" +
-          L + " .bf-ini[hidden]{display:none}"
-        );
-      case "glass":
-        return (
-          L + "{background:var(--bf-g1);-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);border-color:var(--bf-g3)}" +
-          L + " .bf-head,.bf-l-glass .bf-msgs,.bf-l-glass .bf-foot{background:transparent}" +
-          L + " .bf-head{border-bottom-color:var(--bf-g3)}" +
-          L + " .bf-bot .bf-bubble,.bf-l-glass .bf-chip{background:var(--bf-g2);border:1px solid var(--bf-g3)}" +
-          L + " .bf-inrow{background:var(--bf-g4);border:0;border-radius:999px}" +
-          L + " .bf-ta{color:var(--bf-bg)}" +
-          L + " .bf-ta::placeholder{color:var(--bf-g5)}" +
-          L + " .bf-iconbtn{color:var(--bf-bg)}" +
-          L + " .bf-iconbtn:hover{background:rgba(255,255,255,.14)}" +
-          L + " .bf-send{border-radius:50%}"
-        );
-      case "hairline":
-        return (
-          L + "{box-shadow:0 20px 50px -30px rgba(10,14,20,.35)}" +
-          L + " .bf-head{border-bottom:0;padding-top:18px}" +
-          L + " .bf-avatar,.bf-l-hairline .bf-ini:not([hidden]){width:26px;height:26px;border-radius:7px;font-size:11px}" +
-          L + " .bf-ini:not([hidden]){display:grid}" +
-          L + " .bf-bot .bf-bubble{background:transparent;padding:0 2px;max-width:100%}" +
-          L + " .bf-user .bf-bubble{background:transparent;color:var(--bf-text);border:1px solid var(--bf-border)}" +
-          L + " .bf-typing{padding-left:2px}" +
-          L + " .bf-chips{flex-direction:column;gap:0;margin:0 var(--bf-pad,16px) 8px;padding:0;border-top:1px solid var(--bf-border)}" +
-          L + " .bf-chip{display:flex;justify-content:space-between;width:100%;border:0;border-bottom:1px solid var(--bf-border);border-radius:0;background:transparent;color:var(--bf-text);padding:11px 2px}" +
-          L + " .bf-chip::after{content:'\\2192';color:var(--bf-muted);transition:transform .15s}" +
-          L + " .bf-chip:hover{background:transparent}" +
-          L + " .bf-chip:hover::after{transform:translateX(3px);color:var(--bf-acfg)}" +
-          L + " .bf-foot{padding-top:6px}" +
-          L + " .bf-inrow{background:transparent;border:0;border-top:1px solid var(--bf-border);border-radius:0;padding:8px 0 4px;box-shadow:none}" +
-          L + " .bf-inrow:focus-within{box-shadow:none}" +
-          L + " .bf-send{background:transparent;color:var(--bf-acfg)}"
-        );
-      case "paper":
-        return (
-          L + " .bf-head{justify-content:center;text-align:center;padding-block:18px 14px}" +
-          L + " .bf-avatar,.bf-l-paper .bf-ini{display:none!important}" +
-          L + " .bf-title{flex:none;max-width:100%;font-size:19px;font-weight:400;letter-spacing:-.01em;white-space:normal;overflow:visible;overflow-wrap:anywhere}" +
-          L + " .bf-x{position:absolute;right:10px;top:12px}" +
-          L + " .bf-msgs{gap:14px}" +
-          L + " .bf-bot .bf-bubble{background:transparent;padding:0;font-size:15.5px;line-height:1.6;max-width:100%}" +
-          L + " .bf-user .bf-bubble{background:transparent;color:var(--bf-muted);font-style:italic;padding:0;border-radius:0;text-align:right}" +
-          L + " .bf-chips{counter-reset:p;flex-direction:column;gap:2px}" +
-          L + " .bf-chip{counter-increment:p;display:flex;border:0;background:transparent;color:var(--bf-text);padding:5px 0;border-radius:0;font-size:15px}" +
-          L + " .bf-chip::before{content:counter(p,lower-alpha) '.';color:var(--bf-acfg);font-style:italic;min-width:20px}" +
-          L + " .bf-chip:hover{background:transparent;color:var(--bf-acfg)}" +
-          L + " .bf-inrow{background:transparent;border:0;border-bottom:1px solid var(--bf-text);border-radius:0;padding-left:0;box-shadow:none}" +
-          L + " .bf-inrow:focus-within{box-shadow:none}" +
-          L + " .bf-send{background:transparent;color:var(--bf-acfg)}"
-        );
-      case "pebble":
-        return (
-          L + " .bf-head{flex-direction:column;justify-content:center;text-align:center;gap:6px;padding-block:16px 12px;background:var(--bf-bg2);border-bottom-color:transparent}" +
-          L + " .bf-avatar,.bf-l-pebble .bf-ini:not([hidden]){width:46px;height:46px;font-size:16px}" +
-          L + " .bf-ini:not([hidden]){display:grid}" +
-          L + " .bf-title{flex:none;max-width:100%;white-space:normal;overflow:visible;overflow-wrap:anywhere}" +
-          L + " .bf-x{position:absolute;right:8px;top:8px}" +
-          L + " .bf-bubble{border-radius:max(8px,calc(var(--bf-r) - 4px));padding:10px 15px}" +
-          L + " .bf-bot .bf-bubble{border-bottom-left-radius:6px}" +
-          L + " .bf-user .bf-bubble{border-bottom-right-radius:6px}" +
-          L + " .bf-chip{border:0;background:var(--bf-soft)}" +
-          L + " .bf-inrow{border-radius:999px;background:var(--bf-bg2);border-color:transparent}" +
-          L + " .bf-send{border-radius:50%}"
-        );
-      case "console":
-        return (
-          L + "{box-shadow:0 30px 70px -24px rgba(0,0,0,.55)}" +
-          L + " .bf-head{padding-block:10px;background:var(--bf-bg2)}" +
-          L + " .bf-head::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--bf-accent);box-shadow:16px 0 0 var(--bf-border),32px 0 0 var(--bf-border);margin-right:34px}" +
-          L + " .bf-avatar,.bf-l-console .bf-ini{display:none!important}" +
-          L + " .bf-title{font-size:12.5px;font-weight:500;flex:1;text-align:center}" +
-          L + " .bf-title::before{content:'~/';color:var(--bf-muted)}" +
-          L + " .bf-x{width:24px;height:24px;font-size:16px}" +
-          L + " .bf-msgs{gap:8px;font-size:13px}" +
-          L + " .bf-row.bf-user{flex-direction:row}" +
-          L + " .bf-bubble{background:transparent!important;border:0;padding:0;border-radius:0;max-width:100%}" +
-          L + " .bf-user .bf-bubble{color:var(--bf-acfg)}" +
-          L + " .bf-user .bf-bubble::before{content:'\\203A ';color:var(--bf-muted)}" +
-          L + " .bf-chips{flex-direction:column;gap:1px;counter-reset:t}" +
-          L + " .bf-chip{counter-increment:t;display:flex;border:0;border-radius:0;background:transparent;color:var(--bf-text);padding:3px 6px;margin-left:-6px;font-size:13px}" +
-          L + " .bf-chip::before{content:'[' counter(t) ']';color:var(--bf-acfg);margin-right:8px}" +
-          L + " .bf-chip:hover{background:var(--bf-soft)}" +
-          L + " .bf-inrow{background:transparent;border:0;border-top:1px dashed var(--bf-border);border-radius:0;padding:8px 0 2px;box-shadow:none}" +
-          L + " .bf-inrow:focus-within{box-shadow:none}" +
-          L + " .bf-inrow::before{content:'\\203A';color:var(--bf-acfg);margin-right:8px;font-weight:600}" +
-          L + " .bf-send{background:transparent;color:var(--bf-acfg);border-radius:0}" +
-          L + " .bf-typing i{border-radius:0;width:7px;height:12px;background:var(--bf-accent);animation:bfblink 1s steps(1) infinite}" +
-          L + " .bf-typing i+i{display:none}"
-        );
-      case "concierge":
-        return (
-          L + " .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:0}" +
-          L + " .bf-x{margin-left:auto}" +
-          L + " .bf-hero{width:100%;order:5}" +
-          L + " .bf-hero-h{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.15}" +
-          L + " .bf-hero-p{opacity:.85;font-size:13.5px;margin-top:4px}" +
-          L + ".bf-home .bf-head{padding:20px var(--bf-pad,16px) 26px}" +
-          L + ".bf-home .bf-title,.bf-l-concierge.bf-home .bf-avatar{display:none}" +
-          L + ".bf-home .bf-hero{display:block;margin-top:14px}" +
-          L + ".bf-home .bf-msgs{display:none}" +
-          L + ".bf-home .bf-chips{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:var(--bf-pad,16px);align-content:start;overflow-y:auto}" +
-          L + ".bf-home .bf-chip{flex-direction:column;align-items:flex-start;gap:10px;padding:13px;border-radius:var(--bf-rc);border:1px solid var(--bf-border);color:var(--bf-text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.05);display:flex}" +
-          L + ".bf-home .bf-chip::before{content:'\\2192';width:30px;height:30px;border-radius:9px;background:var(--bf-soft);color:var(--bf-acfg);display:grid;place-items:center}" +
-          L + ".bf-home .bf-chip:last-child:nth-child(odd){grid-column:span 2}" +
-          L + ".bf-home .bf-chip:hover{border-color:var(--bf-acfg);background:var(--bf-bg)}" +
-          L + ":not(.bf-home) .bf-chips{display:none}"
-        );
-      case "command":
-        return (
-          L + " .bf-head{position:absolute;right:6px;top:6px;padding:0;background:transparent;border:0;z-index:2}" +
-          L + " .bf-title,.bf-l-command .bf-avatar,.bf-l-command .bf-ini{display:none!important}" +
-          L + " .bf-foot{order:-1;padding:10px 44px 0 10px}" +
-          L + " .bf-inrow{background:transparent;border:0;border-bottom:1px solid var(--bf-border);border-radius:0;padding:8px 6px 12px;box-shadow:none}" +
-          L + " .bf-inrow:focus-within{box-shadow:none}" +
-          L + " .bf-inrow::before{content:'';width:20px;height:20px;flex:none;margin-right:10px;background:var(--bf-accent);-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E\") center/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E\") center/contain no-repeat}" +
-          L + " .bf-ta{font-size:16.5px}" +
-          L + " .bf-send{border-radius:8px;width:30px;height:30px}" +
-          L + " .bf-chips{flex-direction:column;gap:2px;padding:6px 10px}" +
-          L + " .bf-chip{display:flex;width:100%;border:0;background:transparent;color:var(--bf-text);border-radius:var(--bf-rb);padding:9px 10px;font-weight:500}" +
-          L + " .bf-chip::after{content:'\\21B5';margin-left:auto;color:var(--bf-muted);opacity:0}" +
-          L + " .bf-chip:hover,.bf-l-command .bf-chip:focus-visible{background:var(--bf-soft)}" +
-          L + " .bf-chip:hover::after,.bf-l-command .bf-chip:focus-visible::after{opacity:1}" +
-          L + " .bf-bot .bf-bubble{background:transparent;padding:2px 4px;color:var(--bf-muted);font-size:13px;max-width:100%}" +
-          L + " .bf-kbd{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--bf-border);font-size:11px;color:var(--bf-muted)}" +
-          L + " .bf-kbd kbd{font-family:inherit;font-size:10.5px;border:1px solid var(--bf-border);border-radius:4px;padding:0 5px;margin-right:4px;background:var(--bf-bg2)}" +
-          L + " .bf-brand{position:absolute;right:14px;bottom:0;padding:8px 0}" +
-          "@media (min-width:481px){" +
-          L + ",:host(.bf-left) " + L + "{left:50%;right:auto;bottom:auto;top:12vh;transform:translateX(-50%);width:440px;height:auto;max-height:min(520px,76vh);animation-name:bffade}}"
-        );
-      case "drawer":
-        return (
-          L + " .bf-head{padding-bottom:0;row-gap:12px}" +
-          L + " .bf-ini:not([hidden]){display:grid;border-radius:10px}" +
-          L + " .bf-avatar{border-radius:10px}" +
-          L + " .bf-tabs{display:flex;width:100%;gap:18px;order:6}" +
-          L + " .bf-tabs button{border:0;background:transparent;color:var(--bf-muted);padding:6px 0 10px;font-size:13px;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;font-family:inherit}" +
-          L + " .bf-tabs button.on{color:var(--bf-text);border-bottom-color:var(--bf-acfg)}" +
-          L + " .bf-pane{flex:1;overflow:auto;padding:var(--bf-pad,16px)}" +
-          L + ".bf-tab-help .bf-pane{display:block}" +
-          L + ".bf-tab-help .bf-msgs," + L + ".bf-tab-help .bf-chips," + L + ".bf-tab-help .bf-foot{display:none}" +
-          L + " .bf-pane h4{margin:0 0 10px;font-size:12px;color:var(--bf-muted);font-weight:500}" +
-          L + " .bf-artrow{display:flex;align-items:center;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--bf-border);padding:12px 2px;color:var(--bf-text);font-size:13.5px;cursor:pointer;font-family:inherit}" +
-          L + " .bf-artrow::after{content:'\\203A';margin-left:auto;color:var(--bf-muted)}" +
-          ":host(.bf-hl-drawer.bf-open) .bf-launcher{display:none}" +
-          "@media (min-width:481px){" +
-          L + ",:host(.bf-left) " + L + "{top:0;bottom:0;right:0;left:auto;width:400px;height:100vh;max-height:100vh;border-radius:0;border-width:0 0 0 1px;animation-name:bffade}" +
-          ":host(.bf-left) " + L + "{right:auto;left:0;border-width:0 1px 0 0}}"
-        );
-      case "block":
-        return (
-          L + "{border:2px solid var(--bf-text);box-shadow:7px 7px 0 var(--bf-text);font-weight:500}" +
-          L + " .bf-head{background:var(--bf-accent);color:var(--bf-on-accent);border-bottom:2px solid var(--bf-text)}" +
-          L + " .bf-title{text-transform:uppercase;letter-spacing:.04em;font-weight:800;font-size:14px}" +
-          L + " .bf-avatar,.bf-l-block .bf-ini:not([hidden]){border:2px solid var(--bf-text);background:var(--bf-bg);color:var(--bf-text);border-radius:var(--bf-rb)}" +
-          L + " .bf-ini:not([hidden]){display:grid}" +
-          L + " .bf-bubble{border:2px solid var(--bf-text)!important}" +
-          L + " .bf-bot .bf-bubble{background:var(--bf-bg)}" +
-          L + " .bf-user .bf-bubble{box-shadow:3px 3px 0 var(--bf-text)}" +
-          L + " .bf-chip{border:2px solid var(--bf-text);color:var(--bf-text);box-shadow:3px 3px 0 var(--bf-text)}" +
-          L + " .bf-chip:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bf-text);background:var(--bf-bg)}" +
-          L + " .bf-inrow{border:2px solid var(--bf-text);box-shadow:none}" +
-          L + " .bf-send{border:2px solid var(--bf-text)}" +
-          ":host(.bf-hl-block) .bf-launcher{border:2px solid #0a0a0a;box-shadow:4px 4px 0 #0a0a0a}" +
-          "@media (max-width:480px){" + L + "{box-shadow:none;border-width:0}}"
-        );
+  // Stage positioning the artifact did at host level: Drawer is a full-height side panel, Command is
+  // centred near the top. Phone widths keep the full-screen panel for every layout (docs/27 section 2).
+  function layoutPlaceCss(name) {
+    var L = ".bf-lay.bf-l-" + name;
+    var out = "";
+    if (name === "command") {
+      out +=
+        "@media (min-width:481px){" + L + "," + ":host(.bf-left) " + L + "{left:50%;right:auto;bottom:auto;top:12vh;transform:translateX(-50%);animation-name:bfkFade}}" +
+        L + " .bf-head{display:none}" + L + " .bf-foot{position:static}" +
+        "@media (max-width:767px){" + L + " .bf-head{display:block;position:absolute;right:6px;top:6px;padding:0;border:0;background:transparent;z-index:2}" +
+        L + " .bf-head>:not(.bf-hacts){display:none!important}" + L + " .bf-restart{display:none}" +
+        L + " .bf-foot{padding-right:44px}}";
+    } else if (name === "drawer") {
+      out +=
+        ":host(.bf-hl-drawer.bf-open) .bf-launcher{display:none}" +
+        "@media (min-width:481px){" + L + "," + ":host(.bf-left) " + L + "{top:0;bottom:0;right:0;left:auto;width:400px;height:100vh;max-height:100vh;border-radius:0;border-width:0 0 0 1px;animation-name:bfkFade}" +
+        ":host(.bf-left) " + L + "{right:auto;left:0;border-width:0 1px 0 0}}";
+    } else if (name === "block") {
+      out += ":host(.bf-hl-block) .bf-launcher{border:2px solid #0a0a0a;box-shadow:4px 4px 0 #0a0a0a}" +
+        "@media (max-width:480px){" + L + "{box-shadow:none;border-width:0}}";
+    } else if (name === "glass") {
+      // The artifact shows glass over a colourful page. On a plain page it would be white on white, so the
+      // panel carries its own soft aurora under the frosted layer (accent-tinted, never opaque).
+      out += L + "{background:radial-gradient(circle at 18% 14%,var(--bf-aur1),transparent 42%),radial-gradient(circle at 88% 62%,var(--bf-aur2),transparent 46%),radial-gradient(circle at 56% 96%,var(--bf-aur3),transparent 40%),var(--bf-g1)}";
     }
-    return "";
+    return out;
   }
-
-  // Phone widths keep the legacy full-screen panel for every layout (docs/27 §2, §6).
   var LAYOUT_MOBILE_CSS =
     "@media (max-width:480px){.bf-panel.bf-lay,:host(.bf-left) .bf-panel.bf-lay{width:100vw;max-width:100vw;height:100vh;max-height:100vh;top:auto;bottom:0;right:0;left:0;transform:none;border-radius:0}}";
+
+  function layoutCss(name) {
+    return LAYOUT_CSS.base + layoutSupplementCss() + (LAYOUT_CSS[name] || "") + layoutPlaceCss(name);
+  }
 
   // The one extra <style>, created only when something needs it and rewritten only when the
   // set of needed rules changes (so a colour tweak in the builder never re-parses CSS).
@@ -496,7 +409,7 @@
     }
     els.extra.textContent =
       (tuned ? tuneCss() : "") +
-      (layout ? layoutBaseCss() + layoutCss(layout) : "") +
+      (layout ? layoutCss(layout) : "") +
       (blocks ? blocksCss() : "") +
       (layout ? LAYOUT_MOBILE_CSS : "");
   }
@@ -529,11 +442,13 @@
       v["--bf-rc"] = Math.min(r, 14) + "px";
       v["--bf-rb"] = Math.min(r, 10) + "px";
     }
-    if (dens) {
-      v["--bf-pad"] = dens.pad;
-      v["--bf-gap"] = dens.gap;
-      v["--bf-mp"] = dens.mp;
-      v["--bf-fs"] = dens.fs;
+    // A layout always has spacing (the artifact's default is "comfortable"); legacy only when chosen.
+    var spacing = dens || (layout ? DENSITY.comfortable : null);
+    if (spacing) {
+      v["--bf-pad"] = spacing.pad;
+      v["--bf-gap"] = spacing.gap;
+      v["--bf-mp"] = spacing.mp;
+      v["--bf-fs"] = spacing.fs;
     }
     if (layout) {
       // The legacy palette derives these from the mode alone; a layout derives them from the
@@ -542,17 +457,30 @@
       host.style.setProperty("--bf-border", mixHex(p.text, p.bg, 11));
       host.style.setProperty("--bf-muted", mixHex(p.text, p.bg, 58));
       if (!theme.typing_area_color) host.style.setProperty("--bf-input", mixHex(p.text, p.bg, 4));
+      var bord = mixHex(p.text, p.bg, 11);
+      v["--bf-aline"] = mixHex(p.accent, bord, 40);
+      v["--bf-aline2"] = mixHex(p.accent, bord, 60);
+      v["--bf-ona20"] = rgba(p.onAccent, 0.2);
+      v["--bf-ona78"] = rgba(p.onAccent, 0.78);
+      v["--bf-aca55"] = rgba(p.accent, 0.55);
       v["--bf-g1"] = rgba(p.bg, 0.58);
       v["--bf-g2"] = rgba(p.bg, 0.7);
-      v["--bf-g3"] = rgba(p.text, 0.1);
+      v["--bf-g3"] = rgba(p.text, 0.09);
       v["--bf-g4"] = rgba(p.text, 0.85);
       v["--bf-g5"] = rgba(p.bg, 0.6);
-    }
-    if (layout || blocks) {
-      v["--bf-soft"] = mixHex(p.accent, p.bg, 12);
-      v["--bf-aline"] = mixHex(p.accent, mixHex(p.text, p.bg, 11), 40);
+      v["--bf-g6"] = rgba(p.text, 0.08);
+      // The artifact's own backdrop colours (warm amber, green, orange), so frosted glass has something to frost.
+      v["--bf-aur1"] = "rgba(242,181,107,.55)";
+      v["--bf-aur2"] = "rgba(47,109,76,.45)";
+      v["--bf-aur3"] = "rgba(230,107,60,.3)";
       // The accent used as TEXT on the panel: a dark accent on a dark panel (or the reverse) is
       // unreadable, so fall back to the text colour when the contrast is below 3:1.
+      v["--bf-acfg"] = contrastOf(p.accent, p.bg) >= 3 ? p.accent : p.text;
+    }
+    if (blocks) v["--bf-soft"] = mixHex(p.accent, p.bg, 12);
+    if (layout) v["--bf-soft"] = mixHex(p.accent, p.bg, 12);
+    if (blocks && !layout) {
+      v["--bf-aline"] = mixHex(p.accent, mixHex(p.text, p.bg, 11), 40);
       v["--bf-acfg"] = contrastOf(p.accent, p.bg) >= 3 ? p.accent : p.text;
     }
     LAYOUT_VARS.forEach(function (k) {
@@ -567,74 +495,163 @@
     ensureLayoutDom(layout);
   }
 
-  // Concierge / Drawer / Command are the only layouts that add DOM; nothing is built otherwise.
+  var PLACEHOLDER = { command: "Ask anything or search…", console: "type a command or question" };
+
+  // Concierge / Drawer / Command / Console add DOM, and every layout swaps the glyph buttons for the
+  // artifact's icons; nothing is built for the legacy look, and switching back removes it all again.
   function ensureLayoutDom(layout) {
     if (state.domLayout === layout) return;
+    if (state.domLayout === undefined && !layout) {
+      state.domLayout = layout; // pristine legacy DOM: nothing to build, nothing to undo
+      return;
+    }
+    teardownLayoutDom();
     state.domLayout = layout;
-    var stale = els.panel.querySelectorAll("[data-bf-lay]");
-    for (var i = 0; i < stale.length; i++) stale[i].parentNode.removeChild(stale[i]);
-    els.hero = els.tabs = els.pane = els.kbd = null;
-    els.panel.classList.remove("bf-home", "bf-tab-help");
     if (!layout) return;
     var head = els.panel.querySelector(".bf-head");
-    var ini = document.createElement("span");
-    ini.className = "bf-ini";
-    ini.setAttribute("data-bf-lay", "");
+    var mk = function (tag, cls, html) {
+      var n = document.createElement(tag);
+      n.className = cls;
+      n.setAttribute("data-bf-lay", "");
+      if (html != null) n.innerHTML = html;
+      return n;
+    };
+    var ini = mk("span", "bf-ini bf-ava");
     ini.setAttribute("aria-hidden", "true");
-    head.insertBefore(ini, head.firstChild);
     els.ini = ini;
-    if (layout === "concierge") {
-      els.hero = document.createElement("div");
-      els.hero.className = "bf-hero";
-      els.hero.setAttribute("data-bf-lay", "");
-      els.hero.innerHTML = '<div class="bf-hero-h"></div><div class="bf-hero-p"></div>';
-      head.appendChild(els.hero);
-    } else if (layout === "drawer") {
-      els.tabs = document.createElement("nav");
-      els.tabs.className = "bf-tabs";
-      els.tabs.setAttribute("data-bf-lay", "");
-      els.tabs.setAttribute("aria-label", "Sections");
-      head.appendChild(els.tabs);
-      els.pane = document.createElement("div");
-      els.pane.className = "bf-pane";
-      els.pane.setAttribute("data-bf-lay", "");
-      els.msgs.parentNode.insertBefore(els.pane, els.chips);
-    } else if (layout === "command") {
-      els.kbd = document.createElement("div");
-      els.kbd.className = "bf-kbd";
-      els.kbd.setAttribute("data-bf-lay", "");
-      els.kbd.setAttribute("aria-hidden", "true");
-      els.kbd.innerHTML = "<span><kbd>↑↓</kbd>navigate</span><span><kbd>↵</kbd>select</span><span><kbd>esc</kbd>close</span>";
-      els.panel.appendChild(els.kbd);
+    els.avatar.classList.add("bf-ava");
+    var tl = mk("span", "bf-tl", "<i></i><i></i><i></i>");
+    tl.setAttribute("aria-hidden", "true");
+    var team = mk(
+      "div",
+      "bf-team",
+      '<span style="background:#fbcfe8;color:#4a0d2a">' + iconSvg("user") + '</span><span style="background:#fde68a;color:#3b2a06">' +
+        iconSvg("user") + '</span><span style="background:#bae6fd;color:#08304a">' + iconSvg("user") + "</span>"
+    );
+    team.setAttribute("aria-hidden", "true");
+    var id = mk("div", "bf-id");
+    var sub = mk("div", "bf-sub", '<span class="bf-dot"></span><span>Usually replies in seconds</span>');
+    id.appendChild(els.title);
+    id.appendChild(sub);
+    var hero = mk("div", "bf-hero", '<div class="bf-hero-h">Hi there</div><div class="bf-hero-p">Ask us anything, or pick a topic to start.</div>');
+    var hacts = mk("div", "bf-hacts");
+    var restart = document.createElement("button");
+    restart.type = "button";
+    restart.className = "bf-ib bf-restart";
+    restart.setAttribute("aria-label", "Start over");
+    restart.title = "Start over";
+    restart.innerHTML = iconSvg("refresh");
+    restart.addEventListener("click", restartChat);
+    hacts.appendChild(restart);
+    var x = head.querySelector(".bf-x");
+    x.classList.add("bf-ib");
+    x.innerHTML = iconSvg("x");
+    hacts.appendChild(x);
+    var tabs = null;
+    if (layout === "drawer") {
+      tabs = mk("nav", "bf-tabs");
+      tabs.setAttribute("aria-label", "Sections");
     }
+    [ini, tl, els.avatar, team, id, hero, hacts, tabs].forEach(function (n) { if (n) head.appendChild(n); });
+    els.tl = tl; els.team = team; els.id = id; els.hero = hero; els.hacts = hacts; els.tabs = tabs; els.restart = restart;
+
+    // Composer: the artifact's icons and arrow instead of the emoji glyphs.
+    els.fileBtn.classList.add("bf-ib");
+    els.fileBtn.innerHTML = iconSvg("clip");
+    els.emojiBtn.classList.add("bf-ib");
+    els.emojiBtn.innerHTML = iconSvg("smile");
+    els.send.innerHTML = iconSvg("send");
+    els.ta.setAttribute("placeholder", PLACEHOLDER[layout] || "Type a message…");
+
+    // Suggested prompts live inside the message list, right under the welcome message.
+    els.chips.classList.toggle("bf-main", layout === "concierge");
+
+    if (layout === "drawer") {
+      els.helpPane = mk("div", "bf-pane bf-help");
+      els.statusPane = mk(
+        "div",
+        "bf-pane bf-status",
+        '<h4>Right now</h4><div class="bf-stat"><i></i>All systems operational</div><div class="bf-stat"><i></i>Usually replies in seconds</div>'
+      );
+      els.chips.parentNode.insertBefore(els.helpPane, els.chips.nextSibling);
+      els.chips.parentNode.insertBefore(els.statusPane, els.helpPane.nextSibling);
+    } else if (layout === "command") {
+      els.kbd = mk("div", "bf-kbd", "<span><kbd>↵</kbd>select</span><span><kbd>esc</kbd>close</span>");
+      els.kbd.setAttribute("aria-hidden", "true");
+      els.panel.insertBefore(els.kbd, els.brand.parentNode.nextSibling);
+    }
+  }
+
+  function teardownLayoutDom() {
+    if (!els.hacts) return;
+    var head = els.panel.querySelector(".bf-head");
+    var x = els.hacts.querySelector(".bf-x");
+    head.insertBefore(els.avatar, head.firstChild);
+    head.insertBefore(els.title, head.firstChild.nextSibling);
+    head.appendChild(x);
+    [els.ini, els.tl, els.team, els.id, els.hero, els.hacts, els.tabs, els.helpPane, els.statusPane, els.kbd].forEach(function (n) {
+      if (n && n.parentNode) n.parentNode.removeChild(n);
+    });
+    els.avatar.classList.remove("bf-ava");
+    els.avatar.removeAttribute("hidden");
+    x.classList.remove("bf-ib");
+    x.innerHTML = "&times;";
+    els.fileBtn.classList.remove("bf-ib");
+    els.fileBtn.textContent = "📎";
+    els.emojiBtn.classList.remove("bf-ib");
+    els.emojiBtn.textContent = "🙂";
+    els.send.textContent = "➤";
+    els.ta.setAttribute("placeholder", "Type a message…");
+    els.chips.classList.remove("bf-main");
+    if (els.chips.parentNode === els.msgs) els.panel.insertBefore(els.chips, els.panel.querySelector(".bf-foot"));
+    els.panel.classList.remove("bf-home", "bf-tab-help", "bf-tab-status", "bf-started");
+    els.ini = els.tl = els.team = els.id = els.hero = els.hacts = els.tabs = els.helpPane = els.statusPane = els.kbd = els.restart = null;
+  }
+
+  // Start over: a fresh conversation, the welcome message and prompts again (layouts only).
+  function restartChat() {
+    if (state.sending) return;
+    try { if (state.ws) state.ws.close(); } catch (e) { /* ignore */ }
+    state.ws = null;
+    forget(STORE_KEY);
+    state.conversationId = null;
+    state.hasConversation = false;
+    state.campaignShown = false;
+    state.turnBlocks = [];
+    if (state.config) refreshWelcome(state.config.welcome_message);
+    setTab("chat");
+    updateHome();
+    if (els.ta) els.ta.focus();
   }
 
   function setTab(id) {
     els.panel.classList.toggle("bf-tab-help", id === "help");
+    els.panel.classList.toggle("bf-tab-status", id === "status");
     if (!els.tabs) return;
     var bs = els.tabs.querySelectorAll("button");
-    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("on", bs[i].getAttribute("data-tab") === id);
+    for (var i = 0; i < bs.length; i++) {
+      var on = bs[i].getAttribute("data-tab") === id;
+      bs[i].classList.toggle("bf-on", on);
+      bs[i].setAttribute("aria-pressed", String(on));
+    }
   }
 
-  // Fill the layout-only elements from data the agent already has (name, welcome message,
-  // suggested prompts). No demo copy is hard-coded.
+  // Fill the layout-only elements from data the agent already has (name, suggested prompts).
   function renderLayoutExtras() {
     var layout = state.layout;
     if (!layout || !els.ini) return;
     var cfg = state.config || {};
     var name = String(cfg.name || "Chat");
     els.ini.textContent = (name.replace(/[^A-Za-z0-9À-￿ ]/g, "").trim().charAt(0) || "V").toUpperCase();
-    els.ini.hidden = !!logoUrl(cfg.theme || {});
-    var prompts = (cfg.suggested_prompts || [])
-      .map(function (p) { return typeof p === "string" ? p : p && p.label ? p.label : ""; })
-      .filter(Boolean);
-    if (els.hero) {
-      els.hero.firstChild.textContent = name;
-      els.hero.lastChild.textContent = cfg.welcome_message || "";
-    }
+    var logo = !!logoUrl(cfg.theme || {});
+    els.ini.hidden = logo;
+    els.avatar.hidden = !logo;
+    var prompts = promptsOf(cfg);
     if (els.tabs) {
       els.tabs.innerHTML = "";
-      var tabs = prompts.length ? [["chat", "Chat"], ["help", "Help"]] : [];
+      var tabs = [["chat", "Chat"]];
+      if (prompts.length) tabs.push(["help", "Help"]);
+      tabs.push(["status", "Status"]);
       tabs.forEach(function (t) {
         var b = document.createElement("button");
         b.type = "button";
@@ -643,26 +660,33 @@
         b.addEventListener("click", function () { setTab(t[0]); });
         els.tabs.appendChild(b);
       });
-      els.pane.innerHTML = "";
+      els.helpPane.innerHTML = "";
       if (prompts.length) {
         var h4 = document.createElement("h4");
-        h4.textContent = "Suggested questions";
-        els.pane.appendChild(h4);
+        h4.textContent = "Popular questions";
+        els.helpPane.appendChild(h4);
         prompts.forEach(function (text) {
           var row = document.createElement("button");
           row.type = "button";
           row.className = "bf-artrow";
-          row.textContent = text;
+          row.appendChild(document.createTextNode(text));
+          row.insertAdjacentHTML("beforeend", iconSvg("arrowR").replace("<svg", '<svg class="bf-go"'));
           row.addEventListener("click", function () {
             setTab("chat");
             api.sendMessage(text);
           });
-          els.pane.appendChild(row);
+          els.helpPane.appendChild(row);
         });
       }
       setTab("chat");
     }
     updateHome();
+  }
+
+  function promptsOf(cfg) {
+    return (cfg.suggested_prompts || [])
+      .map(function (p) { return typeof p === "string" ? p : p && p.label ? p.label : ""; })
+      .filter(Boolean);
   }
 
   // Concierge shows its home screen until the visitor says something; it never comes back for a
@@ -671,11 +695,12 @@
     if (!els.panel) return;
     var home =
       state.layout === "concierge" &&
-      !!(state.config && (state.config.suggested_prompts || []).length) &&
+      !!(state.config && promptsOf(state.config).length) &&
       !state.hasConversation &&
       !state.conversationId &&
       !state.campaignShown;
     els.panel.classList.toggle("bf-home", home);
+    els.panel.classList.toggle("bf-started", !!state.layout && state.hasConversation);
   }
 
   // Keyboard model for layouts: Esc closes from anywhere in the panel; the Command layout also
@@ -831,30 +856,6 @@
       ".bf-ho i{width:36px;height:36px;border-radius:50%;background:var(--bf-accent);color:var(--bf-on-accent);display:grid;place-items:center;font-style:normal;font-weight:700;font-size:13px;flex:none}" +
       ".bf-ho b{display:block;font-size:13.5px}" +
       ".bf-ho small{color:var(--bf-muted);font-size:12px}" +
-      // per-layout looks: the block shapes above, re-skinned by the active layout
-      ".bf-l-glass .bf-opt,.bf-l-glass .bf-card,.bf-l-glass .bf-form,.bf-l-glass .bf-rate,.bf-l-glass .bf-day,.bf-l-glass .bf-slot,.bf-l-glass .bf-counter,.bf-l-glass .bf-steps,.bf-l-glass .bf-ho{background:var(--bf-g2);border-color:var(--bf-g3)}" +
-      ".bf-l-hairline .bf-opt{border:0;border-bottom:1px solid var(--bf-border);border-radius:0;background:transparent;padding:11px 2px}" +
-      ".bf-l-hairline .bf-opts{gap:0;border-top:1px solid var(--bf-border)}" +
-      ".bf-l-paper .bf-opts{counter-reset:o;gap:2px}" +
-      ".bf-l-paper .bf-opt{counter-increment:o;border:0;background:transparent;padding:5px 0;border-radius:0;font-size:15px}" +
-      ".bf-l-paper .bf-opt .bf-rad{display:none}" +
-      ".bf-l-paper .bf-opt::before{content:counter(o,lower-alpha) '.';color:var(--bf-acfg);font-style:italic;min-width:20px}" +
-      ".bf-l-paper .bf-opt.bf-on{background:transparent;color:var(--bf-acfg)}" +
-      ".bf-l-pebble .bf-card,.bf-l-pebble .bf-form,.bf-l-pebble .bf-rate,.bf-l-pebble .bf-ho,.bf-l-pebble .bf-steps{border-radius:20px}" +
-      ".bf-l-console .bf-opts{counter-reset:o;gap:1px}" +
-      ".bf-l-console .bf-opt{counter-increment:o;border:0;border-radius:0;background:transparent;padding:3px 6px;margin-left:-6px;font-size:13px}" +
-      ".bf-l-console .bf-opt .bf-rad{display:none}" +
-      ".bf-l-console .bf-opt::before{content:'[' counter(o) ']';color:var(--bf-acfg)}" +
-      ".bf-l-console .bf-opt.bf-on,.bf-l-console .bf-opt:hover:not(:disabled){background:var(--bf-soft)}" +
-      ".bf-l-console .bf-card,.bf-l-console .bf-form,.bf-l-console .bf-rate,.bf-l-console .bf-ho,.bf-l-console .bf-counter,.bf-l-console .bf-steps{border-style:dashed;background:transparent}" +
-      ".bf-l-console .bf-btn{border-radius:0;background:transparent;color:var(--bf-acfg);border:1px solid var(--bf-accent)}" +
-      ".bf-l-console .bf-btn::before{content:'[ '}.bf-l-console .bf-btn::after{content:' ]'}" +
-      ".bf-l-console .bf-btn.bf-ok{background:var(--bf-accent);color:var(--bf-on-accent)}" +
-      ".bf-l-console .bf-art{height:44px}" +
-      ".bf-l-block .bf-opt,.bf-l-block .bf-card,.bf-l-block .bf-form,.bf-l-block .bf-rate,.bf-l-block .bf-ho,.bf-l-block .bf-day,.bf-l-block .bf-slot,.bf-l-block .bf-counter,.bf-l-block .bf-steps{border:2px solid var(--bf-text);box-shadow:3px 3px 0 var(--bf-text)}" +
-      ".bf-l-block .bf-btn{border:2px solid var(--bf-text);box-shadow:3px 3px 0 var(--bf-text);color:var(--bf-on-accent)}" +
-      ".bf-l-block .bf-btn.bf-ghost{color:var(--bf-text)}" +
-      ".bf-l-block .bf-art{border-bottom:2px solid var(--bf-text)}" +
       "@media (prefers-reduced-motion:reduce){.bf-carousel{scroll-behavior:auto}}"
     );
   }
@@ -1598,8 +1599,24 @@
     if (!els.msgs) return;
     if (state.hasConversation) return; // don't disturb an in-progress chat
     if (state.campaignShown) return; // nor a proactive message the visitor is reading
-    els.msgs.innerHTML = "";
-    els.welcomeBubble = text ? addMessage("bot", text) : null;
+    if (state.layout) {
+      // Layouts: the welcome message (one bubble per line, none invented) with the suggested prompts
+      // right under it, inside the message list.
+      if (els.chips.parentNode === els.msgs) els.msgs.removeChild(els.chips);
+      els.msgs.innerHTML = "";
+      els.welcomeBubble = null;
+      String(text || "")
+        .split(/\n+/)
+        .filter(function (l) { return l.trim(); })
+        .forEach(function (l) {
+          var b = addMessage("bot", l.trim());
+          if (!els.welcomeBubble) els.welcomeBubble = b;
+        });
+      els.msgs.appendChild(els.chips);
+    } else {
+      els.msgs.innerHTML = "";
+      els.welcomeBubble = text ? addMessage("bot", text) : null;
+    }
     var th = (state.config && state.config.theme) || {};
     if (PREVIEW && blocksOn(th)) previewBlocks(th.interactive_blocks);
   }
@@ -1647,7 +1664,13 @@
       if (!text) return;
       var chip = document.createElement("button");
       chip.className = "bf-chip";
-      chip.textContent = text;
+      if (state.layout) {
+        chip.innerHTML =
+          '<span class="bf-ic">' + iconSvg(iconFor(text)) + '</span><span class="bf-lb"></span><span class="bf-go">' + iconSvg("arrowR") + "</span>";
+        chip.querySelector(".bf-lb").textContent = text;
+      } else {
+        chip.textContent = text;
+      }
       chip.addEventListener("click", function () {
         api.sendMessage(text);
       });

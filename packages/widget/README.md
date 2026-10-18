@@ -40,8 +40,13 @@ to the original look; a layout owns the whole surface.
   (accent, font, radius, launcher, colors); the widget only reads what is saved.
 - Layout CSS lives in one extra `<style>` that exists only for the active layout. An agent with no
   layout/radius/density gets no class, no CSS variable, no extra `<style>` and no extra DOM.
-- Only Concierge (home screen), Drawer (Chat / Help tabs) and Command (keyboard hints) add DOM.
-  Help rows are the agent's suggested prompts; there is no hard-coded copy and no Status tab.
+- The look is the approved artifact (`designreference/vicero-widget-lab.html`): its per-style CSS is ported
+  into `widget.js` (`LAYOUT_CSS`) with selectors renamed only, so a design change starts in the artifact and
+  is re-ported, not hand-edited. Layouts add header pieces (online dot, refresh button, Concierge greeting and
+  avatar stack, Console window dots), swap the glyph buttons for the artifact's SVG icons, and show the
+  suggested prompts inside the message list under the welcome message (hidden once the chat starts). A welcome
+  message with a second line becomes a second bubble; nothing is invented. Drawer has Chat, Help (the agent's
+  prompts) and a static Status tab. Prompt icons are picked by keyword, with a chat bubble as the default.
 - Fonts map to the existing keys (`system`, `inter`, `arial`, `georgia`, `courier`). **No remote web
   fonts** are ever loaded inside a customer's site.
 - Esc closes from anywhere in the panel; Command walks the suggestion rows with the arrow keys;

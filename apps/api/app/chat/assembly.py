@@ -142,16 +142,19 @@ _CLOCK_PREFIX = "Current date and time: "
 
 
 def current_time_line(now: dt.datetime | None = None) -> str:
-    """Today's date, weekday and time in the business timezone, for every turn (ADR-127).
+    """Today's date, weekday and time in the business timezone, plus the next seven days, for every turn (ADR-127).
 
-    The model has no clock. Asked for "Saturday", it picked a date at random and named the wrong weekday
-    ("Saturday, 19 Oct 2026" was a Monday), so a customer could be offered or booked a day they did not mean.
+    The model has no clock and does date arithmetic badly: asked for "Saturday" it named wrong weekdays ("Saturday,
+    19 Oct 2026" was a Monday), and even once it knew today it sometimes counted wrong ("Saturday 23 Oct", a Friday).
+    So it is handed the next seven days spelled out and only has to look one up.
     """
     zone = ZoneInfo(settings.booking_timezone)
     local = (now or dt.datetime.now(tz=dt.UTC)).astimezone(zone)
+    upcoming = ", ".join(f"{(local + dt.timedelta(days=n)):%a %d %b}" for n in range(1, 8))
     return (
         f"{_CLOCK_PREFIX}{local:%A, %d %B %Y, %H:%M} ({settings.booking_timezone}). "
-        "Use it for today, tomorrow and weekday names; never guess the date."
+        f"The next days: {upcoming}. "
+        "Use these for today, tomorrow and weekday names; never work out or guess a date yourself."
     )
 
 

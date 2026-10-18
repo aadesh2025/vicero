@@ -115,7 +115,9 @@ class _FakeN8n:
         self.callback: httpx.Response | None = None
 
     async def trigger_webhook(self, url: str, payload: dict[str, Any]) -> tuple[int, Any]:
-        day = (dt.date.today() + dt.timedelta(days=21)).isoformat()
+        # A Tuesday two to three weeks out: Sundays are closed, so a fixed offset from today fails on some days.
+        soon = dt.date.today() + dt.timedelta(days=14)
+        day = (soon + dt.timedelta(days=(1 - soon.weekday()) % 7)).isoformat()
         body = {
             "run_id": payload["run_id"],
             "callback_token": payload["callback_token"],

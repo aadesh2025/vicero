@@ -176,3 +176,22 @@ async def test_persona_break_never_reaches_a_visitor(client: AsyncClient) -> Non
     content = r.json()["content"]
     # Whatever happened, the break is not what the visitor was served.
     assert "large language model" not in content.lower()
+
+
+def test_the_per_turn_date_line_is_not_part_of_the_protected_prompt() -> None:
+    """A reply that says "today is Saturday" must not read as leaking the instructions (ADR-127)."""
+    messages = build_messages(
+        system_prompt="INSTRUCTIONS HERE",
+        context_block="KB",
+        memory_summary=None,
+        history=[],
+        user_message="hi",
+        window_messages=12,
+    )
+    assert "Current date and time:" in (messages[0].content or "")
+    assert instruction_prompt_of(messages) == "INSTRUCTIONS HERE"
+    # An agent with no prompt of its own has nothing to protect, only the date line.
+    bare = build_messages(
+        system_prompt=None, context_block="", memory_summary=None, history=[], user_message="hi", window_messages=12
+    )
+    assert instruction_prompt_of(bare) is None

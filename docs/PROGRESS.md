@@ -2258,3 +2258,7 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 - **M4 sending:** `send_image` on the three Meta adapters; `search_products` / `send_product_images` tools; text first, then up to 3 photos.
 - **M5 inbox:** photos in the thread (click to enlarge, alt text from the description, "deleted after 30 days"); operator can send a photo; typing indicator while a photo is processed.
 - Needs from you: `MEDIA_URL_SIGNING_KEY` in the production `.env`, the media volume and backup (runbook section 16), and the live checks on real WhatsApp / Instagram / Messenger accounts. Not verified live: Meta's real size limits and that no extra permission is needed for attachments.
+
+## Today's date on every turn (2026-10-18, ADR-127)
+
+- The persona message of every turn now ends with the current date, weekday and time in `BOOKING_TIMEZONE`, so "Saturday 11 am" resolves to a real Saturday. Tests: `tests/test_turn_date.py`, Saturday booking tests in `tests/test_bookings.py`.

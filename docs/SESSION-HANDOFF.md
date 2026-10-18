@@ -7,7 +7,7 @@
 
 - Shipped in two commits: `feat(widget): 10 selectable layouts + corner radius + density` and `feat(widget): interactive blocks (opt-in)`. Everything is additive; reverting the commits is the rollback (migration 0037 drops `messages.blocks` on downgrade).
 - Pick-up points: widget code `packages/widget/src/widget.js` (layout engine and block renderers are marked sections; never edit `apps/web/public/widget.js`, run `node packages/widget/build.mjs`); backend rules `apps/api/app/chat/blocks.py`, tool execution `apps/api/app/tools/block_tools.py`; designer `apps/web/src/components/builder/tabs/channels-tab.tsx` and presets `apps/web/src/lib/widget-layouts.ts`.
-- The regression snapshot `apps/web/e2e/fixtures/widget-legacy-styles.json` was captured from the pre-change bundle. Re-capture it (`UPDATE_WIDGET_SNAPSHOT=1`) only when the original look is changed on purpose.
+- The untouched-agent regression test (`apps/web/e2e/44-widget-regression.spec.ts`) loads the pre-docs/27 bundle (`e2e/fixtures/widget-before-docs27.js`) and the current bundle in the same browser and compares them, so nothing is stored from another machine. If the original look is changed on purpose, replace that fixture with the bundle that should now count as original.
 - E2E needs the API with `ALLOW_SELF_SERVE_ORGS=true`, `SELF_SERVE_ENABLED=false`, `LLM_FORCE_FAKE=true` (see CI) and Docker Desktop running; Docker was found stopped at the start of this work.
 - Open: see the follow-ups in the 2026-10-17 entry of `docs/PROGRESS.md`.
 

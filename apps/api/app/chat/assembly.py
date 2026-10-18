@@ -128,8 +128,17 @@ def instruction_prompt_of(messages: list[Message]) -> str | None:
     answers for quoting the documents they are supposed to quote (docs/11 §4-L5).
     """
     if messages and messages[0].role == "system":
-        return messages[0].content
+        content = messages[0].content or ""
+        # The per-turn date line (ADR-127) is not part of the instructions: a reply that mentions today's date must
+        # not read as a prompt leak.
+        cut = content.rfind(_CLOCK_PREFIX)
+        if cut != -1:
+            content = content[:cut].rstrip(chr(10))
+        return content or None
     return None
+
+
+_CLOCK_PREFIX = "Current date and time: "
 
 
 def current_time_line(now: dt.datetime | None = None) -> str:
@@ -141,7 +150,7 @@ def current_time_line(now: dt.datetime | None = None) -> str:
     zone = ZoneInfo(settings.booking_timezone)
     local = (now or dt.datetime.now(tz=dt.UTC)).astimezone(zone)
     return (
-        f"Current date and time: {local:%A, %d %B %Y, %H:%M} ({settings.booking_timezone}). "
+        f"{_CLOCK_PREFIX}{local:%A, %d %B %Y, %H:%M} ({settings.booking_timezone}). "
         "Use it for today, tomorrow and weekday names; never guess the date."
     )
 

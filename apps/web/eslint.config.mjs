@@ -12,6 +12,7 @@ const eslintConfig = [
       "playwright-report/**",
       "test-results/**",
       "public/widget.js", // built artifact from packages/widget, not source
+      "e2e/fixtures/**", // captured bundles and test data, not source
     ],
   },
   ...nextCoreWebVitals,

@@ -96,7 +96,9 @@ class Settings(BaseSettings):
     inbound_media_retention_days: int = 30
     # Vision model that writes the text description of a customer photo (describe-first, ADR-124).
     vision_provider: str = "gemini"
-    vision_model: str = "gemini-2.5-flash"
+    # `-latest` alias, not a dated model: Google retired gemini-2.5-flash for new keys (404) within a year of
+    # its release, which silently turned every customer photo into "could not be loaded".
+    vision_model: str = "gemini-flash-latest"
     max_images_per_reply: int = 3
     # Compute a product's embedding in the worker after a save. Off in the test suite (no broker traffic).
     product_embedding_enabled: bool = True
@@ -250,7 +252,7 @@ class Settings(BaseSettings):
     # minute on the free tier, which is about one L3 call a minute (the policy alone is ~1,450 tokens): it 429'd
     # on nearly every turn. `gpt-oss-20b` has 8,000 a minute and graded all five labelled samples correctly.
     # `guard_policy_provider` is `groq` or `gemini` (free tier, needs GEMINI_API_KEY; set the model to match,
-    # e.g. `gemini-2.5-flash-lite`), so L3 can sit on a different provider from the chat entirely.
+    # e.g. `gemini-flash-lite-latest`), so L3 can sit on a different provider from the chat entirely.
     guard_policy_provider: str = "groq"
     guard_policy_model: str = "openai/gpt-oss-20b"
     # It is a reasoning model (~200-300ms observed), so the budget is wider than L2's.

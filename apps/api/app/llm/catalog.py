@@ -108,12 +108,19 @@ _GEMINI = ProviderSpec(
     requires_key=True,
     kind="native",
     api_key_url="https://aistudio.google.com/apikey",
-    key_hint="AIza…",
+    key_hint="AQ… / AIza…",
     description="Generous free tier; large context windows.",
     models=(
-        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000, vision=True),
+        # Google retires Gemini models for new keys on a fixed schedule (2.5 Flash/Flash-Lite and 2.0 Flash
+        # answered 404 "no longer available" to a key made in Oct 2026). The `-latest` aliases follow Google's
+        # current Flash tier, so they keep working across generations; they lead the list for that reason.
+        ModelSpec("gemini-flash-latest", "Gemini Flash (latest)", 1_000_000, vision=True),
+        ModelSpec("gemini-flash-lite-latest", "Gemini Flash-Lite (latest)", 1_000_000, vision=True),
+        ModelSpec("gemini-3.8-flash", "Gemini 3.8 Flash", 1_000_000, vision=True),
+        ModelSpec("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite", 1_000_000, vision=True),
+        ModelSpec("gemini-2.5-flash", "Gemini 2.5 Flash", 1_000_000, vision=True, note="retired for new keys"),
         ModelSpec("gemini-2.5-pro", "Gemini 2.5 Pro", 1_000_000, vision=True),
-        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000, vision=True),
+        ModelSpec("gemini-2.0-flash", "Gemini 2.0 Flash", 1_000_000, vision=True, note="retired"),
         ModelSpec("gemini-1.5-flash", "Gemini 1.5 Flash", 1_000_000, note="legacy"),
         ModelSpec("gemini-1.5-pro", "Gemini 1.5 Pro", 2_000_000, note="legacy"),
     ),

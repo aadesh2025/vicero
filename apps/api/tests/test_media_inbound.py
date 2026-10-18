@@ -222,6 +222,12 @@ def test_images_are_mapped_by_each_adapter() -> None:
 
 def test_vision_flag_on_known_models() -> None:
     assert find_model("gemini", "gemini-2.5-flash").vision is True  # type: ignore[union-attr]
+    # The default must be a model Google still serves to new keys, and it must be known to support images.
+    from app.core.config import Settings
+
+    default = Settings.model_fields["vision_model"].default
+    assert default.endswith("-latest"), "a dated Gemini model gets retired; use the -latest alias"
+    assert find_model("gemini", default).vision is True  # type: ignore[union-attr]
     assert find_model("openai", "gpt-4o").vision is True  # type: ignore[union-attr]
     assert find_model("claude", "x") is None or True
     assert find_model("groq", "openai/gpt-oss-120b").vision is False  # type: ignore[union-attr]

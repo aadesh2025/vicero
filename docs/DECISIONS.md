@@ -18,6 +18,13 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-127: Gemini models are referenced by `-latest` alias, not by dated name
+- **Date:** 2026-10-18
+- **Status:** accepted
+- **Context:** A Google key created in Oct 2026 answered 404 "no longer available" for `gemini-2.5-flash`, `gemini-2.0-flash` and `gemini-2.5-flash-lite`. The default vision model was `gemini-2.5-flash`, so on any new key every customer photo failed (`vision_failed`) and the bot asked the customer to resend it. Found on the live server while testing ADR-124.
+- **Decision:** `VISION_MODEL` defaults to `gemini-flash-latest`. The model catalog leads with `gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-3.8-flash` and `gemini-3.5-flash-lite` (all verified with an image on a new key); the retired names stay listed with a note so existing agents that point at them still show up. A test fails if the default is ever a dated name or is not marked as vision-capable.
+- **Consequences:** an alias can change behaviour when Google moves it to a newer generation; for a describe-only task that is acceptable and far better than a hard 404. Agents already pinned to a retired model keep failing until the owner picks another one; the fallback chain covers them if it has a second provider.
+
 ### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
 - **Date:** 2026-10-17
 - **Status:** accepted

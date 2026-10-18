@@ -1,17 +1,20 @@
 import { test, expect, type Page } from "@playwright/test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // docs/27 §2: an agent that never touches the new settings (widget_layout / corner_radius /
 // density / interactive_blocks all null) must render pixel-for-pixel like it did before the
-// layouts existed. This spec dumps the computed styles + class names of every legacy surface and
-// compares them to a snapshot that was captured from the PRE-change bundle
-// (e2e/fixtures/widget-legacy-styles.json). It needs no API — it drives widget-preview.html.
+// layouts existed. This spec loads the widget bundle as it was before docs/27
+// (e2e/fixtures/widget-before-docs27.js, the bundle of the commit before 715203c) and the CURRENT
+// bundle into the same browser, drives both through the same steps, and compares the computed styles,
+// classes, attributes and DOM shape of every legacy surface. Nothing is stored from another machine
+// (a stored baseline differs by font metrics between Windows and the Linux CI runner), and it needs no
+// API: it drives widget-preview.html.
 //
-// Re-capture only when the legacy look is changed ON PURPOSE:
-//   UPDATE_WIDGET_SNAPSHOT=1 npx playwright test e2e/44-widget-regression.spec.ts
+// If the original look is changed on purpose, replace the fixture with the bundle that should now count
+// as "original".
 
-const SNAPSHOT = resolve(__dirname, "fixtures/widget-legacy-styles.json");
+const OLD_BUNDLE = readFileSync(resolve(__dirname, "fixtures/widget-before-docs27.js"), "utf8");
 
 const PROPS = [
   "display", "position", "top", "right", "bottom", "left", "z-index", "width", "height", "min-width",
@@ -67,7 +70,13 @@ const SELECTORS: Record<string, string> = {
   brand: ".bf-brand",
 };
 
-async function capture(page: Page, viewport: { width: number; height: number }) {
+async function capture(page: Page, viewport: { width: number; height: number }, bundle: "old" | "new") {
+  await page.unroute("**/widget.js").catch(() => undefined);
+  if (bundle === "old") {
+    await page.route("**/widget.js", (route) =>
+      route.fulfill({ contentType: "text/javascript", body: OLD_BUNDLE }),
+    );
+  }
   await page.setViewportSize(viewport);
   await page.goto("/widget-preview.html");
   await expect(page.locator(".bf-launcher")).toBeVisible({ timeout: 10_000 });
@@ -108,8 +117,9 @@ async function dump(page: Page) {
   // Park the mouse and let the launcher's hover transition (translateY) settle, or the dump
   // captures a mid-transition frame and the comparison flaps.
   await page.mouse.move(2, 2);
-  // Focus is a race (open() focuses the composer after 50ms; a click moves it to the send
-  // button), and the textarea's focus border is part of the computed style. Pin it: blur.
+  // Focus is a race: open() focuses the composer after 50ms, and the textarea's focus border is part of
+  // the computed style. Let that timer fire first, then pin the state by blurring.
+  await page.waitForTimeout(150);
   await page.evaluate(() => {
     const root = (document.querySelector("#vicero-widget") as HTMLElement).shadowRoot!;
     (root.activeElement as HTMLElement | null)?.blur();
@@ -161,16 +171,18 @@ async function dump(page: Page) {
 }
 
 test("untouched agent renders exactly like the pre-layouts widget (desktop + phone)", async ({ page }) => {
-  const actual = {
-    desktop: await capture(page, { width: 1100, height: 800 }),
-    phone: await capture(page, { width: 390, height: 720 }),
+  // Guard against comparing the bundle with itself: the old one must predate the layouts.
+  expect(OLD_BUNDLE).not.toContain("widget_layout");
+  const served = await (await page.request.get("/widget.js")).text();
+  expect(served).toContain("widget_layout");
+
+  const before = {
+    desktop: await capture(page, { width: 1100, height: 800 }, "old"),
+    phone: await capture(page, { width: 390, height: 720 }, "old"),
   };
-  if (process.env.UPDATE_WIDGET_SNAPSHOT === "1" || !existsSync(SNAPSHOT)) {
-    mkdirSync(dirname(SNAPSHOT), { recursive: true });
-    writeFileSync(SNAPSHOT, JSON.stringify(actual, null, 1));
-    test.info().annotations.push({ type: "snapshot", description: "written" });
-    return;
-  }
-  const expected = JSON.parse(readFileSync(SNAPSHOT, "utf8"));
-  expect(JSON.parse(JSON.stringify(actual))).toEqual(expected);
+  const after = {
+    desktop: await capture(page, { width: 1100, height: 800 }, "new"),
+    phone: await capture(page, { width: 390, height: 720 }, "new"),
+  };
+  expect(after).toEqual(before);
 });

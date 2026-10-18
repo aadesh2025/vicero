@@ -2270,3 +2270,4 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 ## Today's date on every turn (2026-10-18, ADR-127)
 
 - The persona message of every turn now ends with the current date, weekday and time in `BOOKING_TIMEZONE`, so "Saturday 11 am" resolves to a real Saturday. Tests: `tests/test_turn_date.py`, Saturday booking tests in `tests/test_bookings.py`.
+- Follow-up: the line also lists the next seven days (Sun 18 Oct -> `Sat 24 Oct`), because the model still mis-counted dates when it only knew today.

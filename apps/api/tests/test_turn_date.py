@@ -52,7 +52,7 @@ def test_the_date_rides_on_the_persona_message_and_leaves_the_rest_alone() -> No
     messages = _build()
     assert [m.role for m in messages] == ["system", "system", "user"]
     assert messages[0].content is not None and messages[0].content.startswith("You are the assistant.")
-    assert "Wednesday, 14 October 2026, 12:00" in messages[0].content
+    assert "Wednesday, 14 October 2026, 12:00" in messages[0].content and "Sat 17 Oct" in messages[0].content
     assert messages[1].content == "CONTEXT BLOCK", "the retrieved-context message is untouched"
 
 
@@ -67,3 +67,24 @@ def test_next_saturday_from_a_wednesday_is_three_days_out() -> None:
     saturday = today + dt.timedelta(days=(5 - today.weekday()) % 7)
     assert saturday == dt.date(2026, 10, 17) and saturday.strftime("%A") == "Saturday"
     assert "Wednesday, 14 October 2026" in current_time_line(_utc(2026, 10, 14, 6, 30))
+
+
+def test_the_next_seven_days_are_spelled_out_with_the_right_weekdays() -> None:
+    # Sunday 18 Oct 2026 in India: "Saturday" is the 24th (the model once said the 23rd, a Friday).
+    line = current_time_line(_utc(2026, 10, 18, 4, 0))
+    assert "Sunday, 18 October 2026" in line
+    assert "The next days: Mon 19 Oct, Tue 20 Oct, Wed 21 Oct, Thu 22 Oct, Fri 23 Oct, Sat 24 Oct, Sun 25 Oct." in line
+
+
+def test_the_listed_days_always_match_the_calendar() -> None:
+    import re
+
+    for offset in range(0, 40, 3):
+        now = _utc(2026, 10, 1, 6, 0) + dt.timedelta(days=offset)
+        line = current_time_line(now)
+        listed = re.search(r"The next days: (.*?)\. Use", line)
+        assert listed is not None
+        local = now.astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30)))
+        for n, part in enumerate(listed.group(1).split(", "), start=1):
+            expected = local + dt.timedelta(days=n)
+            assert part == f"{expected:%a %d %b}", (offset, part)

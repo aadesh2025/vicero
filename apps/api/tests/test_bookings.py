@@ -513,3 +513,37 @@ async def test_bookings_table_counts(client: AsyncClient, db_session: AsyncSessi
         await db_session.execute(select(func.count()).select_from(Booking).where(Booking.organization_id == w.org_id))
     ).scalar_one()
     assert total == 1
+
+
+# ── "Saturday 11 am" (the model is now told today's date; the tools must serve the day it names) ─────────────
+
+
+async def test_a_saturday_11_am_booking_is_stored_on_that_saturday_in_the_business_timezone(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    w = await _world(client, db_session, "bk_sat@example.com")
+    saturday = _next(5, 11, 0)
+    assert saturday.strftime("%A") == "Saturday" and saturday.utcoffset() == dt.timedelta(hours=5, minutes=30)
+
+    offered = (await w.call("availability", {"date": saturday.date().isoformat()})).json()
+    starts = [dt.datetime.fromisoformat(slot["start_iso"]) for slot in offered["slots"]]
+    assert offered["ok"] and saturday in starts, "11:00 is an offered Saturday slot (10:00 to 13:30)"
+
+    r = await w.call("book", _book_args(saturday))
+    body = r.json()
+    assert r.status_code == 200 and body["ok"] and body["status"] == "confirmed"
+    (b,) = await w.bookings()
+    assert b.start_at.astimezone(service.tz()).strftime("%A %H:%M") == "Saturday 11:00"
+    assert b.start_at.astimezone(dt.UTC).strftime("%H:%M") == "05:30"
+    # The reply names the weekday and time that were asked for.
+    assert body["when"].startswith("Sat ") and "11:00 AM" in body["when"]
+
+
+async def test_the_wrong_day_a_model_could_pick_is_not_booked_as_saturday(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Sunday 11:00 (a day the model might name by mistake) is refused, not silently accepted."""
+    w = await _world(client, db_session, "bk_sun@example.com")
+    r = await w.call("book", _book_args(_next(6, 11, 0)))
+    assert r.json()["ok"] is False and r.json()["error"] == "invalid_time"
+    assert await w.bookings() == []

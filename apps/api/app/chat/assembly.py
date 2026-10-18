@@ -6,9 +6,12 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.chat import variables as variables_module
+from app.core.config import settings
 from app.llm.types import Message
 
 # The builder's Tone selector is a style hint, not a behaviour override, so it is appended
@@ -129,6 +132,20 @@ def instruction_prompt_of(messages: list[Message]) -> str | None:
     return None
 
 
+def current_time_line(now: dt.datetime | None = None) -> str:
+    """Today's date, weekday and time in the business timezone, for every turn (ADR-127).
+
+    The model has no clock. Asked for "Saturday", it picked a date at random and named the wrong weekday
+    ("Saturday, 19 Oct 2026" was a Monday), so a customer could be offered or booked a day they did not mean.
+    """
+    zone = ZoneInfo(settings.booking_timezone)
+    local = (now or dt.datetime.now(tz=dt.UTC)).astimezone(zone)
+    return (
+        f"Current date and time: {local:%A, %d %B %Y, %H:%M} ({settings.booking_timezone}). "
+        "Use it for today, tomorrow and weekday names; never guess the date."
+    )
+
+
 def build_messages(
     *,
     system_prompt: str | None,
@@ -137,6 +154,7 @@ def build_messages(
     history: list[Message],
     user_message: str,
     window_messages: int,
+    now: dt.datetime | None = None,
 ) -> list[Message]:
     """Assemble the message list for a turn, trimming history to the recent window.
 
@@ -144,8 +162,10 @@ def build_messages(
     first (the summarized older turns live in ``memory_summary``).
     """
     messages: list[Message] = []
-    if system_prompt:
-        messages.append(Message(role="system", content=system_prompt))
+    # The date rides on the persona message (not a message of its own) so the retrieved-context message that
+    # follows it, and the leak check against `system_prompt`, are unaffected.
+    clock = current_time_line(now)
+    messages.append(Message(role="system", content=f"{system_prompt}\n\n{clock}" if system_prompt else clock))
     if context_block:
         messages.append(Message(role="system", content=context_block))
     if memory_summary:

@@ -18,6 +18,13 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-127: Every turn carries today's date, weekday and time in the business timezone
+- **Date:** 2026-10-18
+- **Status:** accepted
+- **Context:** The model has no clock. Asked for "Saturday 11 am" it picked a date at random and named the wrong weekday ("Saturday, 19 Oct 2026" was a Monday; "Saturday 20 Oct" a Tuesday), so a customer could be offered or booked a day they did not mean.
+- **Decision:** `assembly.build_messages` appends `Current date and time: Saturday, 17 October 2026, 11:30 (Asia/Kolkata). Use it for today, tomorrow and weekday names; never guess the date.` to the persona system message of every turn (channels and the dashboard/widget chat share it). The zone is `BOOKING_TIMEZONE` (default `Asia/Kolkata`). About 35 tokens per model call. The line is not part of `protected_prompt`, so the leak check and the retrieved-context message are unaffected.
+- **Consequences:** the model can resolve "Saturday", "tomorrow" and "next week". The booking tools still validate the slot (opening hours, Sunday closed), so a wrong day is refused rather than booked.
+
 ### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
 - **Date:** 2026-10-17
 - **Status:** accepted

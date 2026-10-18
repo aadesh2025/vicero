@@ -18,7 +18,7 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
-### ADR-130: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
+### ADR-131: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** Block labels, card text and form labels come from the model, often from the knowledge base,
@@ -33,7 +33,7 @@ Format each entry as below. Newest at the top.
   any label asking for passwords, card numbers, ID numbers or one-time codes.
 - **Consequences:** a leaky or withdrawn turn shows plain text only; at most two blocks per reply.
 
-### ADR-129: A block tap is an ordinary user message (with `block_reply` beside it)
+### ADR-130: A block tap is an ordinary user message (with `block_reply` beside it)
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** The agent runtime, guardrails, metering and rate limits are tuned for text turns.
@@ -46,7 +46,7 @@ Format each entry as below. Newest at the top.
   conversation and enabled only for agents that opted in.
 - **Alternatives considered:** a dedicated block-reply turn type (a second path around every guard).
 
-### ADR-128: Interactive blocks are an additive `block` SSE event, opt-in per agent
+### ADR-129: Interactive blocks are an additive `block` SSE event, opt-in per agent
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** docs/27 wants tappable UI without risking any current agent, embed or channel.
@@ -62,7 +62,7 @@ Format each entry as below. Newest at the top.
   agents (prompt text is guidance — every limit is also enforced in code; the no-context A/B of ADR-045 was not
   re-run because `DEFAULT_SYSTEM_PROMPT`, the templates and the identity lock are untouched).
 
-### ADR-127: Layouts are a separate `widgetLayout` field; presets live in the designer; no web fonts
+### ADR-128: Layouts are a separate `widgetLayout` field; presets live in the designer; no web fonts
 - **Date:** 2026-10-17
 - **Status:** accepted
 - **Context:** Ten new designs must ship without changing a single existing embed.
@@ -77,6 +77,13 @@ Format each entry as below. Newest at the top.
   (no status data exists) and Concierge hides its home screen once a conversation exists.
 - **Consequences:** the bundle grew from 12.4 KB to 27.1 KB gzip as shipped (unminified; see
   `packages/widget/README.md`). Rolling back is reverting the commits.
+### ADR-127: Every turn carries today's date, weekday and time in the business timezone
+- **Date:** 2026-10-18
+- **Status:** accepted
+- **Context:** The model has no clock. Asked for "Saturday 11 am" it picked a date at random and named the wrong weekday ("Saturday, 19 Oct 2026" was a Monday; "Saturday 20 Oct" a Tuesday), so a customer could be offered or booked a day they did not mean.
+- **Decision:** `assembly.build_messages` appends `Current date and time: Saturday, 17 October 2026, 11:30 (Asia/Kolkata). Use it for today, tomorrow and weekday names; never guess the date.` to the persona system message of every turn (channels and the dashboard/widget chat share it). The zone is `BOOKING_TIMEZONE` (default `Asia/Kolkata`). About 35 tokens per model call. The line is not part of `protected_prompt`, so the leak check and the retrieved-context message are unaffected.
+- **Consequences:** the model can resolve "Saturday", "tomorrow" and "next week". The booking tools still validate the slot (opening hours, Sunday closed), so a wrong day is refused rather than booked.
+
 ### ADR-126: A tool turn does not re-send the retrieved context on its follow-up model calls
 - **Date:** 2026-10-17
 - **Status:** accepted

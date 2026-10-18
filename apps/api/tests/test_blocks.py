@@ -610,3 +610,15 @@ async def test_a_forms_values_are_not_stored_a_second_time(
         )
     ).json()
     assert "someone@example.com" not in json.dumps([m["blocks"] for m in hist])
+
+
+def test_day_labels_come_from_the_date_not_from_the_model() -> None:
+    """Found in a live run: a model labelled 2026-10-23 as Monday (it is a Friday)."""
+    block = build_block(
+        "datetime",
+        {
+            "days": [{"date": "2026-10-23", "label": "Monday"}, {"date": "2026-10-26", "label": "Friday"}],
+            "slots": [{"time": "10:00 am"}],
+        },
+    )
+    assert [d["label"] for d in block["days"]] == ["Fri 23 Oct", "Mon 26 Oct"]

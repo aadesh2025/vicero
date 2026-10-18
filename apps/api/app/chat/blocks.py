@@ -244,10 +244,12 @@ def _datetime(p: dict[str, Any]) -> dict[str, Any]:
         if not _DATE.match(date):
             raise BlockError("each day needs a date like 2026-10-22")
         try:
-            dt.date.fromisoformat(date)
+            real = dt.date.fromisoformat(date)
         except ValueError:
             raise BlockError(f"'{date}' is not a real date") from None
-        day: dict[str, Any] = {"id": date, "label": _text(raw.get("label"), "label", 30, required=False) or date}
+        # The label is derived from the date, never taken from the model: a live run had a model call
+        # 2026-10-23 "Monday" when it is a Friday, and a wrong weekday on a booking picker reads as a bug.
+        day: dict[str, Any] = {"id": date, "label": f"{real:%a} {real.day} {real:%b}"}
         if raw.get("disabled") or raw.get("closed"):
             day["disabled"] = True
         days.append(day)

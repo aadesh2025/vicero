@@ -869,11 +869,22 @@
   // Send a tap as a normal user message (docs/27 §5): the agent reads `text`; `block_reply` only lets the
   // server mark the block answered so it reloads read-only.
   function answer(block, wrap, value, text, mark) {
-    if (state.sending) return false;
     lock(wrap);
     if (mark) mark();
-    sendMessage(text, { block_id: block.id, value: value });
-    return true;
+    var reply = { block_id: block.id, value: value };
+    if (!state.sending) {
+      sendMessage(text, reply);
+      return;
+    }
+    // The block event arrives just before the stream ends, so a fast tap can land while the previous turn
+    // is still closing. Wait for it (a few frames) instead of dropping the visitor's answer.
+    var tries = 0;
+    var t = setInterval(function () {
+      if (!state.sending || ++tries > 100) {
+        clearInterval(t);
+        if (!state.sending) sendMessage(text, reply);
+      }
+    }, 50);
   }
 
   function arrowNav(container, selector, horizontal) {
@@ -1068,7 +1079,7 @@
       var text = inputs
         .filter(function (r) { return values[r.f.id]; })
         .map(function (r) { return r.f.label + ": " + values[r.f.id]; })
-        .join("\n");
+        .join("; ");
       answer(block, wrap, values, text, function () {
         submit.textContent = "Sent";
         submit.classList.add("bf-ok");

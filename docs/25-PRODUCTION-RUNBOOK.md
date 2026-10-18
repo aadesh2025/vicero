@@ -67,6 +67,7 @@ ssh vicero "/opt/vicero/rollback.sh api=sha256:<old> web=sha256:<old>"
 | 2026-10-08 | Automations + private n8n (R2 security fix, commit-before-response, R3; `bb95b95`) | `sha256:5a038c43a4429fe856917a1926a950465171933e9a829487a102fc11e9c74530` / `sha256:7e443a96f47749c17079618f54efbac2948e7e6ec606ca15ed54a65d73de950a` (the migration `0031_automations` only adds tables: rollback = these images; restore a backup rather than downgrade) |
 | 2026-10-08 | ops clean-up: `deploy.sh` always pulls images (`pull --policy always`, merged PR via `fix/deploy-pull-always`), server on `0e3015a`; api `sha256:a8d8b6cf1fe2c0b2b2ce8052c7a6bb61f75d075ccd65195ba4ed778f616b5614`, web `sha256:3cd07465a0f928d82fa99a4277dc1c03e0c57de4ba15fc4188dc292d1d849de8` | `sha256:52571237a6dcb4413834060c347e901aea6681cb719cf51086fcf4235c8d82e5` / `sha256:5e0146b4c42f88b1d812407d25aeb839cdb394678e44f0745567e75362aa85eb` (no new migration; head stays `0031_automations`) |
 | 2026-10-09 | offline IP-to-country fallback for the display currency (PR #12, `ac3d754`); api `sha256:2e35b6156c2694336a3c2a628ffe0552cb7a71a2cbc3c0d443360b6dbb7b88cc`, web `sha256:2ba2e92740e9cff53a3d5505b12c29b59650bf791940068160b301372fce97ca` | `sha256:a8d8b6cf1fe2c0b2b2ce8052c7a6bb61f75d075ccd65195ba4ed778f616b5614` / `sha256:3cd07465a0f928d82fa99a4277dc1c03e0c57de4ba15fc4188dc292d1d849de8` (no migration; head stays `0031_automations`; the fallback is off until its database path is set) |
+| _pending_ | Widget layouts + interactive blocks (docs/27, ADR-127 to ADR-130): see section 17. Migration 0037. | `deploy.sh` prints the previous digests when it runs; copy them here. Images only (section 17, Rollback). |
 | 2026-10-09 | n8n editor gate password reset (`N8N_EDITOR_GATE_HASH` replaced, only the `caddy` container recreated; no image change, no migration) | n/a (no rollback needed; the previous hash was not kept) |
 
 The pin lasts until the next `deploy.sh`, which returns to the moving `:master` tag. **The database only
@@ -300,3 +301,35 @@ Rollback: deactivate the three `ORG-<id> | Booking | ...` workflows in n8n (or d
 **Watch the logs for** `media_fetch_failed`, `media_rejected`, `vision_failed`, `media_send_rejected`. `vision_described` carries the cost of each photo.
 
 **Live check (WhatsApp, Instagram, Messenger):** send a photo and see a sensible answer; ask for a product photo and see it arrive after the text; on WhatsApp, a photo after 24 hours is refused with the usual window message; an operator photo from the inbox arrives; the photo is gone from the inbox after 30 days ("Photo deleted after 30 days").
+
+
+## 17. Widget layouts and interactive blocks (docs/27, ADR-127 to ADR-130)
+
+**Release checklist (prepared, not run)**
+
+| What | Detail |
+|---|---|
+| Commits | `715203c` layouts, `a31613c` blocks, `059eaeb` esbuild minify, `fef8269` docs, plus the merge of `origin/master` and the follow-up fixes (see `git log`). Content is identical to branch `widget/docs27-on-master` (same work, cleaner history); push one or the other, not both. |
+| Migration | `0037_message_blocks`: adds nullable `messages.blocks` (JSONB). Additive, safe with the API running. Its `downgrade()` drops the column (verified up, down, up on a scratch database). `deploy.sh` runs it. |
+| Widget bundle | Rebuilt by `cd packages/widget && npm ci && npm run build` (esbuild minify, 67.5 KB, 19.0 KB gzip). The committed `apps/web/public/widget.js` is what the web image serves; nothing is built on the server. |
+| New env vars | None for docs/27. If docs/26 (images and catalog) and the token-diet PRs (#31, #33, #34) are not yet live, this deploy also ships them: do the section 16 checklist first (`MEDIA_URL_SIGNING_KEY`, vision key, media volume). |
+| Behaviour change for existing agents | None. Layouts and blocks are off until an owner picks a design or switches Interactive blocks on (Channels tab). A cached old `widget.js` keeps working (tested). |
+
+**Deploy (you run these; nothing here is automatic)**
+
+1. Push to `master` (a normal push). Wait for GitHub Actions **Release (build, push, smoke, deploy)** to go green, about 2 minutes.
+2. `ssh vicero /opt/vicero/status.sh` (read-only; confirm disk, backups and health first).
+3. `ssh vicero /opt/vicero/deploy.sh` and wait for `[deploy] PASS`. Copy the "previous images" digests it prints into the release log row above.
+4. Check the migration: `ssh vicero "docker exec vicero-prod-api-1 alembic current"` should print `0037_message_blocks (head)`.
+5. Check the site: open an existing embedded widget (looks and behaves as before), then Channels tab, pick a design, and watch the live preview.
+6. Optional block check on a test agent: switch **Interactive blocks** on, ask for options, a booking time and a contact form, and tap through.
+
+**Rollback**
+
+- Images only: `ssh vicero "/opt/vicero/rollback.sh api=sha256:<previous> web=sha256:<previous>"`. The old API ignores the extra column, so no database step is needed. The runbook rule stands: the database only moves forward.
+- Per agent, immediately and without a deploy: turn **Interactive blocks** off or set the design back to **Original** (a save is live).
+- Source: `git revert` the docs/27 commits on `master`. Only if you also want the column gone, after the images are rolled back: `alembic downgrade -1` (drops `messages.blocks`; blocks already stored are lost; plain-text replies keep their text because `content` carries the fallback text).
+
+**Watch** `blocks_discarded` (a turn whose blocks were withdrawn by the output guard), `block_rejected` (the model proposed an invalid block) and the widget `GET /v1/public/agents/*/conversations/*/messages` rate (60/min per visitor).
+
+**Known limits:** the model can invent booking days and times (it has no availability tool in this release; day labels are derived from the date, times are not checked); block text with phone numbers or emails the organisation has not published is withheld by the PII guard; blocks need a tool-calling model.

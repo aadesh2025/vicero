@@ -524,3 +524,4 @@ to RRF ordering, logged, never an error and never an empty result set.
 | `INBOUND_HOOK_RATE_PER_MINUTE` | `60` | Authenticated calls one inbound hook accepts per minute; past it the caller gets `429` (docs/28 T3) |
 | `INBOUND_HOOK_UNAUTH_RATE_PER_MINUTE` | `120` | Calls per minute from one IP to one hook before authentication, so strangers cannot use up the real sender's quota |
 | `INBOUND_HOOK_AGENT_TURN_TIMEOUT_S` | `25` | How long an `agent_turn` hook waits for the model before answering `504` |
+| `TOOL_MAX_CONCURRENCY_PER_ORG` | `5` | Outbound tool calls (API / MCP) one organization may have in flight at once per process; extra calls wait (docs/28 T4.6) |

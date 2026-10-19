@@ -28,6 +28,14 @@ class CreateToolRequest(BaseModel):
     enabled: bool = True
     config: dict[str, Any] = Field(default_factory=dict)
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    # Spoken to the visitor while the tool runs: {on_start, on_delay: {after_s, text}, on_error}. Plain text.
+    messages: dict[str, Any] | None = None
+    # A person must approve each call (a pending request appears in the Inbox) before it runs.
+    approval_required: bool = False
+    # {per_conversation, per_minute}: calls past the limit come back to the model as "rate_limited".
+    rate_limit: dict[str, int] | None = None
+    # `async` (API tools): return at once, run in the background, and tell the visitor when it finishes.
+    mode: str = Field(default="sync", pattern="^(sync|async)$")
 
 
 class UpdateToolRequest(BaseModel):
@@ -37,6 +45,11 @@ class UpdateToolRequest(BaseModel):
     enabled: bool | None = None
     config: dict[str, Any] | None = None
     input_schema: dict[str, Any] | None = None
+    # Send null to clear `messages` / `rate_limit`; leave out to keep them.
+    messages: dict[str, Any] | None = None
+    approval_required: bool | None = None
+    rate_limit: dict[str, int] | None = None
+    mode: str | None = Field(default=None, pattern="^(sync|async)$")
 
 
 class ToolOut(BaseModel):
@@ -50,6 +63,10 @@ class ToolOut(BaseModel):
     config: dict[str, Any]
     input_schema: dict[str, Any]
     created_at: dt.datetime
+    messages: dict[str, Any] | None = None
+    approval_required: bool = False
+    rate_limit: dict[str, int] | None = None
+    mode: str = "sync"
 
 
 class TestToolRequest(BaseModel):
@@ -186,6 +203,9 @@ class MCPRefreshResponse(BaseModel):
 
 class MCPToolOverride(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
+    messages: dict[str, Any] | None = None
+    approval_required: bool | None = None
+    rate_limit: dict[str, int] | None = None
 
 
 class MCPBindingIn(BaseModel):

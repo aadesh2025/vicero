@@ -6,7 +6,7 @@ import datetime as dt
 import uuid
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -48,6 +48,10 @@ class Conversation(Base, UUIDPrimaryKey, TimestampMixin):
     title: Mapped[str | None] = mapped_column(String(512))
     meta: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     memory_summary: Mapped[str | None] = mapped_column(Text)
+    # Variables tools and hooks collect during the conversation (docs/28 T4.1, ADR-135): {name: value}.
+    variables: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
+    )
     last_message_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     # Inbound only — `last_message_at` moves on our own outbound too, which would make a
     # bot reply look like customer activity and silently reopen WhatsApp's 24-hour

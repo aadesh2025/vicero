@@ -136,6 +136,7 @@ PROBES: list[tuple[str, str, dict | None]] = [
     ("POST", "/v1/inbound-hooks/{hook}/rotate-secret", None),
     ("GET", "/v1/inbound-hooks/{hook}/events", None),
     ("GET", "/v1/agents/{agent}/inbound-hooks", None),
+    ("GET", "/v1/inbox/tool-approvals", None),
     ("GET", "/v1/connections/{connection}", None),
     ("PATCH", "/v1/connections/{connection}", {"name": "pwned"}),
     ("POST", "/v1/connections/{connection}/test", None),

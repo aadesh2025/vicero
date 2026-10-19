@@ -2,38 +2,54 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import re
 import time
 import uuid
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import automations as automation_rules
 from app.billing import usage
 from app.chat import blocks as chat_blocks
+from app.chat import convvars
 from app.core import rbac
 from app.core.audit import write_audit
 from app.core.catalog import catalog_enabled
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.core.ratelimit import limiter
 from app.integrations.n8n_client import N8nClient, get_client, valid_callback_token
 from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
-from app.models import Agent, AgentToolBinding, AgentVersion, Connection, MCPServer, Organization, Tool, ToolRun
+from app.models import (
+    Agent,
+    AgentToolBinding,
+    AgentVersion,
+    Connection,
+    Conversation,
+    MCPServer,
+    Organization,
+    Tool,
+    ToolRun,
+)
 from app.modules.orgs.deps import OrgContext
 from app.tools import api_tool, block_tools, schemas
+from app.tools import policy as tool_policy
 from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS, CATALOG_TOOLS
 from app.tools.compact import compact_description, compact_schema
+from app.tools.concurrency import org_slot
 from app.tools.connections import load_connection
 from app.tools.limits import MAX_TOOLS_PER_AGENT, is_managed_mcp
-from app.tools.mcp_tool import execute_mcp_tool
+from app.tools.mcp_tool import prepare_mcp_call, run_prepared_mcp
 from app.tools.n8n_tool import execute_n8n_tool, n8n_args_schema, relax_n8n_schema
 
 log = get_logger("tools")
@@ -60,6 +76,10 @@ def _tool_out(tool: Tool) -> schemas.ToolOut:
         config=tool.config,
         input_schema=tool.input_schema,
         created_at=tool.created_at,
+        messages=tool.messages,
+        approval_required=tool.approval_required,
+        rate_limit=tool.rate_limit,
+        mode=tool.mode,
     )
 
 
@@ -108,10 +128,15 @@ async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.Crea
 
     if data.connection_id is not None and data.type != "api":
         raise AppError("tools.connection_not_applicable", "Only API tools use a connection.", 400)
+    _require_mode(data.type, data.mode)
     tool = Tool(
         organization_id=ctx.org.id,
         agent_id=data.agent_id,
         connection_id=data.connection_id,
+        messages=tool_policy.clean_messages(data.messages),
+        approval_required=data.approval_required,
+        rate_limit=tool_policy.clean_rate_limit(data.rate_limit),
+        mode=data.mode,
         name=data.name,
         type=data.type,
         description=description,
@@ -126,6 +151,12 @@ async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.Crea
 
 
 _TOOL_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+
+
+def _require_mode(tool_type: str, mode: str) -> None:
+    """Background execution is for HTTP-style tools. (An n8n tool has its own sync/async switch in its config.)"""
+    if mode == "async" and tool_type not in ("api", "http"):
+        raise AppError("tools.async_unsupported", "Only API tools can run in the background.", 400)
 
 
 def _require_tool_name(name: str) -> None:
@@ -159,6 +190,9 @@ async def _check_api_config(
     pick = (config.get("response") or {}).get("pick")
     if pick is not None and (problem := api_tool.validate_selectors(pick)):
         raise AppError("tools.bad_response_pick", problem, 400)
+    capture = config.get("capture")
+    if capture is not None and (problem := api_tool.validate_capture(capture)):
+        raise AppError("tools.bad_capture", problem, 400)
     body_type = config.get("body_type")
     if body_type is not None and body_type not in ("json", "form", "raw"):
         raise AppError("tools.bad_body_type", "body_type must be json, form or raw.", 400)
@@ -221,6 +255,15 @@ async def update_tool(
                 tool.config = data.config
     if data.input_schema is not None and tool.type != "builtin":
         tool.input_schema = data.input_schema
+    if "messages" in data.model_fields_set:
+        tool.messages = tool_policy.clean_messages(data.messages)
+    if "rate_limit" in data.model_fields_set:
+        tool.rate_limit = tool_policy.clean_rate_limit(data.rate_limit)
+    if data.approval_required is not None:
+        tool.approval_required = data.approval_required
+    if data.mode is not None:
+        _require_mode(tool.type, data.mode)
+        tool.mode = data.mode
     return _tool_out(tool)
 
 
@@ -231,19 +274,26 @@ async def delete_tool(session: AsyncSession, ctx: OrgContext, tool_id: uuid.UUID
 
 
 # ── Resolution + execution ─────────────────────────────────────────────────────────
-async def resolve_agent_tools(
-    session: AsyncSession, org_id: uuid.UUID, agent_id: uuid.UUID, *, include_mcp: bool = False
-) -> tuple[list[ToolSpec], dict[str, Tool]]:
-    """Return (ToolSpecs, name→Tool) for the agent's enabled tools.
+@dataclass(slots=True)
+class ToolSet:
+    """What an agent may use this turn: what the model is told, how to find each tool, and how each one behaves."""
 
-    `include_mcp` is off by default (docs/17 Phase 1): even an org that has registered MCP
-    servers and bound `Tool` rows to them never has those rows attached to a turn unless the
-    agentic runtime is on for that org (see `app.chat.budget.agentic_loop_enabled`) — the same
-    "registration doesn't imply usage" split n8n binding already has, just gated on a
-    different flag. Registration/CRUD is unaffected either way.
+    specs: list[ToolSpec]
+    by_name: dict[str, Tool]
+    policies: dict[str, tool_policy.ToolPolicy]
+
+
+async def resolve_agent_toolset(
+    session: AsyncSession, org_id: uuid.UUID, agent_id: uuid.UUID, *, include_mcp: bool = False
+) -> ToolSet:
+    """The agent's enabled tools in the owner's order, with each one's effective policy.
+
+    `include_mcp` is off by default (docs/17 Phase 1): an older, hand-made MCP tool row never reaches a turn unless
+    the agentic runtime is on for the org (`app.chat.budget.agentic_loop_enabled`). Rows an agent's MCP binding
+    created (docs/28 T2) are always offered.
     """
-    # Which tools an agent may use is whatever is bound to it (docs/28 T1.5), in the owner's order. A tool
-    # created for an agent is bound to it on insert, so this is the same set the old `Tool.agent_id` filter gave.
+    # Which tools an agent may use is whatever is bound to it (docs/28 T1.5). A tool created for an agent is bound to
+    # it on insert, so this is the same set the old `Tool.agent_id` filter gave.
     stmt = (
         select(Tool, AgentToolBinding)
         .join(AgentToolBinding, AgentToolBinding.tool_id == Tool.id)
@@ -257,28 +307,37 @@ async def resolve_agent_tools(
         .order_by(AgentToolBinding.position, Tool.created_at, Tool.id)
     )
     if not include_mcp:
-        # Rows an agent's MCP binding created are always offered; the older hand-made ones stay behind the flag.
         stmt = stmt.where(or_(Tool.type != "mcp", Tool.config["managed"].as_boolean().is_(True)))
     rows = list((await session.execute(stmt)).all())
     rows = await _drop_unusable_mcp(session, org_id, rows)
-    tools = [t for t, _b in rows]
-    overrides = {t.name: (b.overrides or {}) for t, b in rows}
-    specs = [
-        ToolSpec(
-            name=t.name,
-            description=compact_description(overrides[t.name].get("description") or t.description),
-            # n8n schemas are repaired on read so tools bound before the fix stop
-            # breaking turns without needing a data migration.
-            parameters=compact_schema(
-                relax_n8n_schema(t.input_schema) if t.type == "n8n" else (t.input_schema or {})
-            ),
-        )
-        for t in tools
-    ]
+    specs: list[ToolSpec] = []
     by_name: dict[str, Tool] = {}
-    for t in tools:
-        by_name.setdefault(t.name, t)  # the first of two same-named tools wins, as the model sees only one
-    return specs, by_name
+    policies: dict[str, tool_policy.ToolPolicy] = {}
+    for t, binding in rows:
+        if t.name in by_name:  # the first of two same-named tools wins, as the model sees only one
+            continue
+        overrides = binding.overrides or {}
+        by_name[t.name] = t
+        policies[t.name] = tool_policy.effective_policy(t, overrides)
+        specs.append(
+            ToolSpec(
+                name=t.name,
+                description=compact_description(overrides.get("description") or t.description),
+                # n8n schemas are repaired on read so tools bound before the fix stop breaking turns.
+                parameters=compact_schema(
+                    relax_n8n_schema(t.input_schema) if t.type == "n8n" else (t.input_schema or {})
+                ),
+            )
+        )
+    return ToolSet(specs, by_name, policies)
+
+
+async def resolve_agent_tools(
+    session: AsyncSession, org_id: uuid.UUID, agent_id: uuid.UUID, *, include_mcp: bool = False
+) -> tuple[list[ToolSpec], dict[str, Tool]]:
+    """Return (ToolSpecs, name->Tool) for the agent's enabled tools. See `resolve_agent_toolset`."""
+    ts = await resolve_agent_toolset(session, org_id, agent_id, include_mcp=include_mcp)
+    return ts.specs, ts.by_name
 
 
 async def _drop_unusable_mcp(
@@ -309,6 +368,20 @@ async def _drop_unusable_mcp(
     ]
 
 
+class _NoLock:
+    """Stands in for the database lock when a caller runs one call at a time."""
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+
+_NO_LOCK = _NoLock()
+DbLock = asyncio.Lock | _NoLock
+
+
 async def build_tooling(
     session: AsyncSession,
     org_id: uuid.UUID,
@@ -325,27 +398,35 @@ async def build_tooling(
 
     Takes `org_id` (not an OrgContext) so the public/widget chat can reuse it. `executor(call)`
     runs the tool and returns a plain dict {output, status, error} (the runtime stays decoupled
-    from the tools package). `include_mcp` — see `resolve_agent_tools`.
+    from the tools package). `include_mcp` - see `resolve_agent_toolset`.
+
+    `executor.tool_messages` maps a tool name to what the visitor is told while it runs (docs/28 T4.2); the runtime
+    reads it. Several calls from one model step run together, so everything that touches the database session takes
+    one lock; the network part of an API / MCP call runs outside it.
 
     `outbound_media` is the list a channel reply collects product photos in; only channels that can
-    send images pass it, so only they are offered `send_product_images` (docs/26 §M4).
+    send images pass it, so only they are offered `send_product_images` (docs/26 section M4).
 
     `blocks` + `block_flags` (docs/27 Phase 2): the widget passes the list its turn collects interactive blocks
     in and the agent's `interactiveBlocks` settings. Both default to None, which is exactly today's behaviour:
     no block tool is registered and nothing about the request changes.
     """
     features = version.features or {}
+    if features.get("tool_choice") == "none":
+        return [], None  # the agent was set to never use tools
     specs: list[ToolSpec] = []
     by_name: dict[str, Tool] = {}
+    policies: dict[str, tool_policy.ToolPolicy] = {}
     if features.get("tools_enabled"):
         # Runtime entitlement check, independent of the CRUD gates above: an agent that somehow has
         # tools attached (created before a downgrade, imported, or by a bug) must still not run
-        # them on a plan that excludes tool calling (docs/18 §9).
+        # them on a plan that excludes tool calling (docs/18 section 9).
         org = await session.get(Organization, org_id)
         if org is not None and not usage.feature_allowed(org, "tool_calling"):
             log.info("tooling_skipped_plan", org_id=str(org_id), agent_id=str(agent.id))
         else:
-            specs, by_name = await resolve_agent_tools(session, org_id, agent.id, include_mcp=include_mcp)
+            ts = await resolve_agent_toolset(session, org_id, agent.id, include_mcp=include_mcp)
+            specs, by_name, policies = ts.specs, ts.by_name, ts.policies
             if org is not None and not usage.feature_allowed(org, "n8n"):
                 by_name = {k: t for k, t in by_name.items() if t.type != "n8n"}
                 specs = [sp for sp in specs if sp.name in by_name]
@@ -387,69 +468,102 @@ async def build_tooling(
         blocks=blocks if block_names else None,
         bound_tool_ids=frozenset(t.id for t in by_name.values()),
     )
+    lock = asyncio.Lock()
 
     async def executor(call: ToolCall) -> dict[str, Any]:
         if call.name in block_names:
-            block_res = await block_tools.run_block_tool(tool_ctx, call.name, call.arguments)
+            async with lock:
+                block_res = await block_tools.run_block_tool(tool_ctx, call.name, call.arguments)
             return {"output": block_res.output, "status": block_res.status, "error": block_res.error}
         if call.name in catalog_names:
-            catalog_res = await CATALOG_TOOLS[call.name].run(tool_ctx, call.arguments)
+            async with lock:
+                catalog_res = await CATALOG_TOOLS[call.name].run(tool_ctx, call.arguments)
             return {"output": catalog_res.output, "status": catalog_res.status, "error": catalog_res.error}
-        res = await execute_tool_call(session, tool_ctx, by_name, call)
+        res = await execute_tool_call(
+            session, tool_ctx, by_name, call, policy=policies.get(call.name), db_lock=lock
+        )
         return {"output": res.output, "status": res.status, "error": res.error}
 
+    executor.tool_messages = {  # type: ignore[attr-defined]
+        name: p.messages for name, p in policies.items() if p.messages and name in by_name
+    }
     return specs, executor
 
 
-async def _dispatch(tool: Tool, ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+async def _dispatch(tool: Tool, ctx: ToolContext, args: dict[str, Any], lock: DbLock | None = None) -> ToolResult:
+    """Run one tool. Database work holds `lock`; the network part of an API / MCP call does not, so concurrent
+    calls overlap where it matters."""
+    held = lock or _NO_LOCK
     if tool.type == "builtin":
         builtin = BUILTINS.get(tool.name)
         if builtin is None:
             return ToolResult(output={}, status="error", error=f"unknown built-in '{tool.name}'")
-        return await builtin.run(ctx, args)
+        async with held:
+            return await builtin.run(ctx, args)
     if tool.type in ("api", "http"):
-        connection = None
-        if tool.connection_id is not None:
-            connection = await load_connection(ctx.session, tool.organization_id, tool.connection_id)
-            if connection is None:
-                return ToolResult(output={}, status="error", error="this tool's connection no longer exists")
-        return await api_tool.execute_api_tool(
-            tool.config,
-            args,
-            connection=connection,
-            input_schema=tool.input_schema if tool.type == "api" else None,
-            legacy=tool.type == "http",
-        )
+        async with held:
+            connection = None
+            if tool.connection_id is not None:
+                connection = await load_connection(ctx.session, tool.organization_id, tool.connection_id)
+                if connection is None:
+                    return ToolResult(output={}, status="error", error="this tool's connection no longer exists")
+            variables: dict[str, Any] = {}
+            if ctx.conversation_id is not None:
+                conv = await ctx.session.get(Conversation, ctx.conversation_id)
+                variables = dict(conv.variables or {}) if conv is not None else {}
+        async with org_slot(tool.organization_id):
+            return await api_tool.execute_api_tool(
+                tool.config,
+                args,
+                connection=connection,
+                input_schema=tool.input_schema if tool.type == "api" else None,
+                variables=variables,
+                legacy=tool.type == "http",
+            )
     if tool.type == "n8n":
-        return await execute_n8n_tool(tool.config, args, ctx)
+        async with held:
+            return await execute_n8n_tool(tool.config, args, ctx)
     if tool.type == "mcp":
-        if is_managed_mcp(tool):
-            org = await ctx.session.get(Organization, tool.organization_id)
-            if org is not None and not usage.mcp_allowed(org):
-                return ToolResult(output={}, status="error", error="MCP is not included in this plan")
-            problems = api_tool.validate_args(tool.input_schema, args)
-            if problems:
-                return ToolResult(
-                    output={"error": "invalid_arguments", "details": problems},
-                    status="error",
-                    error="invalid arguments: " + "; ".join(problems),
-                )
-        return await execute_mcp_tool(ctx.session, ctx.org_id, tool.config, args)
+        async with held:
+            if is_managed_mcp(tool):
+                org = await ctx.session.get(Organization, tool.organization_id)
+                if org is not None and not usage.mcp_allowed(org):
+                    return ToolResult(output={}, status="error", error="MCP is not included in this plan")
+                problems = api_tool.validate_args(tool.input_schema, args)
+                if problems:
+                    return ToolResult(
+                        output={"error": "invalid_arguments", "details": problems},
+                        status="error",
+                        error="invalid arguments: " + "; ".join(problems),
+                    )
+            prepared = await prepare_mcp_call(ctx.session, ctx.org_id, tool.config)
+        if isinstance(prepared, ToolResult):
+            return prepared
+        async with org_slot(ctx.org_id):
+            return await run_prepared_mcp(prepared, args)
     return ToolResult(output={}, status="error", error=f"unsupported tool type '{tool.type}'")
 
 
-async def execute_tool_call(
-    session: AsyncSession,
-    ctx: ToolContext,
-    tools_by_name: dict[str, Tool],
-    call: ToolCall,
-) -> ToolResult:
-    """Execute a model-requested tool call, logging a ToolRun. Never raises.
+def new_run(
+    session: AsyncSession, ctx: ToolContext, tool: Tool, args: dict[str, Any], status: str = "pending"
+) -> ToolRun:
+    run = ToolRun(
+        organization_id=tool.organization_id,
+        tool_id=tool.id,
+        conversation_id=ctx.conversation_id,
+        agent_id=ctx.agent_id,
+        provider=_provider_of(tool),
+        input=args,
+        status=status,
+    )
+    session.add(run)
+    return run
 
-    The ToolRun is created (status ``pending``) *before* dispatch so async tools (n8n) can pass
-    its id as a callback token; it's finalized afterwards (async tools stay ``pending`` until the
-    callback resolves them).
-    """
+
+async def _admit(
+    session: AsyncSession, ctx: ToolContext, tools_by_name: dict[str, Tool], call: ToolCall
+) -> Tool | ToolResult:
+    """Is this call allowed to be attempted at all? The tool, or the refusal to hand back."""
     tool = tools_by_name.get(call.name)
     if tool is None:
         return ToolResult(output={}, status="error", error=f"tool '{call.name}' is not available")
@@ -478,39 +592,71 @@ async def execute_tool_call(
     if tool.type == "n8n" and await _webhook_bound_to_other_org(session, tool.organization_id, tool.config):
         log.warning("n8n_webhook_cross_org", tool_id=str(tool.id), org=str(tool.organization_id))
         return ToolResult(output={}, status="error", error="This automation is not available.")
+    return tool
 
-    run = ToolRun(
-        organization_id=tool.organization_id,
-        tool_id=tool.id,
-        conversation_id=ctx.conversation_id,
-        agent_id=ctx.agent_id,
-        provider=_provider_of(tool),
-        input=call.arguments,
-        status="pending",
-    )
-    session.add(run)
-    await session.flush()
-    ctx.run_id = run.id
-    if tool.type == "n8n":
-        # n8n calls Vicero back while this call is still in flight (`/internal/tools/*`, the async callback) from
-        # its own connection, and a row that is only flushed is invisible to it: every such call got
-        # `bookings.bad_run` (401) until the turn committed. So make the run, and the conversation and message
-        # it hangs off, durable BEFORE the webhook goes out. (A separate session cannot do this: the run's
-        # foreign key to the conversation needs that row committed first.)
-        await session.commit()
 
-    t0 = time.perf_counter()
-    try:
-        result = await _dispatch(tool, ctx, call.arguments)
-    except Exception as exc:  # a tool must never crash the turn
-        result = ToolResult(output={}, status="error", error=str(exc))
-        log.warning("tool_execute_error", tool=call.name, error=str(exc))
-    run.latency_ms = int((time.perf_counter() - t0) * 1000)
+async def _rate_limited(
+    session: AsyncSession, ctx: ToolContext, tool: Tool, policy: tool_policy.ToolPolicy
+) -> ToolResult | None:
+    """The tool's per-minute and per-conversation limits (docs/28 T4.6). The model is told, so it can say so."""
+    rl = policy.rate_limit
+    if not rl:
+        return None
+    if rl.get("per_conversation") and ctx.conversation_id is not None:
+        used = int(
+            (
+                await session.execute(
+                    select(func.count())
+                    .select_from(ToolRun)
+                    .where(
+                        ToolRun.tool_id == tool.id,
+                        ToolRun.conversation_id == ctx.conversation_id,
+                        ToolRun.error.is_distinct_from("rate_limited"),
+                    )
+                )
+            ).scalar_one()
+        )
+        if used >= rl["per_conversation"]:
+            return _limited("per_conversation")
+    if rl.get("per_minute"):
+        allowed, retry = await limiter.hit(f"toolrl:{tool.organization_id}:{tool.id}", rl["per_minute"], 60)
+        if not allowed:
+            return _limited("per_minute", retry)
+    return None
+
+
+def _limited(which: str, retry_after: int | None = None) -> ToolResult:
+    out: dict[str, Any] = {
+        "error": "rate_limited",
+        "limit": which,
+        "message": "This action has been used too often. Do not try again now; tell the customer to try later.",
+    }
+    if retry_after:
+        out["retry_after_s"] = retry_after
+    return ToolResult(output=out, status="error", error="rate_limited")
+
+
+async def finalize_run(
+    session: AsyncSession,
+    ctx: ToolContext,
+    tool: Tool,
+    run: ToolRun,
+    result: ToolResult,
+    args: dict[str, Any],
+    latency_ms: int,
+) -> None:
+    """Write the outcome onto the run, store captured variables, and announce it."""
+    run.latency_ms = latency_ms
     run.output = result.output
-    run.status = result.status
+    run.status = result.deferred or result.status
     run.error = result.error
     run.attempt = result.attempt
     run.request_sanitized = result.request
+    if result.captured and run.conversation_id is not None:
+        try:
+            await convvars.apply(session, run.conversation_id, result.captured, source=f"tool:{tool.name}")
+        except convvars.VariableError as exc:
+            log.warning("tool_capture_rejected", tool=tool.name, error=str(exc))
     from app.webhooks.dispatch import emit_event
     from app.webhooks.events import emit_tool_called
 
@@ -518,7 +664,7 @@ async def execute_tool_call(
         session,
         tool.organization_id,
         "tool.run",
-        {"tool": tool.name, "status": result.status, "run_id": str(run.id)},
+        {"tool": tool.name, "status": run.status, "run_id": str(run.id)},
         agent_id=ctx.agent_id,
     )
     await emit_tool_called(
@@ -527,12 +673,75 @@ async def execute_tool_call(
         agent_id=ctx.agent_id,
         tool_name=tool.name,
         provider=_provider_of(tool),
-        status=result.status,
+        status=run.status,
         latency_ms=run.latency_ms,
-        args=call.arguments,
+        args=args,
         run_id=run.id,
         conversation_id=ctx.conversation_id,
     )
+
+
+async def execute_tool_call(
+    session: AsyncSession,
+    ctx: ToolContext,
+    tools_by_name: dict[str, Tool],
+    call: ToolCall,
+    *,
+    policy: tool_policy.ToolPolicy | None = None,
+    db_lock: DbLock | None = None,
+    approved: bool = False,
+    run: ToolRun | None = None,
+) -> ToolResult:
+    """Execute a model-requested tool call, logging a ToolRun. Never raises.
+
+    The ToolRun is created (status ``pending``) *before* dispatch so async tools (n8n) can pass
+    its id as a callback token; it's finalized afterwards (async tools stay ``pending`` until the
+    callback resolves them).
+
+    `policy` is the agent's effective policy for this tool (rate limit, approval, background mode); without one the
+    tool's own settings apply. `approved` and `run` are for resuming a call a person has approved or a background
+    task is finishing: the run row already exists and the approval gate has been passed.
+    """
+    lock = db_lock or _NO_LOCK
+    async with lock:
+        admitted = await _admit(session, ctx, tools_by_name, call)
+    if isinstance(admitted, ToolResult):
+        return admitted
+    tool = admitted
+    policy = policy or tool_policy.effective_policy(tool)
+    from app.tools import deferred
+
+    async with lock:
+        if run is None:
+            limited = await _rate_limited(session, ctx, tool, policy)
+            if limited is not None:
+                refused = new_run(session, ctx, tool, call.arguments, status="error")
+                refused.error, refused.output = "rate_limited", limited.output
+                await session.flush()
+                return limited
+            if policy.approval_required and not approved:
+                return await deferred.request_approval(session, ctx, tool, call)
+            if policy.mode == "async" and tool.type in ("api", "http"):
+                return await deferred.start_async(session, ctx, tool, call)
+            run = new_run(session, ctx, tool, call.arguments)
+            await session.flush()
+        ctx.run_id = run.id
+        if tool.type == "n8n":
+            # n8n calls Vicero back while this call is still in flight (`/internal/tools/*`, the async callback) from
+            # its own connection, and a row that is only flushed is invisible to it: every such call got
+            # `bookings.bad_run` (401) until the turn committed. So make the run, and the conversation and message
+            # it hangs off, durable BEFORE the webhook goes out. (A separate session cannot do this: the run's
+            # foreign key to the conversation needs that row committed first.)
+            await session.commit()
+
+    t0 = time.perf_counter()
+    try:
+        result = await _dispatch(tool, ctx, call.arguments, lock)
+    except Exception as exc:  # a tool must never crash the turn
+        result = ToolResult(output={}, status="error", error=str(exc))
+        log.warning("tool_execute_error", tool=call.name, error=str(exc))
+    async with lock:
+        await finalize_run(session, ctx, tool, run, result, call.arguments, int((time.perf_counter() - t0) * 1000))
     return result
 
 
@@ -807,6 +1016,13 @@ async def resolve_n8n_callback(session: AsyncSession, data: schemas.N8nCallbackR
     run.output = data.output
     run.status = data.status
     run.error = data.error
+    if run.conversation_id is not None:
+        # The late result is re-injected: the agent tells the customer how it went (docs/28 T4.3). Committed first
+        # because the follow-up reads the outcome from its own connection.
+        from app.tools import deferred
+
+        await session.commit()
+        deferred.enqueue_followup(run.id)
     return True
 
 
@@ -882,12 +1098,7 @@ async def set_agent_tools(
             "MCP tools are chosen per server with PUT /v1/agents/{id}/mcp-servers, not here.",
             400,
         )
-    for b in data.tools:
-        extra = set(b.overrides) - {"description"}
-        if extra:
-            raise AppError("tools.bad_override", f"Unsupported override(s): {', '.join(sorted(extra))}.", 400)
-        if "description" in b.overrides and not isinstance(b.overrides["description"], str):
-            raise AppError("tools.bad_override", "The description override must be text.", 400)
+    cleaned = {b.tool_id: tool_policy.clean_overrides(b.overrides) for b in data.tools}
 
     existing = {
         b.tool_id: b
@@ -913,12 +1124,12 @@ async def set_agent_tools(
                     agent_id=agent_id,
                     tool_id=b.tool_id,
                     enabled=b.enabled,
-                    overrides=b.overrides,
+                    overrides=cleaned[b.tool_id],
                     position=position,
                 )
             )
         else:
-            row.enabled, row.overrides, row.position = b.enabled, b.overrides, position
+            row.enabled, row.overrides, row.position = b.enabled, cleaned[b.tool_id], position
     await session.flush()
     await write_audit(
         session, ctx.org.id, ctx.user.id, "agent.tools_set",

@@ -295,6 +295,9 @@ class Settings(BaseSettings):
     # --- Tools (Phase 9) ---
     # Max tool-call iterations per turn before the runtime forces a final answer.
     tool_max_iterations: int = 4
+    # Outbound tool calls (API / MCP) one organization may have in flight at once in this process, so one tenant
+    # cannot occupy the small VPS (docs/28 section 9). Calls past the cap wait their turn.
+    tool_max_concurrency_per_org: int = 5
     # Per-tool execution timeout (seconds) for HTTP / built-in tools.
     tool_timeout_seconds: float = 15.0
 

@@ -38,6 +38,11 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 Phase T4: tool behaviour (2026-10-19, ADR-135, migration 0041).** Conversation variables
+  (`set_variable`/`get_variable`/`collect_field`, API `capture`, `{{vars.x}}`), spoken tool messages (widget + channels),
+  approval through the Inbox, background tools with an agent follow-up (also for late n8n results), per-tool rate limits,
+  `tool_choice`, parallel calls with a per-org concurrency cap, `end_conversation`. Visitors no longer receive raw
+  `tool_call`/`tool_result` stream events. New env: `TOOL_MAX_CONCURRENCY_PER_ORG`.
 - **docs/28 Phase T3: per-agent webhooks and inbound hooks (2026-10-19, ADR-134, migration 0040).** Agent-scoped outbound
   endpoints, `tool.called` / `conversation.ended` / `lead.captured` events, delivery on the egress guard, and
   `/v1/hooks/in/{public_id}` with signed/bearer auth, replay + idempotency protection, rate limits, a 30-day event log

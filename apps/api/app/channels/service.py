@@ -397,6 +397,15 @@ async def process_inbound_full(
         contact = await resolve_contact(session, channel, adapter, msg.external_user_id, msg.profile)
         conv = await _get_or_create_conversation(session, channel, msg.external_user_id, contact)
     turn = await _build_turn(session, channel, adapter, agent, version, conv, contact, msg)
+
+    async def say(text: str) -> None:
+        """What the agent says while a tool runs goes out as its own message; a failure here is never the turn's."""
+        try:
+            await adapter.send(channel, msg.external_user_id, text)
+        except Exception as exc:
+            log.warning("tool_message_delivery_failed", channel_type=channel.type, error=str(exc)[:120])
+
+    turn.tool_message_sink = say
     await turn.run()
     reply = None if turn.handed_off else ((turn.result.content or "").strip() or None)
     media = [] if turn.handed_off else list(turn.result.outbound_media)

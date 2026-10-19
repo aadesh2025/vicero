@@ -135,6 +135,8 @@ async def public_chat_ws(websocket: WebSocket, public_key: str) -> None:
                     await websocket.send_json({"type": "error", "error": exc.code})
                     continue
                 async for ev in service.public_chat_events(session, resolved, data):
+                    if ev.type in ("tool_call", "tool_result"):
+                        continue  # raw tool traffic stays out of the visitor's stream (see public_chat_sse)
                     await websocket.send_text(ev.model_dump_json())
                 await session.commit()
         except WebSocketDisconnect:

@@ -42,3 +42,8 @@ class ToolResult:
     # docs/28 §6: which try this was, and the request as sent (sanitized - never carries a secret).
     attempt: int = 1
     request: dict[str, Any] | None = None
+    # Variables to store on the conversation (an API tool's `capture` mapping), already read out of the response.
+    captured: dict[str, Any] | None = None
+    # Set when the call did not finish inside this turn: "pending_approval" (waiting for a person) or "pending"
+    # (an async tool started). The run row takes this as its status instead of `status`.
+    deferred: str | None = None

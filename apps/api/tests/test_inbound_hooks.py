@@ -15,7 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.models import AuditLog, Contact, InboundHook, InboundHookEvent, Message, Organization, WorkflowRun
+from app.models import (
+    AuditLog,
+    Contact,
+    Conversation,
+    InboundHook,
+    InboundHookEvent,
+    Message,
+    Organization,
+    WorkflowRun,
+)
 from app.modules.inbound_hooks import actions
 from app.modules.inbound_hooks.service import MAX_BODY_BYTES, purge_old_events, sign_for_test
 from app.modules.inbox import service as inbox_service
@@ -347,18 +356,33 @@ async def test_idempotency_key_dedupes_for_a_day(client: AsyncClient, db_session
 
 
 # ── Actions ──────────────────────────────────────────────────────────────────────
-async def test_set_variables_writes_only_the_mapped_fields_to_the_contact(
+async def test_set_variables_writes_only_the_mapped_fields_to_the_conversation(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     headers = await _org(client, "hk15@example.com")
     aid, key = await _agent(client, headers)
-    await _visitor(client, key)
+    cid = await _visitor(client, key)
     hook = await _hook(client, headers, aid)
     payload = {**PAYLOAD, "order": {**PAYLOAD["order"], "card_number": "4111"}, "extra": "ignored"}
     r = await _call(client, hook, payload)
-    assert r.status_code == 200 and r.json()["set"] == ["order_id", "status"]
+    assert r.status_code == 200 and r.json()["set"] == ["order_id", "status"] and r.json()["conversation_id"] == cid
+    conv = await db_session.get(Conversation, uuid.UUID(cid))
+    assert conv is not None and conv.variables == {"order_id": "A-1", "status": "shipped"}  # nothing unmapped got in
+
+
+async def test_set_variables_with_no_conversation_yet_waits_on_the_contact(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    headers = await _org(client, "hk15b@example.com")
+    aid, _ = await _agent(client, headers)
+    org_id = uuid.UUID(headers["X-Org-Id"])
+    db_session.add(Contact(organization_id=org_id, channel="widget", external_id="+919999900001", extra={}))
+    await db_session.flush()
+    hook = await _hook(client, headers, aid)
+    r = await _call(client, hook, PAYLOAD)
+    assert r.status_code == 200 and r.json()["stored_on"] == "contact"
     contact = (await db_session.execute(select(Contact).where(Contact.external_id == "+919999900001"))).scalar_one()
-    assert contact.extra["variables"] == {"order_id": "A-1", "status": "shipped"}  # nothing unmapped got in
+    assert contact.extra["variables"] == {"order_id": "A-1", "status": "shipped"}
 
 
 async def test_set_variables_for_an_unknown_contact_is_a_404_and_is_logged(client: AsyncClient) -> None:

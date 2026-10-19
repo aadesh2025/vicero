@@ -3,6 +3,12 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ AGENT TOOLS T4 — 2026-10-19 (tool behaviour, ADR-135, migration 0041; stacked on T3)
+
+- Branch `feat/tools-t4-behaviour`. Code: `app/tools/{policy,deferred,concurrency}.py`, `app/chat/{convvars,followup}.py`, `execute_tool_call` in `app/tools/service.py`, `_run_calls` in `app/chat/runtime.py`, widget `tool_message` handler (rebuilt via `node packages/widget/build.mjs`).
+- Needs a worker for background tools and follow-ups (`tools.run_async`, `tools.followup`).
+- Next: T5 (UI: Connections, Tools tab, API tool editor, MCP panel, webhooks panel, logs, approvals view).
+
 ## ▶ AGENT TOOLS T3 — 2026-10-19 (webhooks, ADR-134, migration 0040; stacked on T2)
 
 - Branch `feat/tools-t3-webhooks`. Code: `app/modules/inbound_hooks/{actions,service,router}.py`, `app/webhooks/{dispatch,events}.py`, `app/core/idempotency.py`.

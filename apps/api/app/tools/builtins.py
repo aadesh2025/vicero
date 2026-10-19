@@ -188,6 +188,109 @@ async def _request_handoff(ctx: ToolContext, args: dict[str, Any]) -> ToolResult
     return ToolResult(output={"status": "handoff_requested"})
 
 
+# ── conversation variables and flow tools (docs/28 T4.1, T4.5) ──────────────────────────
+_FIELD_TYPES = ("text", "email", "phone", "number", "date")
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %B %Y", "%B %d, %Y", "%d %b %Y")
+
+
+def validate_field(kind: str, raw: str) -> tuple[Any, str | None]:
+    """(normalized value, None) when `raw` is a valid `kind`, else (None, a short reason the model can act on)."""
+    from app.crm.extract import normalize_email, normalize_phone
+
+    value = raw.strip()
+    if not value:
+        return None, "The value is empty."
+    if kind == "email":
+        email = normalize_email(value)
+        return (email, None) if email else (None, "That is not a valid email address.")
+    if kind == "phone":
+        phone = normalize_phone(value)
+        return (phone, None) if phone else (None, "That is not a valid phone number.")
+    if kind == "number":
+        try:
+            number = float(value.replace(",", ""))
+        except ValueError:
+            return None, "That is not a number."
+        return (int(number) if number.is_integer() else number), None
+    if kind == "date":
+        for fmt in _DATE_FORMATS:
+            try:
+                return dt.datetime.strptime(value, fmt).date().isoformat(), None
+            except ValueError:
+                continue
+        return None, "That is not a date I can read. Ask for it as DD/MM/YYYY."
+    return value, None
+
+
+async def _set_variable(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    from app.chat import convvars
+
+    if ctx.conversation_id is None:
+        return ToolResult(output={}, status="error", error="there is no conversation to store this on")
+    try:
+        stored = await convvars.apply(
+            ctx.session, ctx.conversation_id, {str(args.get("name", "")): args.get("value")}, source="tool"
+        )
+    except convvars.VariableError as exc:
+        return ToolResult(output={"ok": False, "error": str(exc)}, status="error", error=str(exc))
+    return ToolResult(output={"ok": True, "stored": stored})
+
+
+async def _get_variable(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    from app.chat import convvars
+    from app.models import Conversation
+
+    if ctx.conversation_id is None:
+        return ToolResult(output={}, status="error", error="there is no conversation")
+    conv = await ctx.session.get(Conversation, ctx.conversation_id)
+    if conv is None:
+        return ToolResult(output={}, status="error", error="conversation not found")
+    try:
+        name = convvars.check_name(str(args.get("name", "")))
+    except convvars.VariableError as exc:
+        return ToolResult(output={"ok": False, "error": str(exc)}, status="error", error=str(exc))
+    values = conv.variables or {}
+    return ToolResult(output={"name": name, "found": name in values, "value": values.get(name)})
+
+
+async def _collect_field(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    """Validate what the customer just said before it is stored. A bad value is a normal answer, not an error:
+    the model is told why and asks again."""
+    from app.chat import convvars
+
+    kind = str(args.get("type", "text"))
+    if kind not in _FIELD_TYPES:
+        allowed = ", ".join(_FIELD_TYPES)
+        return ToolResult(output={"ok": False, "error": f"type must be one of {allowed}"}, status="error")
+    if ctx.conversation_id is None:
+        return ToolResult(output={}, status="error", error="there is no conversation to store this on")
+    value, problem = validate_field(kind, str(args.get("value", "")))
+    if problem is not None:
+        return ToolResult(output={"ok": False, "error": problem, "ask_again": True})
+    try:
+        update = {str(args.get("name", "")): value}
+        stored = await convvars.apply(ctx.session, ctx.conversation_id, update, source="tool")
+    except convvars.VariableError as exc:
+        return ToolResult(output={"ok": False, "error": str(exc)}, status="error", error=str(exc))
+    return ToolResult(output={"ok": True, "stored": stored})
+
+
+async def _end_conversation(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    from app.models import Conversation
+    from app.webhooks.events import emit_conversation_ended
+
+    if ctx.conversation_id is None:
+        return ToolResult(output={}, status="error", error="there is no conversation to end")
+    conv = await ctx.session.get(Conversation, ctx.conversation_id)
+    if conv is None or conv.organization_id != ctx.org_id:
+        return ToolResult(output={}, status="error", error="conversation not found")
+    if conv.status != "closed":
+        conv.status = "closed"
+        await ctx.session.flush()
+        await emit_conversation_ended(ctx.session, conv, reason=str(args.get("reason") or "ended_by_agent")[:100])
+    return ToolResult(output={"status": "ended"})
+
+
 # ── product catalog (docs/26 §3.3) ──────────────────────────────────────────────────
 _MAX_COUNT = 3
 
@@ -320,6 +423,56 @@ BUILTINS: dict[str, BuiltinTool] = {
             "required": ["query"],
         },
         run=_web_search,
+    ),
+    "set_variable": BuiltinTool(
+        name="set_variable",
+        description="Remember a fact about this conversation (for example an order number) under a short name.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "lowercase letters, digits and underscores"},
+                "value": {"type": "string"},
+            },
+            "required": ["name", "value"],
+        },
+        run=_set_variable,
+    ),
+    "get_variable": BuiltinTool(
+        name="get_variable",
+        description="Read back something remembered earlier in this conversation with set_variable.",
+        parameters={
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
+        run=_get_variable,
+    ),
+    "collect_field": BuiltinTool(
+        name="collect_field",
+        description=(
+            "Store a detail the customer just gave you after checking it is valid for its type "
+            "(email, phone, number, date or text). If it is invalid you are told why: ask them again."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "where to keep it, e.g. contact_email"},
+                "type": {"type": "string", "enum": list(_FIELD_TYPES)},
+                "value": {"type": "string", "description": "exactly what the customer said"},
+            },
+            "required": ["name", "type", "value"],
+        },
+        run=_collect_field,
+    ),
+    "end_conversation": BuiltinTool(
+        name="end_conversation",
+        description="Close this conversation once the customer's request is fully handled and they need nothing more.",
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string", "description": "why it is finished"}},
+            "required": [],
+        },
+        run=_end_conversation,
     ),
     "request_handoff": BuiltinTool(
         name="request_handoff",

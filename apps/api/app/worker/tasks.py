@@ -478,3 +478,33 @@ async def _run_inbound_hook_retention() -> int:
 def purge_inbound_hook_events_task() -> int:
     """Daily (Celery beat): delete inbound hook call logs older than 30 days."""
     return _run(_run_inbound_hook_retention())
+
+
+async def _run_async_tool(run_id: str) -> bool:
+    from app.tools.deferred import run_async_tool
+
+    async with SessionFactory() as session:
+        sent = await run_async_tool(session, uuid.UUID(run_id))
+        await session.commit()
+        return sent
+
+
+@celery_app.task(name="tools.run_async")  # type: ignore[untyped-decorator]
+def run_async_tool_task(run_id: str) -> bool:
+    """Make a background tool's call, store its outcome, and tell the visitor how it went (docs/28 T4.3)."""
+    return _run(_run_async_tool(run_id))
+
+
+async def _run_tool_followup(run_id: str) -> bool:
+    from app.chat.followup import generate_followup
+
+    async with SessionFactory() as session:
+        sent = await generate_followup(session, uuid.UUID(run_id))
+        await session.commit()
+        return sent
+
+
+@celery_app.task(name="tools.followup")  # type: ignore[untyped-decorator]
+def tool_followup_task(run_id: str) -> bool:
+    """Tell the visitor how a finished action turned out (an approved call, a late n8n result) (docs/28 T4.3-T4.4)."""
+    return _run(_run_tool_followup(run_id))

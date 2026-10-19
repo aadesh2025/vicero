@@ -317,7 +317,7 @@ async def _prepare_turn(
             # No contact on the dashboard path, so `{{user_name}}` resolves to its fallback
             # rather than a stale name from another conversation.
             variables=variables.build_context(
-                agent_name=agent.name, business_name=ctx.org.name
+                agent_name=agent.name, business_name=ctx.org.name, conversation_variables=conv.variables
             ),
         ),
         context_block=context_block,
@@ -656,3 +656,17 @@ async def delete_conversation(session: AsyncSession, ctx: OrgContext, cid: uuid.
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
     conv = await _get_conversation(session, ctx, cid)
     await session.delete(conv)
+
+
+# Public names for the pieces the follow-up generator reuses (app/chat/followup.py); the underscore ones stay private.
+load_history = _load_history
+resolve_provider = _resolve_provider
+build_chat_request = _build_chat_request
+finalize_turn = _finalize_turn
+
+
+def variables_for(conv: Conversation, *, agent_name: str | None, business_name: str | None) -> dict[str, str]:
+    """Prompt variables for a conversation, including `{{vars.name}}` from what tools collected."""
+    return variables.build_context(
+        agent_name=agent_name, business_name=business_name, conversation_variables=conv.variables
+    )

@@ -266,6 +266,41 @@ def _sanitize_request(
     return scrub(request, secrets)  # type: ignore[no-any-return]
 
 
+MAX_CAPTURES = 10
+
+
+def validate_capture(capture: Any) -> str | None:
+    """Config-time check of an API tool's `capture` mapping ({variable: selector})."""
+    if not isinstance(capture, dict):
+        return "capture must map variable names to selectors"
+    if len(capture) > MAX_CAPTURES:
+        return f"capture takes at most {MAX_CAPTURES} variables"
+    for name, selector in capture.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,39}", str(name)):
+            return f"'{name}' is not a valid variable name (lowercase letters, digits, underscore)"
+        if not isinstance(selector, str) or parse_selector(selector) is None:
+            return f"'{selector}' is not a valid selector (use $.a.b[0].c)"
+    return None
+
+
+def _capture(resp: EgressResponse, config: dict[str, Any]) -> dict[str, Any] | None:
+    """Read the configured values out of a successful JSON response. A selector that finds nothing is skipped."""
+    capture = config.get("capture")
+    if not capture or resp.truncated or "json" not in resp.headers.get("content-type", ""):
+        return None
+    try:
+        parsed = resp.json()
+    except ValueError:
+        return None
+    found: dict[str, Any] = {}
+    for name, selector in capture.items():
+        steps = parse_selector(str(selector))
+        value = select(parsed, steps) if steps is not None else _MISSING
+        if value is not _MISSING and value is not None:
+            found[str(name)] = json.dumps(value) if isinstance(value, dict | list) else value
+    return found or None
+
+
 def _shape_response(resp: EgressResponse, config: dict[str, Any]) -> dict[str, Any]:
     max_chars = _max_chars(config)
     parsed: Any = None
@@ -415,6 +450,7 @@ async def execute_api_tool(
             error=None if ok else f"HTTP {resp.status_code}",
             attempt=attempt,
             request=sanitized,
+            captured=scrub(_capture(resp, config), secrets) if ok else None,
         )
     return ToolResult(  # pragma: no cover
         output={}, status="error", error=last_error, attempt=attempts, request=sanitized

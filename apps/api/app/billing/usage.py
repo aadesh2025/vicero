@@ -532,6 +532,20 @@ async def require_webhook_slot(session: AsyncSession, org: Organization) -> None
     await _require_slot(session, org, "webhooks", "webhook endpoints", count)
 
 
+async def require_connection_slot(session: AsyncSession, org: Organization) -> None:
+    """Saved API connections (docs/28 §10). 0 on trial/Starter, so the 402 is the locked state."""
+    from app.models import Connection
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(Connection).where(Connection.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "connections", "API connections", count)
+
+
 async def require_team_member_slot(session: AsyncSession, org: Organization) -> None:
     """Checked on invitation **and** acceptance (docs/22 §11) — checking only one lets an org
     exceed its cap by pre-inviting more people than it can seat."""

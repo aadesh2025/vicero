@@ -66,6 +66,9 @@ LIMIT_FEATURES = (
     "channels",
     "team_members",
     "automations",
+    "connections",
+    "mcp_servers",
+    "inbound_hooks",
 )
 
 #: Every value `details.feature` may carry. The frontend's locked states key off this set, so it
@@ -84,6 +87,9 @@ _LIMIT_ATTR = {
     "workflows": "max_workflows",
     "tools": "max_tools",
     "webhooks": "max_webhooks",
+    "connections": "max_connections",
+    "mcp_servers": "max_mcp_servers",
+    "inbound_hooks": "max_inbound_hooks",
     "automations": "max_automations",
 }
 
@@ -101,6 +107,10 @@ class PlanSpec:
     max_workflows: int | None
     max_tools: int | None
     max_webhooks: int | None
+    #: docs/28 §10. Saved API connections, registered MCP servers, and inbound trigger hooks. 0 = locked.
+    max_connections: int | None
+    max_mcp_servers: int | None
+    max_inbound_hooks: int | None
     n8n_enabled: bool
     #: Client-visible automations (docs/26): how many may exist, and how many runs a month may be recorded.
     #: 0 = off. Staff build them; the client only reads their status and logs. Unlike the other counts
@@ -190,6 +200,9 @@ PLANS: dict[str, PlanSpec] = {
         max_workflows=0,
         max_tools=0,
         max_webhooks=0,
+        max_connections=0,
+        max_mcp_servers=0,
+        max_inbound_hooks=0,
         n8n_enabled=False,
         max_automations=0,
         max_automation_runs=0,
@@ -213,6 +226,9 @@ PLANS: dict[str, PlanSpec] = {
         max_workflows=0,
         max_tools=0,
         max_webhooks=0,
+        max_connections=0,
+        max_mcp_servers=0,
+        max_inbound_hooks=0,
         n8n_enabled=False,
         max_automations=0,
         max_automation_runs=0,
@@ -239,6 +255,9 @@ PLANS: dict[str, PlanSpec] = {
         max_workflows=10,
         max_tools=8,
         max_webhooks=5,
+        max_connections=5,
+        max_mcp_servers=2,
+        max_inbound_hooks=3,
         n8n_enabled=True,
         max_automations=5,
         max_automation_runs=2000,
@@ -265,6 +284,9 @@ PLANS: dict[str, PlanSpec] = {
         max_workflows=None,
         max_tools=None,
         max_webhooks=None,
+        max_connections=None,
+        max_mcp_servers=None,
+        max_inbound_hooks=None,
         n8n_enabled=True,
         max_automations=20,
         max_automation_runs=10000,
@@ -291,6 +313,9 @@ PLANS: dict[str, PlanSpec] = {
         max_workflows=None,
         max_tools=None,
         max_webhooks=None,
+        max_connections=None,
+        max_mcp_servers=None,
+        max_inbound_hooks=None,
         n8n_enabled=True,
         max_automations=None,
         max_automation_runs=None,
@@ -318,6 +343,9 @@ _EXPIRED = PlanSpec(
     max_workflows=0,
     max_tools=0,
     max_webhooks=0,
+    max_connections=0,
+    max_mcp_servers=0,
+    max_inbound_hooks=0,
     n8n_enabled=False,
     max_automations=0,
     max_automation_runs=0,

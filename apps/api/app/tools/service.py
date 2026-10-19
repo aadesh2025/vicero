@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -17,6 +18,7 @@ from app.billing import automations as automation_rules
 from app.billing import usage
 from app.chat import blocks as chat_blocks
 from app.core import rbac
+from app.core.audit import write_audit
 from app.core.catalog import catalog_enabled
 from app.core.config import settings
 from app.core.crypto import encrypt
@@ -26,13 +28,13 @@ from app.core.ssrf import is_blocked_host
 from app.integrations.n8n_client import N8nClient, get_client, valid_callback_token
 from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
-from app.models import Agent, AgentVersion, MCPServer, Organization, Tool, ToolRun
+from app.models import Agent, AgentToolBinding, AgentVersion, Connection, MCPServer, Organization, Tool, ToolRun
 from app.modules.orgs.deps import OrgContext
-from app.tools import block_tools, schemas
+from app.tools import api_tool, block_tools, schemas
 from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS, CATALOG_TOOLS
 from app.tools.compact import compact_description, compact_schema
-from app.tools.http_tool import execute_http_tool
+from app.tools.connections import load_connection
 from app.tools.mcp_client import MCPToolError
 from app.tools.mcp_client import list_tools as mcp_list_tools
 from app.tools.mcp_tool import execute_mcp_tool
@@ -55,6 +57,7 @@ def _tool_out(tool: Tool) -> schemas.ToolOut:
     return schemas.ToolOut(
         id=tool.id,
         agent_id=tool.agent_id,
+        connection_id=tool.connection_id,
         name=tool.name,
         type=tool.type,
         description=tool.description,
@@ -89,6 +92,9 @@ async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.Crea
     elif data.type == "http":
         if not config.get("url"):
             raise AppError("tools.url_required", "HTTP tools require a config.url.", 400)
+    elif data.type == "api":
+        _require_tool_name(data.name)
+        await _check_api_config(session, ctx, config, data.connection_id)
     elif data.type == "mcp":
         if not config.get("server_id") or not config.get("tool_name"):
             raise AppError(
@@ -105,9 +111,12 @@ async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.Crea
         if mcp_server is None or mcp_server.organization_id != ctx.org.id:
             raise AppError("tools.mcp_server_not_found", "MCP server not found.", 404)
 
+    if data.connection_id is not None and data.type != "api":
+        raise AppError("tools.connection_not_applicable", "Only API tools use a connection.", 400)
     tool = Tool(
         organization_id=ctx.org.id,
         agent_id=data.agent_id,
+        connection_id=data.connection_id,
         name=data.name,
         type=data.type,
         description=description,
@@ -121,11 +130,52 @@ async def create_tool(session: AsyncSession, ctx: OrgContext, data: schemas.Crea
     return _tool_out(tool)
 
 
+_TOOL_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")
+
+
+def _require_tool_name(name: str) -> None:
+    """Providers reject a function name outside this set, which fails the whole turn - so catch it at save."""
+    if not _TOOL_NAME.match(name):
+        raise AppError(
+            "tools.bad_name",
+            "An API tool's name must start with a letter and use only letters, digits, '_' or '-' (max 64).",
+            400,
+        )
+
+
+async def _check_api_config(
+    session: AsyncSession, ctx: OrgContext, config: dict[str, Any], connection_id: uuid.UUID | None
+) -> None:
+    """Validate an API tool's config at save time, so a typo fails here and not on the first live call."""
+    method = str(config.get("method", "GET")).upper()
+    if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}:
+        raise AppError("tools.bad_method", f"Unsupported method '{method}'.", 400)
+    if connection_id is not None:
+        conn = await session.get(Connection, connection_id)
+        if conn is None or conn.organization_id != ctx.org.id:
+            raise AppError("connections.not_found", "Connection not found.", 404)
+        if not config.get("path") and not config.get("url"):
+            config.setdefault("path", "")
+    elif not config.get("url"):
+        raise AppError("tools.url_required", "An API tool without a connection needs a config.url.", 400)
+    url = config.get("url")
+    if url and api_tool.template_has_host_placeholder(str(url)):
+        raise AppError("tools.url_host_template", "The host of a tool URL cannot contain placeholders.", 400)
+    pick = (config.get("response") or {}).get("pick")
+    if pick is not None and (problem := api_tool.validate_selectors(pick)):
+        raise AppError("tools.bad_response_pick", problem, 400)
+    body_type = config.get("body_type")
+    if body_type is not None and body_type not in ("json", "form", "raw"):
+        raise AppError("tools.bad_body_type", "body_type must be json, form or raw.", 400)
+
+
 async def list_tools(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID | None) -> list[schemas.ToolOut]:
     rbac.require_permission(ctx.role, rbac.READ)
     stmt = select(Tool).where(Tool.organization_id == ctx.org.id).order_by(Tool.created_at.desc())
     if agent_id is not None:
-        stmt = stmt.where(Tool.agent_id == agent_id)
+        stmt = stmt.join(AgentToolBinding, AgentToolBinding.tool_id == Tool.id).where(
+            AgentToolBinding.agent_id == agent_id, AgentToolBinding.organization_id == ctx.org.id
+        )
     return [_tool_out(t) for t in (await session.execute(stmt)).scalars().all()]
 
 
@@ -144,6 +194,13 @@ async def update_tool(
         tool.description = data.description
     if data.enabled is not None:
         tool.enabled = data.enabled
+    if "connection_id" in data.model_fields_set:
+        if tool.type != "api":
+            raise AppError("tools.connection_not_applicable", "Only API tools use a connection.", 400)
+        if data.connection_id is not None:
+            current = data.config if data.config is not None else tool.config
+            await _check_api_config(session, ctx, dict(current), data.connection_id)
+        tool.connection_id = data.connection_id
     if data.config is not None:
         if tool.type == "n8n":
             # An n8n tool's target is fixed at bind time, after the visibility, signature and ownership
@@ -161,7 +218,12 @@ async def update_tool(
                     raise AppError("tools.n8n_bad_mode", "mode must be 'sync' or 'async'.", 400)
                 tool.config = {**tool.config, "mode": mode}
         else:
-            tool.config = data.config
+            if tool.type == "api":
+                new_config = dict(data.config)
+                await _check_api_config(session, ctx, new_config, tool.connection_id)
+                tool.config = new_config
+            else:
+                tool.config = data.config
     if data.input_schema is not None and tool.type != "builtin":
         tool.input_schema = data.input_schema
     return _tool_out(tool)
@@ -185,16 +247,29 @@ async def resolve_agent_tools(
     "registration doesn't imply usage" split n8n binding already has, just gated on a
     different flag. Registration/CRUD is unaffected either way.
     """
-    stmt = select(Tool).where(
-        Tool.organization_id == org_id, Tool.agent_id == agent_id, Tool.enabled.is_(True)
+    # Which tools an agent may use is whatever is bound to it (docs/28 T1.5), in the owner's order. A tool
+    # created for an agent is bound to it on insert, so this is the same set the old `Tool.agent_id` filter gave.
+    stmt = (
+        select(Tool, AgentToolBinding)
+        .join(AgentToolBinding, AgentToolBinding.tool_id == Tool.id)
+        .where(
+            Tool.organization_id == org_id,
+            AgentToolBinding.organization_id == org_id,
+            AgentToolBinding.agent_id == agent_id,
+            AgentToolBinding.enabled.is_(True),
+            Tool.enabled.is_(True),
+        )
+        .order_by(AgentToolBinding.position, Tool.created_at, Tool.id)
     )
     if not include_mcp:
         stmt = stmt.where(Tool.type != "mcp")
-    tools = list((await session.execute(stmt)).scalars().all())
+    rows = list((await session.execute(stmt)).all())
+    tools = [t for t, _b in rows]
+    overrides = {t.name: (b.overrides or {}) for t, b in rows}
     specs = [
         ToolSpec(
             name=t.name,
-            description=compact_description(t.description),
+            description=compact_description(overrides[t.name].get("description") or t.description),
             # n8n schemas are repaired on read so tools bound before the fix stop
             # breaking turns without needing a data migration.
             parameters=compact_schema(
@@ -203,7 +278,10 @@ async def resolve_agent_tools(
         )
         for t in tools
     ]
-    return specs, {t.name: t for t in tools}
+    by_name: dict[str, Tool] = {}
+    for t in tools:
+        by_name.setdefault(t.name, t)  # the first of two same-named tools wins, as the model sees only one
+    return specs, by_name
 
 
 async def build_tooling(
@@ -282,6 +360,7 @@ async def build_tooling(
         conversation_id=conversation_id,
         outbound_media=outbound_media,
         blocks=blocks if block_names else None,
+        bound_tool_ids=frozenset(t.id for t in by_name.values()),
     )
 
     async def executor(call: ToolCall) -> dict[str, Any]:
@@ -303,8 +382,19 @@ async def _dispatch(tool: Tool, ctx: ToolContext, args: dict[str, Any]) -> ToolR
         if builtin is None:
             return ToolResult(output={}, status="error", error=f"unknown built-in '{tool.name}'")
         return await builtin.run(ctx, args)
-    if tool.type == "http":
-        return await execute_http_tool(tool.config, args)
+    if tool.type in ("api", "http"):
+        connection = None
+        if tool.connection_id is not None:
+            connection = await load_connection(ctx.session, tool.organization_id, tool.connection_id)
+            if connection is None:
+                return ToolResult(output={}, status="error", error="this tool's connection no longer exists")
+        return await api_tool.execute_api_tool(
+            tool.config,
+            args,
+            connection=connection,
+            input_schema=tool.input_schema if tool.type == "api" else None,
+            legacy=tool.type == "http",
+        )
     if tool.type == "n8n":
         return await execute_n8n_tool(tool.config, args, ctx)
     if tool.type == "mcp":
@@ -329,7 +419,10 @@ async def execute_tool_call(
         return ToolResult(output={}, status="error", error=f"tool '{call.name}' is not available")
     # Defence in depth: the tool list was already built per org + agent, so this should never fire. If a
     # future code path ever hands the runtime another tenant's tool, refuse and leave a security trail.
-    if tool.organization_id != ctx.org_id or (tool.agent_id is not None and tool.agent_id != ctx.agent_id):
+    foreign_agent = tool.agent_id is not None and tool.agent_id != ctx.agent_id
+    if ctx.bound_tool_ids is not None and tool.id in ctx.bound_tool_ids:
+        foreign_agent = False  # shared across agents on purpose (docs/28 T1.5): resolution proved the binding
+    if tool.organization_id != ctx.org_id or foreign_agent:
         log.warning(
             "tool_ownership_violation",
             tool_id=str(tool.id),
@@ -354,6 +447,8 @@ async def execute_tool_call(
         organization_id=tool.organization_id,
         tool_id=tool.id,
         conversation_id=ctx.conversation_id,
+        agent_id=ctx.agent_id,
+        provider=_provider_of(tool),
         input=call.arguments,
         status="pending",
     )
@@ -378,6 +473,8 @@ async def execute_tool_call(
     run.output = result.output
     run.status = result.status
     run.error = result.error
+    run.attempt = result.attempt
+    run.request_sanitized = result.request
     from app.webhooks.dispatch import emit_event
 
     await emit_event(
@@ -387,6 +484,10 @@ async def execute_tool_call(
         {"tool": tool.name, "status": result.status, "run_id": str(run.id)},
     )
     return result
+
+
+def _provider_of(tool: Tool) -> str:
+    return "api" if tool.type in ("api", "http") else tool.type
 
 
 async def test_tool(
@@ -406,11 +507,15 @@ async def test_tool(
         ToolRun(
             organization_id=tool.organization_id,
             tool_id=tool.id,
+            agent_id=tool.agent_id,
+            provider=_provider_of(tool),
             input=data.input,
             output=result.output,
             status=result.status,
             latency_ms=latency_ms,
             error=result.error,
+            attempt=result.attempt,
+            request_sanitized=result.request,
         )
     )
     return schemas.TestToolResponse(
@@ -752,6 +857,112 @@ async def test_mcp_server_connection(
     )
 
 
+# ── Agent tool bindings (docs/28 T1.5) ────────────────────────────────────────────────
+#: More tools than this and tool-choice accuracy and prompt cost both degrade (docs/28 §5.3, §13).
+MAX_TOOLS_PER_AGENT = 20
+
+
+async def _get_agent(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID) -> Agent:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or agent.organization_id != ctx.org.id:
+        raise AppError("agents.not_found", "Agent not found.", 404)
+    return agent
+
+
+async def list_agent_tools(
+    session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID
+) -> list[schemas.ToolBindingOut]:
+    rbac.require_permission(ctx.role, rbac.READ)
+    await _get_agent(session, ctx, agent_id)
+    stmt = (
+        select(Tool, AgentToolBinding)
+        .join(AgentToolBinding, AgentToolBinding.tool_id == Tool.id)
+        .where(AgentToolBinding.agent_id == agent_id, AgentToolBinding.organization_id == ctx.org.id)
+        .order_by(AgentToolBinding.position, Tool.created_at, Tool.id)
+    )
+    return [
+        schemas.ToolBindingOut(
+            tool_id=t.id,
+            name=t.name,
+            type=t.type,
+            description=t.description,
+            enabled=b.enabled,
+            position=b.position,
+            overrides=b.overrides or {},
+        )
+        for t, b in (await session.execute(stmt)).all()
+    ]
+
+
+async def set_agent_tools(
+    session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, data: schemas.SetAgentToolsRequest
+) -> list[schemas.ToolBindingOut]:
+    """Replace the agent's tool set and order in one call. Tools not listed are unbound (not deleted)."""
+    rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
+    await usage.require_feature(session, ctx.org, "tool_calling")
+    await _get_agent(session, ctx, agent_id)
+    ids = [b.tool_id for b in data.tools]
+    if len(set(ids)) != len(ids):
+        raise AppError("tools.duplicate_binding", "A tool can be listed only once.", 400)
+    if sum(1 for b in data.tools if b.enabled) > MAX_TOOLS_PER_AGENT:
+        raise AppError(
+            "tools.too_many",
+            f"An agent can have at most {MAX_TOOLS_PER_AGENT} enabled tools. "
+            "Split the work across agents or workflows.",
+            400,
+        )
+    found = {}
+    if ids:
+        rows = await session.execute(select(Tool).where(Tool.id.in_(ids), Tool.organization_id == ctx.org.id))
+        found = {t.id: t for t in rows.scalars().all()}
+    missing = [str(i) for i in ids if i not in found]
+    if missing:
+        raise AppError("tools.not_found", "Tool not found.", 404, details={"tool_ids": missing})
+    for b in data.tools:
+        extra = set(b.overrides) - {"description"}
+        if extra:
+            raise AppError("tools.bad_override", f"Unsupported override(s): {', '.join(sorted(extra))}.", 400)
+        if "description" in b.overrides and not isinstance(b.overrides["description"], str):
+            raise AppError("tools.bad_override", "The description override must be text.", 400)
+
+    existing = {
+        b.tool_id: b
+        for b in (
+            await session.execute(
+                select(AgentToolBinding).where(
+                    AgentToolBinding.agent_id == agent_id, AgentToolBinding.organization_id == ctx.org.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+    for tool_id, stale in existing.items():
+        if tool_id not in found:
+            await session.delete(stale)
+    for position, b in enumerate(data.tools):
+        row = existing.get(b.tool_id)
+        if row is None:
+            session.add(
+                AgentToolBinding(
+                    organization_id=ctx.org.id,
+                    agent_id=agent_id,
+                    tool_id=b.tool_id,
+                    enabled=b.enabled,
+                    overrides=b.overrides,
+                    position=position,
+                )
+            )
+        else:
+            row.enabled, row.overrides, row.position = b.enabled, b.overrides, position
+    await session.flush()
+    await write_audit(
+        session, ctx.org.id, ctx.user.id, "agent.tools_set",
+        target_type="agent", target_id=str(agent_id), meta={"tool_ids": [str(i) for i in ids]},
+    )
+    return await list_agent_tools(session, ctx, agent_id)
+
+
 async def list_runs(
     session: AsyncSession, ctx: OrgContext, conversation_id: uuid.UUID | None
 ) -> list[schemas.ToolRunOut]:
@@ -775,6 +986,10 @@ async def list_runs(
             latency_ms=r.latency_ms,
             error=r.error,
             created_at=r.created_at,
+            agent_id=r.agent_id,
+            provider=r.provider,
+            request_sanitized=r.request_sanitized,
+            attempt=r.attempt,
         )
         for r in (await session.execute(stmt)).scalars().all()
     ]

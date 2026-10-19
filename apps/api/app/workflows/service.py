@@ -187,7 +187,10 @@ async def _tool_executor_for(
     if version is None:
         return None
     _specs, by_name = await resolve_agent_tools(session, org.id, agent_id, include_mcp=True)
-    tool_ctx = ToolContext(session=session, org_id=org.id, agent_id=agent_id, version=version)
+    tool_ctx = ToolContext(
+        session=session, org_id=org.id, agent_id=agent_id, version=version,
+        bound_tool_ids=frozenset(t.id for t in by_name.values()),
+    )
 
     async def executor(name: str, args: dict[str, Any]) -> dict[str, Any]:
         call = ToolCall(id=str(uuid.uuid4()), name=name, arguments=args)

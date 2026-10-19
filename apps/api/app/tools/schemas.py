@@ -20,8 +20,10 @@ class CreateToolRequest(BaseModel):
     # "mcp" requires config.server_id + config.tool_name (an already-registered MCP server —
     # see POST /v1/mcp/servers). Live discovery happens via the server's test-connection
     # endpoint, not here, so creating a tool never makes an outbound call of its own.
-    type: str = Field(pattern="^(builtin|http|mcp)$")
+    type: str = Field(pattern="^(builtin|http|mcp|api)$")
     agent_id: uuid.UUID | None = None
+    # `api` tools only: the saved Connection that supplies base URL + auth (docs/28 §5.2).
+    connection_id: uuid.UUID | None = None
     description: str | None = None
     enabled: bool = True
     config: dict[str, Any] = Field(default_factory=dict)
@@ -30,6 +32,8 @@ class CreateToolRequest(BaseModel):
 
 class UpdateToolRequest(BaseModel):
     description: str | None = None
+    # Send null to detach the connection; leave out to keep it.
+    connection_id: uuid.UUID | None = None
     enabled: bool | None = None
     config: dict[str, Any] | None = None
     input_schema: dict[str, Any] | None = None
@@ -38,6 +42,7 @@ class UpdateToolRequest(BaseModel):
 class ToolOut(BaseModel):
     id: uuid.UUID
     agent_id: uuid.UUID | None
+    connection_id: uuid.UUID | None = None
     name: str
     type: str
     description: str | None
@@ -95,6 +100,35 @@ class ToolRunOut(BaseModel):
     latency_ms: int | None
     error: str | None
     created_at: dt.datetime
+    agent_id: uuid.UUID | None = None
+    provider: str | None = None
+    request_sanitized: dict[str, Any] | None = None
+    attempt: int = 1
+
+
+# ── Agent tool bindings (docs/28 T1.5) ───────────────────────────────────────────────────
+
+
+class ToolBindingIn(BaseModel):
+    tool_id: uuid.UUID
+    enabled: bool = True
+    # Per-agent overrides. T1 supports `description` (what the model reads for this agent).
+    overrides: dict[str, Any] = Field(default_factory=dict)
+
+
+class SetAgentToolsRequest(BaseModel):
+    # The list order is the order the model sees the tools in.
+    tools: list[ToolBindingIn] = Field(default_factory=list, max_length=100)
+
+
+class ToolBindingOut(BaseModel):
+    tool_id: uuid.UUID
+    name: str
+    type: str
+    description: str | None
+    enabled: bool
+    position: int
+    overrides: dict[str, Any]
 
 
 # ── MCP servers (docs/17 Phase 1 §4) ────────────────────────────────────────────────────

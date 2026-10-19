@@ -19,7 +19,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -33,6 +33,11 @@ _FORBIDDEN_HEADERS = frozenset({"host", "content-length", "transfer-encoding", "
 _CREDENTIAL_HEADERS = frozenset({"authorization", "proxy-authorization", "cookie"})
 _REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
 _MAX_REDIRECTS_HARD = 3
+
+
+#: Test seam: when set, requests that pass no `transport` use this one (a `httpx.MockTransport`), so the
+#: real call sites - tools, connection tests, token fetches - can be driven end to end with no network.
+DEFAULT_TRANSPORT: httpx.AsyncBaseTransport | None = None
 
 
 class EgressError(Exception):
@@ -102,7 +107,7 @@ def ip_is_public(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return bool(ip.is_global)
 
 
-def _literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+def literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an IP literal, including the legacy forms a resolver would accept and a regex would miss
     (`2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`)."""
     bare = host.strip("[]")
@@ -118,7 +123,7 @@ def _literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | No
 
 async def resolve_host(host: str, port: int) -> list[str]:
     """Every address `host` resolves to. A module-level seam so tests can stage DNS answers."""
-    literal = _literal_ip(host)
+    literal = literal_ip(host)
     if literal is not None:
         return [str(literal)]
     loop = asyncio.get_running_loop()
@@ -188,13 +193,20 @@ async def check_destination(url: str, allowed_hosts: list[str] | None = None) ->
     return scheme, host, port, str(parsed[0])
 
 
+def _header_value(value: str) -> str:
+    """CR/LF and other control characters dropped, non-ASCII percent-encoded: a header is bytes on the wire
+    and a stray emoji in a model-supplied value must not turn into a crash or a second header."""
+    kept = "".join(c for c in value if c == chr(9) or (c >= chr(32) and c != chr(127)))
+    return "".join(c if c.isascii() else quote(c) for c in kept)
+
+
 def _clean_headers(headers: Mapping[str, str] | None) -> dict[str, str]:
     out: dict[str, str] = {}
     for k, v in (headers or {}).items():
         name = str(k).replace("\r", "").replace("\n", "").strip()
         if not name or name.lower() in _FORBIDDEN_HEADERS:
             continue
-        out[name] = str(v).replace("\r", "").replace("\n", "")
+        out[name] = _header_value(str(v))
     return out
 
 
@@ -229,6 +241,7 @@ async def safe_request(
 ) -> EgressResponse:
     """One guarded request. Raises `EgressBlocked` (policy) or `EgressError` (network)."""
     method = method.upper()
+    transport = transport or DEFAULT_TRANSPORT
     hops = min(max(max_redirects, 0), _MAX_REDIRECTS_HARD)
     clean = _clean_headers(headers)
     current = url

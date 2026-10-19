@@ -169,9 +169,7 @@ def test_allowed_hosts_matching() -> None:
 
 async def test_allowed_hosts_never_bypass_the_ip_check(dns: dict[str, list[str]]) -> None:
     with pytest.raises(EgressBlocked):
-        await safe_request(
-            "GET", "http://127.0.0.1/", allowed_hosts=["127.0.0.1"], transport=httpx.MockTransport(_ok)
-        )
+        await safe_request("GET", "http://127.0.0.1/", allowed_hosts=["127.0.0.1"], transport=httpx.MockTransport(_ok))
 
 
 async def test_host_outside_allowlist_is_refused(dns: dict[str, list[str]]) -> None:

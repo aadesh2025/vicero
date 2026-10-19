@@ -74,6 +74,8 @@ async def capture_from_message(
     )
 
     person = await _find_person(session, conversation.organization_id, found)
+    created = person is None
+    changed = created
     if person is None:
         person = CrmContact(
             organization_id=conversation.organization_id,
@@ -87,6 +89,7 @@ async def capture_from_message(
     else:
         learned = _learn(person, found)
         if learned:
+            changed = True
             log.info("crm_person_enriched", person=str(person.id), fields=",".join(learned))
 
     # Link this channel's handle to the person — including a channel they've never used
@@ -100,4 +103,8 @@ async def capture_from_message(
             contact=str(contact.id),
         )
     await session.flush()
+    if changed:
+        from app.webhooks.events import emit_lead_captured
+
+        await emit_lead_captured(session, conversation, person, created=created)
     return person

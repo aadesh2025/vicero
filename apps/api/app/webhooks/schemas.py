@@ -12,6 +12,8 @@ class CreateWebhookRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
     events: list[str] = Field(default_factory=lambda: ["*"])
     secret: str | None = None
+    # Only this agent's events. Leave out for an org-wide endpoint (every event).
+    agent_id: uuid.UUID | None = None
 
 
 class UpdateWebhookRequest(BaseModel):
@@ -24,6 +26,7 @@ class UpdateWebhookRequest(BaseModel):
 class WebhookOut(BaseModel):
     id: uuid.UUID
     url: str
+    agent_id: uuid.UUID | None = None
     events: list[str]
     enabled: bool
     secret: str | None  # returned once on create; masked afterwards

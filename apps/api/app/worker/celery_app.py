@@ -41,6 +41,11 @@ celery_app.conf.update(
             "task": "mcp.refresh_stale",
             "schedule": 3600.0,
         },
+        "inbound-hook-events-retention": {
+            # Hook call logs older than 30 days are deleted (docs/28 T3.3).
+            "task": "inbound_hooks.retention",
+            "schedule": 86400.0,
+        },
         "automation-runs-pull": {
             # Backup for n8n's signed push: fills gaps from n8n's execution list (registered workflows only).
             "task": "automations.pull",

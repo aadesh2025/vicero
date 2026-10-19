@@ -328,6 +328,14 @@ class Settings(BaseSettings):
     # How often (seconds) the Celery beat sweep re-enqueues due `pending` webhook deliveries.
     webhook_sweep_interval_seconds: float = 60.0
 
+    # --- Inbound trigger hooks (docs/28 T3) ---
+    # Authenticated calls one hook accepts per minute; beyond it the caller gets 429.
+    inbound_hook_rate_per_minute: int = 60
+    # Calls per minute from one IP to one hook before authentication (strangers cannot use up the sender quota).
+    inbound_hook_unauth_rate_per_minute: int = 120
+    # How long an `agent_turn` hook waits for the model before answering 504.
+    inbound_hook_agent_turn_timeout_s: float = 25.0
+
     # --- n8n ---
     n8n_base_url: str = "http://localhost:5678"
     n8n_api_key: str | None = None

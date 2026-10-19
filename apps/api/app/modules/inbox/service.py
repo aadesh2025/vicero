@@ -37,6 +37,7 @@ from app.modules.inbox import schemas
 from app.modules.orgs.deps import OrgContext
 from app.realtime.hub import conv_topic, hub, inbox_topic
 from app.webhooks.dispatch import emit_event
+from app.webhooks.events import emit_conversation_ended
 from app.workflows.schemas import ResumeWorkflowRequest
 from app.workflows.service import resume_workflow_run_unchecked
 
@@ -230,7 +231,9 @@ async def handback(session: AsyncSession, ctx: OrgContext, cid: uuid.UUID) -> sc
     conv.assigned_to = None
     await session.flush()
     await _publish_inbox(session, ctx, conv, "handoff.resolved")
-    await emit_event(session, ctx.org.id, "handoff.resolved", {"conversation_id": str(conv.id)})
+    await emit_event(
+        session, ctx.org.id, "handoff.resolved", {"conversation_id": str(conv.id)}, agent_id=conv.agent_id
+    )
     await hub.publish(conv_topic(conv.id), {"type": "handback", "content": "You're back with the assistant."})
     return await _item_out(session, conv)
 
@@ -245,9 +248,14 @@ async def close(session: AsyncSession, ctx: OrgContext, cid: uuid.UUID) -> schem
     conv.status = "closed"
     await session.flush()
     await _publish_inbox(session, ctx, conv, "conversation.closed")
-    await emit_event(session, ctx.org.id, "conversation.closed", {"conversation_id": str(conv.id)})
+    await emit_event(
+        session, ctx.org.id, "conversation.closed", {"conversation_id": str(conv.id)}, agent_id=conv.agent_id
+    )
+    await emit_conversation_ended(session, conv, reason="closed_by_operator")
     if handoff is not None:
-        await emit_event(session, ctx.org.id, "handoff.resolved", {"conversation_id": str(conv.id)})
+        await emit_event(
+            session, ctx.org.id, "handoff.resolved", {"conversation_id": str(conv.id)}, agent_id=conv.agent_id
+        )
     return await _item_out(session, conv)
 
 
@@ -429,6 +437,14 @@ async def send_template(
     """Re-open a WhatsApp conversation with a pre-approved template."""
     rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
     conv = await _get_conversation(session, ctx, cid)
+    msg = await deliver_template(session, conv, template, params)
+    await _publish_inbox(session, ctx, conv, "message.created")
+    return _message_out(msg)
+
+
+async def deliver_template(session: AsyncSession, conv: Conversation, template: str, params: list[str]) -> Message:
+    """Send a pre-approved WhatsApp template into `conv` and record it. Used by the operator action above and by
+    inbound hooks, which have no signed-in operator; each caller does its own permission check."""
     if conv.channel != "whatsapp":
         raise AppError("inbox.templates_unsupported", "Templates are a WhatsApp feature.", 400)
     channel = await _channel_row(session, conv)
@@ -470,8 +486,26 @@ async def send_template(
     session.add(msg)
     conv.last_message_at = _now()
     await session.flush()
-    await _publish_inbox(session, ctx, conv, "message.created")
-    return _message_out(msg)
+    return msg
+
+
+async def send_proactive_message(session: AsyncSession, conv: Conversation, text: str, *, provider: str) -> Message:
+    """An assistant message nobody typed at the keyboard (an inbound hook, an automation). The channel adapter's
+    own `check_can_send` runs first, so WhatsApp's 24-hour window is respected exactly as for an operator reply."""
+    await _check_can_send(session, conv)
+    msg = Message(
+        conversation_id=conv.id,
+        organization_id=conv.organization_id,
+        role="assistant",
+        content=text,
+        provider=provider,
+    )
+    session.add(msg)
+    conv.last_message_at = _now()
+    await session.flush()
+    await _deliver_to_user(session, conv, text)
+    await hub.publish(conv_topic(conv.id), {"type": "operator_message", "content": text, "message_id": str(msg.id)})
+    return msg
 
 
 # ── Realtime ───────────────────────────────────────────────────────────────────────

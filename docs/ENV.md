@@ -521,3 +521,6 @@ to RRF ordering, logged, never an error and never an empty result set.
 | `GUARD_POLICY_MODEL` | `openai/gpt-oss-20b` | L3 model (own rate-limit bucket, not the chat's) |
 | `GUARD_POLICY_FALLBACK_MODEL` | `qwen/qwen3.8-27b` | Tried once when the L3 model is unavailable |
 | `TOOL_FOLLOWUP_DROPS_CONTEXT` | `true` | A tool turn's follow-up model calls do not re-send the retrieved context (ADR-126) |
+| `INBOUND_HOOK_RATE_PER_MINUTE` | `60` | Authenticated calls one inbound hook accepts per minute; past it the caller gets `429` (docs/28 T3) |
+| `INBOUND_HOOK_UNAUTH_RATE_PER_MINUTE` | `120` | Calls per minute from one IP to one hook before authentication, so strangers cannot use up the real sender's quota |
+| `INBOUND_HOOK_AGENT_TURN_TIMEOUT_S` | `25` | How long an `agent_turn` hook waits for the model before answering `504` |

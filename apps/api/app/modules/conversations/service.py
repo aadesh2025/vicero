@@ -97,7 +97,11 @@ async def _get_or_create_conversation(
     session.add(conv)
     await session.flush()
     await emit_event(
-        session, ctx.org.id, "conversation.created", {"conversation_id": str(conv.id), "channel": "dashboard"}
+        session,
+        ctx.org.id,
+        "conversation.created",
+        {"conversation_id": str(conv.id), "channel": "dashboard"},
+        agent_id=conv.agent_id,
     )
     return conv
 
@@ -378,6 +382,7 @@ async def _finalize_turn(
         conv.organization_id,
         "message.created",
         {"conversation_id": str(conv.id), "message_id": str(msg.id), "role": "assistant"},
+        agent_id=conv.agent_id,
     )
     return msg
 

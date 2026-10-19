@@ -30,6 +30,7 @@ from app.models.identity import (
     Session,
     User,
 )
+from app.models.inbound_hooks import InboundHook, InboundHookEvent
 from app.models.inbox import Handoff
 from app.models.integrations import GoogleCalendarConnection
 from app.models.knowledge import Chunk, Document, KnowledgeBase
@@ -88,6 +89,8 @@ __all__ = [
     "GoogleCalendarConnection",
     "Handoff",
     "HelpArticle",
+    "InboundHook",
+    "InboundHookEvent",
     "Invitation",
     "KnowledgeBase",
     "MCPServer",

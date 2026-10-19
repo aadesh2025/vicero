@@ -44,6 +44,7 @@ from app.modules.contacts.router import router as contacts_router
 from app.modules.conversations.router import router as conversations_router
 from app.modules.credentials.router import router as credentials_router
 from app.modules.help_articles.router import router as help_articles_router
+from app.modules.inbound_hooks.router import router as inbound_hooks_router
 from app.modules.inbox.router import router as inbox_router
 from app.modules.integrations.router import callback_router as google_callback_router
 from app.modules.integrations.router import router as integrations_router
@@ -225,6 +226,7 @@ def create_app() -> FastAPI:
     app.include_router(tools_router)
     app.include_router(agent_tools_router)
     app.include_router(connections_router)
+    app.include_router(inbound_hooks_router)
     app.include_router(mcp_router)
     app.include_router(agent_workflows_router)
     app.include_router(workflows_router)

@@ -38,6 +38,10 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 Phase T3: per-agent webhooks and inbound hooks (2026-10-19, ADR-134, migration 0040).** Agent-scoped outbound
+  endpoints, `tool.called` / `conversation.ended` / `lead.captured` events, delivery on the egress guard, and
+  `/v1/hooks/in/{public_id}` with signed/bearer auth, replay + idempotency protection, rate limits, a 30-day event log
+  and four actions (send_message, run_workflow, set_variables, agent_turn). New env: `INBOUND_HOOK_*` (3).
 - **docs/28 Phase T2: per-agent MCP (2026-10-19, ADR-133, migration 0039).** Streamable HTTP transport with the same
   DNS-pinning as egress v2, discovery cache + hourly refresh, `PUT /v1/agents/{id}/mcp-servers` allowlists (empty means
   none, 20-tool ceiling), per-tool description override, `PATCH/DELETE /v1/mcp/servers/{id}`, `refresh-tools`, MCP slot

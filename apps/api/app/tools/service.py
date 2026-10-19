@@ -512,12 +512,26 @@ async def execute_tool_call(
     run.attempt = result.attempt
     run.request_sanitized = result.request
     from app.webhooks.dispatch import emit_event
+    from app.webhooks.events import emit_tool_called
 
     await emit_event(
         session,
         tool.organization_id,
         "tool.run",
         {"tool": tool.name, "status": result.status, "run_id": str(run.id)},
+        agent_id=ctx.agent_id,
+    )
+    await emit_tool_called(
+        session,
+        org_id=tool.organization_id,
+        agent_id=ctx.agent_id,
+        tool_name=tool.name,
+        provider=_provider_of(tool),
+        status=result.status,
+        latency_ms=run.latency_ms,
+        args=call.arguments,
+        run_id=run.id,
+        conversation_id=ctx.conversation_id,
     )
     return result
 

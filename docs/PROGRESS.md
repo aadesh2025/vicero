@@ -38,6 +38,10 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 Phase T2: per-agent MCP (2026-10-19, ADR-133, migration 0039).** Streamable HTTP transport with the same
+  DNS-pinning as egress v2, discovery cache + hourly refresh, `PUT /v1/agents/{id}/mcp-servers` allowlists (empty means
+  none, 20-tool ceiling), per-tool description override, `PATCH/DELETE /v1/mcp/servers/{id}`, `refresh-tools`, MCP slot
+  limits (Pro 2). Tested against a real in-process Streamable HTTP MCP server (`tests/mcp_fixture.py`).
 - **docs/28 Phase T1: connections, API tool v2, egress guard v2, tool bindings (2026-10-19, ADR-132, migration 0038).**
   `app/core/egress.py` (DNS-pinned, redirect/size-bounded outbound requests), `app/modules/connections/` (CRUD + `/test`,
   secrets encrypted and masked, audited, plan-gated), `app/tools/api_tool.py` (`type="api"`; `type="http"` now runs on

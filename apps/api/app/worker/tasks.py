@@ -436,3 +436,30 @@ async def _run_embed_product(product_id: str) -> bool:
 def embed_product_task(product_id: str) -> bool:
     """Embed one product for catalog search. Best effort: keyword search works without it."""
     return _run(_run_embed_product(product_id))
+
+
+async def _run_mcp_refresh() -> int:
+    from app.models import MCPServer
+    from app.tools.mcp_service import refresh_server, stale_server_ids
+
+    async with SessionFactory() as session:
+        ids = await stale_server_ids(session)
+    refreshed = 0
+    for server_id in ids:  # one session each, so one bad server cannot roll back the others
+        try:
+            async with SessionFactory() as session:
+                server = await session.get(MCPServer, server_id)
+                if server is not None:
+                    await refresh_server(session, server)
+                    await session.commit()
+                    refreshed += 1
+        except Exception as exc:
+            log.warning("mcp_refresh_failed", server_id=str(server_id), error=str(exc))
+    return refreshed
+
+
+@celery_app.task(name="mcp.refresh_stale")  # type: ignore[untyped-decorator]
+def refresh_stale_mcp_tools_task() -> int:
+    """Hourly (Celery beat): re-discover the tools of MCP servers whose cache is a day old. A visitor's turn
+    only ever reads the cache; this is the only place discovery happens off a person's click (docs/28 T2.4)."""
+    return _run(_run_mcp_refresh())

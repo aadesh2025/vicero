@@ -498,25 +498,45 @@ async def require_workflow_slot(session: AsyncSession, org: Organization) -> Non
 
 
 async def require_tool_slot(session: AsyncSession, org: Organization) -> None:
-    """Tools and MCP servers share one cap — docs/22 §11 groups "Tool count" across both
-    (`tools/service.create_tool, MCP create`)."""
-    from app.models import MCPServer, Tool
+    """The tool cap. An MCP server is one `max_mcp_servers` slot, and the tool rows an agent's MCP binding
+    creates for it are not counted here (docs/28 section 10); only tools somebody made count."""
+    from app.models import Tool
 
     tools = int(
         (
             await session.execute(
-                select(func.count()).select_from(Tool).where(Tool.organization_id == org.id)
+                select(func.count())
+                .select_from(Tool)
+                .where(Tool.organization_id == org.id, Tool.config["managed"].as_boolean().is_not(True))
             )
         ).scalar_one()
     )
-    mcp = int(
+    await _require_slot(session, org, "tools", "tools", tools)
+
+
+async def require_mcp_slot(session: AsyncSession, org: Organization) -> None:
+    """Registered MCP servers (docs/28 section 10). 0 on trial/Starter, so the 402 is the locked state."""
+    from app.models import MCPServer
+
+    count = int(
         (
             await session.execute(
                 select(func.count()).select_from(MCPServer).where(MCPServer.organization_id == org.id)
             )
         ).scalar_one()
     )
-    await _require_slot(session, org, "tools", "tools", tools + mcp)
+    await _require_slot(session, org, "mcp_servers", "MCP servers", count)
+
+
+async def require_mcp_allowed(session: AsyncSession, org: Organization) -> None:
+    """The plan includes MCP at all (limit not 0), without counting anything: for binding a server to an agent."""
+    await _require_slot(session, org, "mcp_servers", "MCP servers", 0)
+
+
+def mcp_allowed(org: Organization) -> bool:
+    """Non-raising form for the runtime, which must skip rather than fail."""
+    ent = get_entitlements(org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at)
+    return ent.limit_for("mcp_servers") != 0 and not ent.is_expired
 
 
 async def require_webhook_slot(session: AsyncSession, org: Organization) -> None:

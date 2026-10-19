@@ -34,7 +34,7 @@ from app.models.inbox import Handoff
 from app.models.integrations import GoogleCalendarConnection
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.models.macros import Macro
-from app.models.mcp_servers import MCPServer
+from app.models.mcp_servers import AgentMCPBinding, MCPServer
 from app.models.media import MediaAsset, Product, ProductImage
 from app.models.platform import (
     ApiKey,
@@ -59,6 +59,7 @@ from app.models.workflows import Workflow, WorkflowRun, WorkflowStep, WorkflowVe
 __all__ = [
     "PLAYGROUND_CHANNEL",
     "Agent",
+    "AgentMCPBinding",
     "AgentStep",
     "AgentTest",
     "AgentTestRun",

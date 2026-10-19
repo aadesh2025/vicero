@@ -12,14 +12,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-import app.tools.service as tools_service
-
 Headers = dict[str, str]
-
-
-@pytest.fixture(autouse=True)
-def _no_dns(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tools_service, "is_blocked_host", lambda host: False)
 
 
 async def _org(client: AsyncClient, email: str, name: str) -> tuple[Headers, str]:
@@ -124,6 +117,11 @@ PROBES: list[tuple[str, str, dict | None]] = [
     ("POST", "/v1/tools/{tool}/test", {"args": {"expression": "1+1"}}),
     ("DELETE", "/v1/tools/{tool}", None),
     ("POST", "/v1/mcp/servers/{mcp}/test-connection", None),
+    ("POST", "/v1/mcp/servers/{mcp}/refresh-tools", None),
+    ("PATCH", "/v1/mcp/servers/{mcp}", {"name": "pwned"}),
+    ("DELETE", "/v1/mcp/servers/{mcp}", None),
+    ("GET", "/v1/agents/{agent}/mcp-servers", None),
+    ("PUT", "/v1/agents/{agent}/mcp-servers", {"servers": []}),
     ("GET", "/v1/connections/{connection}", None),
     ("PATCH", "/v1/connections/{connection}", {"name": "pwned"}),
     ("POST", "/v1/connections/{connection}/test", None),

@@ -354,16 +354,13 @@ async def test_tool_creation_blocked_when_the_plan_has_expired(
     assert resp.status_code == 402, resp.text
 
 
-async def test_mcp_servers_share_the_tool_cap_with_ordinary_tools(
+async def test_mcp_servers_have_their_own_cap_and_do_not_use_up_the_tool_cap(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """docs/22 §11 groups tools and MCP servers under one "Tool count" — 6 ordinary tools plus
-    2 MCP servers already fills Pro's cap of 8."""
+    """docs/28 section 10: one MCP server is one `max_mcp_servers` slot (Pro: 2), not N tools, and it
+    does not eat into Pro's cap of 8 tools."""
     _, headers, org_id = await trial_org(client)
     await _set_plan(db_session, org_id, "pro", expires_at=FUTURE)
-
-    for _i in range(6):
-        assert (await _create_builtin_tool(client, headers)).status_code == 201
 
     for i in range(2):
         resp = await client.post(
@@ -372,10 +369,29 @@ async def test_mcp_servers_share_the_tool_cap_with_ordinary_tools(
             headers=headers,
         )
         assert resp.status_code == 201, resp.text
+    third = await client.post(
+        "/v1/mcp/servers",
+        json={"name": "mcp-3", "transport": "sse", "url_or_command": "https://example.com/mcp"},
+        headers=headers,
+    )
+    assert third.status_code == 402, third.text
+    assert third.json()["error"]["details"]["feature"] == "mcp_servers"
 
+    for _i in range(8):  # the two servers did not take any of the eight tool slots
+        assert (await _create_builtin_tool(client, headers)).status_code == 201
     blocked = await _create_builtin_tool(client, headers)
-    assert blocked.status_code == 402, blocked.text
-    assert blocked.json()["error"]["details"]["feature"] == "tools"
+    assert blocked.status_code == 402 and blocked.json()["error"]["details"]["feature"] == "tools"
+
+
+async def test_mcp_is_locked_on_starter(client: AsyncClient, db_session: AsyncSession) -> None:
+    _, headers, org_id = await trial_org(client)
+    await _set_plan(db_session, org_id, "starter", expires_at=FUTURE)
+    resp = await client.post(
+        "/v1/mcp/servers",
+        json={"name": "m", "transport": "sse", "url_or_command": "https://example.com/mcp"},
+        headers=headers,
+    )
+    assert resp.status_code == 402
 
 
 async def _create_webhook(client: AsyncClient, headers: dict[str, str], url: str) -> Response:

@@ -15,9 +15,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.crypto import decrypt
-from app.models import MCPServer, User
+from app.models import Connection, MCPServer, User
+from app.tools import connections as conn_auth
 from app.tools.base import ToolResult
 from app.tools.mcp_client import MCPServerConfig, MCPToolError, call_tool
+
+#: A tool result larger than this is cut before it goes anywhere (it will still be neutralized downstream).
+MAX_RESULT_CHARS = 16000
 
 
 def server_config(server: MCPServer) -> MCPServerConfig:
@@ -44,6 +48,22 @@ async def resolve_server_config(session: AsyncSession, server: MCPServer) -> MCP
     if server.transport == "stdio" and server.created_by is not None:
         creator = await session.get(User, server.created_by)
         config.stdio_allowed = bool(creator and creator.is_staff)
+    if server.connection_id is not None:
+        conn = await session.get(Connection, server.connection_id)
+        if conn is None or conn.organization_id != server.organization_id:
+            raise MCPToolError("this server's connection no longer exists")
+        resolved = conn_auth.resolve(conn)
+        if not resolved.enabled:
+            raise MCPToolError("this server's connection is disabled")
+        try:
+            injected = await conn_auth.build_auth(resolved)
+        except conn_auth.ConnectionAuthError as exc:
+            raise MCPToolError(f"authentication failed: {exc}") from exc
+        if injected.query:
+            raise MCPToolError("an MCP server can only use header-based connection auth")
+        config.headers = {**resolved.default_headers, **(config.headers or {}), **injected.headers}
+        # The credential may only travel to a host the connection names.
+        config.allowed_hosts = resolved.allowed_hosts or None
     return config
 
 
@@ -61,8 +81,15 @@ async def execute_mcp_tool(
     if not server.enabled:
         return ToolResult(output={}, status="error", error=f"MCP server '{server.name}' is disabled")
 
+    secrets: list[str] = []
     try:
-        output = await call_tool(await resolve_server_config(session, server), str(tool_name), args)
+        server_cfg = await resolve_server_config(session, server)
+        secrets = [v for v in (server_cfg.headers or {}).values() if len(v) >= 8]
+        secrets += [v for v in (server_cfg.env or {}).values() if len(v) >= 8]
+        output = await call_tool(server_cfg, str(tool_name), args)
     except MCPToolError as exc:
-        return ToolResult(output={}, status="error", error=str(exc))
-    return ToolResult(output=output, status="success")
+        return ToolResult(output={}, status="error", error=str(conn_auth.scrub(str(exc), secrets)))
+    text = output.get("text")
+    if isinstance(text, str) and len(text) > MAX_RESULT_CHARS:
+        output = {**output, "text": text[:MAX_RESULT_CHARS], "truncated": True}
+    return ToolResult(output=conn_auth.scrub(output, secrets), status="success")

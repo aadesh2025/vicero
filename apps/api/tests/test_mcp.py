@@ -18,16 +18,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.tools.mcp_client as mcp_client
+import app.tools.mcp_service as mcp_service
 import app.tools.mcp_tool as mcp_tool_module
-import app.tools.service as tools_service
 from app.models import MCPServer, User
 from app.tools.mcp_client import MCPToolError
 
 
 @pytest.fixture(autouse=True)
-def _no_dns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Registration resolves the SSE host; tests use made-up names, so block by literal address."""
-    monkeypatch.setattr(tools_service, "is_blocked_host", lambda host: host == "10.0.0.5")
+def _public_dns(dns: dict[str, list[str]]) -> None:
+    """Made-up server names resolve to a public address; a literal private IP is refused at registration."""
 
 
 async def _headers(client: AsyncClient, email: str = "a@example.com") -> tuple[dict[str, str], dict]:
@@ -96,7 +95,7 @@ async def test_editor_cannot_register_a_stdio_server(client: AsyncClient) -> Non
         headers=headers,
     )
     assert r.status_code == 403
-    assert r.json()["error"]["code"] == "tools.mcp_stdio_forbidden"
+    assert r.json()["error"]["code"] == "mcp.transport_forbidden"
 
 
 async def test_staff_can_register_a_stdio_server_with_args_and_env(
@@ -162,7 +161,12 @@ async def test_a_stdio_row_from_a_non_staff_creator_is_never_run(
 async def test_connect_refuses_an_sse_url_that_resolves_to_a_private_host(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(mcp_client, "is_blocked_host", lambda host: True)
+    from app.core import egress
+
+    async def private(host: str, port: int) -> list[str]:
+        return ["10.0.0.9"]
+
+    monkeypatch.setattr(egress, "resolve_host", private)
     config = mcp_client.MCPServerConfig(transport="sse", url_or_command="https://rebind.example/sse")
     with pytest.raises(MCPToolError, match="private/loopback"):
         await mcp_client.list_tools(config)
@@ -218,7 +222,7 @@ async def test_editor_can_register_and_test(client: AsyncClient, monkeypatch: py
     async def fake_list_tools(_config: object) -> list[dict[str, object]]:
         return [{"name": "get_events", "description": "List calendar events", "input_schema": {}}]
 
-    monkeypatch.setattr(tools_service, "mcp_list_tools", fake_list_tools)
+    monkeypatch.setattr(mcp_service, "mcp_list_tools", fake_list_tools)
 
     server = await _create_server(client, editor_headers)
     tested = await client.post(f"/v1/mcp/servers/{server['id']}/test-connection", headers=editor_headers)
@@ -246,7 +250,7 @@ async def test_connection_failure_returns_ok_false_not_a_5xx(
     async def failing_list_tools(_config: object) -> list[dict[str, object]]:
         raise MCPToolError("connection refused")
 
-    monkeypatch.setattr(tools_service, "mcp_list_tools", failing_list_tools)
+    monkeypatch.setattr(mcp_service, "mcp_list_tools", failing_list_tools)
 
     headers, _ = await _headers(client)
     server = await _create_server(client, headers)

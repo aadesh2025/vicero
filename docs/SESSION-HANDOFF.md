@@ -3,6 +3,12 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ AGENT TOOLS T2 — 2026-10-19 (per-agent MCP, ADR-133, migration 0039; stacked on T1)
+
+- Branch `feat/tools-t2-mcp`. Code: `app/tools/mcp_service.py` (servers, discovery, bindings), `app/tools/mcp_client.py` (`PinnedTransport`), `app/tools/limits.py`, Celery `mcp.refresh_stale`.
+- Test seam: `mcp_client.INNER_TRANSPORT` + `tests/mcp_fixture.py` run the real SDK server in-process.
+- Next: T3 (outbound webhooks per agent + inbound hooks).
+
 ## ▶ AGENT TOOLS T1 — 2026-10-19 (newest; docs/28, ADR-132)
 
 - Branch `feat/tools-t1-connections` (off `master`), tag `tools-phase-T1-complete` once merged. Migration `0038_connections_and_bindings` (round-trip verified).

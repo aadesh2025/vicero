@@ -18,6 +18,47 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-132: Connections, API tool v2, egress guard v2, and agent tool bindings (docs/28 T1)
+- **Date:** 2026-10-19
+- **Status:** accepted
+- **Context:** HTTP tools kept secrets in `Tool.config`, checked the destination by name and then let the client
+  resolve it again (DNS rebinding), followed no policy on redirects or body size, and a tool belonged to exactly one
+  agent. docs/28 wants per-agent tools with reusable credentials.
+- **Decision:**
+  1. `connections` (migration 0038): base URL + auth type + Fernet-encrypted secrets + `allowed_hosts` (defaults to the
+     base host). Secrets are one JSON blob per `auth_type` (`app/tools/connections.py`), returned only masked
+     (`••••last4`), and a blank or masked field on PATCH keeps the stored value. OAuth2 client-credentials tokens are
+     cached (Redis, with an in-process fallback) until 30 s before expiry. Deleting a connection that tools use is a 409.
+  2. `app/core/egress.safe_request` is the one outbound path for tenant-steered calls: resolve first, refuse any
+     non-public address (private, loopback, link-local/metadata, CGNAT, ULA, v4-mapped v6, legacy decimal/hex/octal IP
+     forms), connect to the **resolved IP** with the original Host and TLS server name, no redirects by default
+     (each hop re-validated, credentials dropped on a host change), body streamed and cut at `max_bytes`, `trust_env`
+     off. `allowed_hosts` can only narrow: an allowlisted private address is still refused. Verified against a real
+     HTTPS server (cert validated against the name while connecting to the IP).
+  3. `type="api"` (`app/tools/api_tool.py`): `{{param}}` / `{{vars.x}}` templates, path/query values percent-encoded,
+     header values lose control characters and non-ASCII is percent-encoded, an exact `{{x}}` in a JSON body keeps its
+     type, the host of a URL template can never contain a placeholder, JSON Schema validation before any request,
+     `response.pick` through a small hand-written selector subset (no eval), retries only for idempotent requests
+     (or a POST carrying an `Idempotency-Key`), at most 3. Every output, error and logged request is scrubbed of the
+     connection secrets; `tool_runs` gains `agent_id`, `provider`, `request_sanitized`, `attempt`. `type="http"` runs
+     on the same executor with no connection (arguments still render as strings).
+  4. `agent_tool_bindings` replace `Tool.agent_id` as the resolution source; migration 0038 backfills from it and an
+     ORM `after_insert` hook binds any tool created with an `agent_id`, so the service, the seed and tests keep working
+     unchanged. `GET/PUT /v1/agents/{id}/tools` sets the whole list and its order; override supported in T1:
+     `description`. 20 enabled tools per agent at most. A tool owned by another agent runs only if resolution bound it
+     (`ToolContext.bound_tool_ids`).
+  5. Workflow `http` node: same executor, reached through the tool executor under the name `http:<node_id>` so cached
+     workflow tests can script it and no signature changed; needs no agent. Its result is neutralized like a tool result.
+  6. Plan limits `max_connections` / `max_mcp_servers` / `max_inbound_hooks` added (0 on trial/Starter, 5/2/3 on Pro,
+     unlimited above). Only connections are enforced in T1.
+- **Alternatives considered:** pinning with a custom httpx transport (more code, same effect as the URL + `sni_hostname`
+  route); storing `approval_required`/`messages`/`rate_limit` on the tool API now (rejected: a setting the runtime does
+  not yet enforce would read as protection - the columns exist, the fields arrive with T4).
+- **Consequences:** `tools.agent_id` stays as the "owner" the first binding was seeded from. The built-in
+  `http_request` tool still uses `is_blocked_host` (not moved in T1). A test seam, `egress.DEFAULT_TRANSPORT`, lets
+  tests drive every call site with no network. `jsonschema` is now a declared dependency (it was already installed via
+  `mcp`).
+
 ### ADR-131: Block text goes through the output guard, and a withdrawn turn takes its blocks with it
 - **Date:** 2026-10-17
 - **Status:** accepted

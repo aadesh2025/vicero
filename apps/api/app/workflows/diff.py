@@ -36,6 +36,7 @@ from app.workflows.graph import _COND_RE, _VAR_PATTERN
 _WRITES: dict[str, tuple[str, ...]] = {
     "set_variable": ("key",),
     "tool": ("result_variable",),
+    "http": ("result_variable",),
     "agent": ("result_variable",),
     "sub_agent": ("result_variable",),
     "loop": ("item_variable", "index_variable"),
@@ -83,12 +84,27 @@ def _node_reads(node: dict[str, Any]) -> set[str]:
             reads.add(val)
     for key in _TEMPLATE_KEYS.get(ntype, ()):
         reads |= _extract_template_vars(config.get(key))
+    if ntype == "http":
+        # Every string in the request template (url, path, query, headers, body) may reference variables;
+        # `{{vars.x}}` is the same variable as `{{x}}`.
+        for text in _strings_in({k: v for k, v in config.items() if k != "result_variable"}):
+            reads |= {r.removeprefix("vars.") for r in _extract_template_vars(text)}
     if ntype == "tool":
         # A tool node's string arguments are template-rendered (graph.py `_run_tool`);
         # non-string arguments are passed through literally and reference nothing.
         for v in (config.get("arguments") or {}).values():
             reads |= _extract_template_vars(v)
     return reads
+
+
+def _strings_in(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in _strings_in(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in _strings_in(v)]
+    return []
 
 
 def _node_writes(node: dict[str, Any]) -> set[str]:

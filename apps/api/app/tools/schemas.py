@@ -78,6 +78,9 @@ class TestToolResponse(BaseModel):
     output: dict[str, Any]
     error: str | None
     latency_ms: int
+    # The request as it went out, with credentials masked (API tools). The test panel shows it beside the response.
+    request: dict[str, Any] | None = None
+    attempt: int = 1
 
 
 class N8nWorkflowOut(BaseModel):
@@ -107,9 +110,25 @@ class N8nCallbackRequest(BaseModel):
     error: str | None = None
 
 
+class ToolRunPage(BaseModel):
+    items: list[ToolRunOut]
+    #: Pass back as `cursor` for the next (older) page; null on the last page.
+    next_cursor: str | None = None
+
+
+class ToolRunSummary(BaseModel):
+    """One tool's recent activity, for the cards on the Tools tab."""
+
+    tool_id: uuid.UUID
+    calls_7d: int
+    last_status: str | None
+    last_run_at: dt.datetime | None
+
+
 class ToolRunOut(BaseModel):
     id: uuid.UUID
     tool_id: uuid.UUID
+    tool_name: str | None = None
     conversation_id: uuid.UUID | None
     status: str
     input: dict[str, Any]
@@ -146,6 +165,8 @@ class ToolBindingOut(BaseModel):
     enabled: bool
     position: int
     overrides: dict[str, Any]
+    #: True for an MCP tool the agent's MCP binding created: it is chosen per server, not through this list.
+    managed: bool = False
 
 
 # ── MCP servers (docs/17 Phase 1 §4) ────────────────────────────────────────────────────

@@ -17,6 +17,32 @@ from app.tools import mcp_service, schemas, service
 
 router = APIRouter(prefix="/v1/tools", tags=["tools"])
 agent_tools_router = APIRouter(prefix="/v1/agents", tags=["tools"])
+tool_runs_router = APIRouter(prefix="/v1/tool-runs", tags=["tools"])
+
+
+@tool_runs_router.get("", response_model=schemas.ToolRunPage)
+async def list_tool_runs(
+    agent_id: uuid.UUID | None = Query(default=None),
+    tool_id: uuid.UUID | None = Query(default=None),
+    status: str | None = Query(default=None, max_length=24),
+    cursor: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=25, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> schemas.ToolRunPage:
+    """The tool-run log with filters and cursor paging (docs/28 section 8)."""
+    return await service.list_run_page(
+        session, ctx, agent_id=agent_id, tool_id=tool_id, status=status, cursor=cursor, limit=limit
+    )
+
+
+@tool_runs_router.get("/summary", response_model=list[schemas.ToolRunSummary])
+async def tool_run_summary(
+    agent_id: uuid.UUID | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.ToolRunSummary]:
+    return await service.run_summary(session, ctx, agent_id)
 
 
 @agent_tools_router.get("/{agent_id}/mcp-servers", response_model=list[schemas.MCPBindingOut])

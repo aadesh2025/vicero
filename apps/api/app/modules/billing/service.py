@@ -56,6 +56,9 @@ def _limits(spec: PlanSpec) -> schemas.PlanLimitsOut:
         workflows=spec.max_workflows,
         tools=spec.max_tools,
         webhooks=spec.max_webhooks,
+        connections=spec.max_connections,
+        mcp_servers=spec.max_mcp_servers,
+        inbound_hooks=spec.max_inbound_hooks,
         team_members=spec.max_team_members,
     )
 

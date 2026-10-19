@@ -18,6 +18,9 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-136: Tools UI - one tab, sections by job, no new infrastructure (docs/28 T5)
+- **Status:** accepted. The Tools tab composes Built-in, API tools, MCP servers, Automations, Webhooks (outbound and inbound) and Logs; connections live in Settings. Locked features (plan limit 0) show a neutral lock note with an Upgrade link, never a hidden section. Forms are keyed dialogs (Radix unmounts on close) so each open starts fresh without effects. Secrets are shown once (hook secret, endpoint secret) and sample cURL reads `$HOOK_SECRET`, never the value. Tool approvals are an Inbox tab fed by `/v1/inbox/tool-approvals`; the pending count badge polls every 15s. Playground labels `tool_message` events so spoken lines are not mistaken for the answer.
+
 ### ADR-135: Advanced tool behaviour - variables, spoken messages, approval, background tools, limits (docs/28 T4)
 - **Date:** 2026-10-19
 - **Status:** accepted

@@ -65,6 +65,9 @@ def test_starter_row(client: TestClient) -> None:
         "workflows": 0,
         "tools": 0,
         "webhooks": 0,
+        "connections": 0,
+        "mcp_servers": 0,
+        "inbound_hooks": 0,
         "team_members": 1,
     }
     assert p["channels"] == ["web"]

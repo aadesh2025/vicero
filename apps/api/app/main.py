@@ -61,7 +61,7 @@ from app.modules.workflow_tests.router import tests_router as workflow_tests_rou
 from app.rag import converters, rerank
 from app.realtime.hub import hub
 from app.tools.mcp_router import router as mcp_router
-from app.tools.router import agent_tools_router
+from app.tools.router import agent_tools_router, tool_runs_router
 from app.tools.router import router as tools_router
 from app.webhooks.router import router as webhooks_router
 from app.workflows.router import agent_workflows_router
@@ -225,6 +225,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations_router)
     app.include_router(tools_router)
     app.include_router(agent_tools_router)
+    app.include_router(tool_runs_router)
     app.include_router(connections_router)
     app.include_router(inbound_hooks_router)
     app.include_router(mcp_router)

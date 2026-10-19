@@ -38,6 +38,10 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 Phase T5: tools UI (2026-10-19, ADR-136).** Settings > Connections, rewritten Tools tab (API tool editor with
+  test/replay, MCP panel with 20-tool ceiling, webhooks panel both directions, logs with replay), Inbox "Tool approvals" tab,
+  playground `tool_message` labels. Backend adds `GET /v1/tool-runs` (+`/summary`), `managed` on bindings, plan limits for
+  connections/MCP/inbound hooks. Verified: tsc, eslint, vitest 886, Playwright `48-tools-ui` (incl. axe, both themes).
 - **docs/28 Phase T4: tool behaviour (2026-10-19, ADR-135, migration 0041).** Conversation variables
   (`set_variable`/`get_variable`/`collect_field`, API `capture`, `{{vars.x}}`), spoken tool messages (widget + channels),
   approval through the Inbox, background tools with an agent follow-up (also for late n8n results), per-tool rate limits,

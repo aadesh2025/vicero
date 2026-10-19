@@ -24,6 +24,10 @@ class PlanLimitsOut(BaseModel):
     workflows: int | None
     tools: int | None
     webhooks: int | None
+    # docs/28 section 10: saved API connections, registered MCP servers, inbound trigger hooks.
+    connections: int | None
+    mcp_servers: int | None
+    inbound_hooks: int | None
     team_members: int | None
 
 

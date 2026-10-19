@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, CornerDownLeft, FileText, Headphones, RotateCcw, Sparkles, User, Wrench } from "lucide-react";
+import {
+  Bot,
+  CornerDownLeft,
+  FileText,
+  Headphones,
+  RotateCcw,
+  Sparkles,
+  User,
+  Wrench,
+} from "lucide-react";
 import { useBuilder } from "@/lib/store/builder";
 import { useSession } from "@/lib/store/session";
 import { playgroundStream } from "@/lib/api/agents";
@@ -16,6 +25,8 @@ interface Msg {
   streaming?: boolean;
   citation?: string;
   tool?: string;
+  /** Spoken tool messages ("Checking your order..."), shown labelled so they are not mistaken for the answer. */
+  spoken?: { kind: string; text: string }[];
   handoff?: boolean;
 }
 
@@ -42,7 +53,13 @@ export function Playground() {
   // Seed with the welcome message whenever the draft's welcome text changes.
   useEffect(() => {
     if (!draft) return;
-    setMessages([{ id: idRef.current++, role: "assistant", text: draft.persona.welcomeMessage }]);
+    setMessages([
+      {
+        id: idRef.current++,
+        role: "assistant",
+        text: draft.persona.welcomeMessage,
+      },
+    ]);
   }, [draft?.persona.welcomeMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Moving to another agent starts a new session. Without this the ref would survive the
@@ -52,7 +69,10 @@ export function Playground() {
   }, [agentId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages]);
 
   const send = async () => {
@@ -61,7 +81,9 @@ export function Playground() {
     setInput("");
     setBusy(true);
 
-    const history = messages.filter((m) => m.text).map((m) => ({ role: m.role, content: m.text }));
+    const history = messages
+      .filter((m) => m.text)
+      .map((m) => ({ role: m.role, content: m.text }));
     const userId = idRef.current++;
     const botId = idRef.current++;
     setMessages((m) => [
@@ -71,25 +93,62 @@ export function Playground() {
     ]);
 
     try {
-      for await (const event of playgroundStream(agentId, text, history, conversationRef.current)) {
+      for await (const event of playgroundStream(
+        agentId,
+        text,
+        history,
+        conversationRef.current,
+      )) {
         const type = event.type as string;
-        if (type === "conversation" && typeof event.conversation_id === "string") {
+        if (
+          type === "conversation" &&
+          typeof event.conversation_id === "string"
+        ) {
           conversationRef.current = event.conversation_id;
         } else if (type === "token" && typeof event.delta === "string") {
           const delta = event.delta;
-          setMessages((m) => m.map((msg) => (msg.id === botId ? { ...msg, text: msg.text + delta } : msg)));
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === botId ? { ...msg, text: msg.text + delta } : msg,
+            ),
+          );
         } else if (type === "tool_call") {
           const tc = event.tool_call as { name?: string } | null;
-          setMessages((m) => m.map((msg) => (msg.id === botId ? { ...msg, tool: tc?.name } : msg)));
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === botId ? { ...msg, tool: tc?.name } : msg,
+            ),
+          );
+        } else if (type === "tool_message") {
+          const tm = event.tool_message as {
+            kind?: string;
+            text?: string;
+          } | null;
+          if (tm?.text) {
+            const entry = { kind: tm.kind ?? "start", text: tm.text };
+            setMessages((m) =>
+              m.map((msg) =>
+                msg.id === botId
+                  ? { ...msg, spoken: [...(msg.spoken ?? []), entry] }
+                  : msg,
+              ),
+            );
+          }
         } else if (type === "done" && event.finish_reason === "handoff") {
           // The bot paused itself here — same trigger a real visitor's "talk to a human"
           // hits in app/chat/inbound.py. Flag it so the transcript shows what actually
           // happened instead of reading like an ordinary reply.
-          setMessages((m) => m.map((msg) => (msg.id === botId ? { ...msg, handoff: true } : msg)));
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === botId ? { ...msg, handoff: true } : msg,
+            ),
+          );
         } else if (type === "error") {
           setMessages((m) =>
             m.map((msg) =>
-              msg.id === botId ? { ...msg, text: `⚠ ${String(event.error)}`, streaming: false } : msg,
+              msg.id === botId
+                ? { ...msg, text: `⚠ ${String(event.error)}`, streaming: false }
+                : msg,
             ),
           );
         }
@@ -97,11 +156,19 @@ export function Playground() {
     } catch {
       setMessages((m) =>
         m.map((msg) =>
-          msg.id === botId ? { ...msg, text: msg.text || "⚠ Couldn't reach the agent.", streaming: false } : msg,
+          msg.id === botId
+            ? {
+                ...msg,
+                text: msg.text || "⚠ Couldn't reach the agent.",
+                streaming: false,
+              }
+            : msg,
         ),
       );
     } finally {
-      setMessages((m) => m.map((msg) => (msg.id === botId ? { ...msg, streaming: false } : msg)));
+      setMessages((m) =>
+        m.map((msg) => (msg.id === botId ? { ...msg, streaming: false } : msg)),
+      );
       setBusy(false);
     }
   };
@@ -110,12 +177,23 @@ export function Playground() {
     // A reset starts a fresh session, so the next turn opens a new conversation rather than
     // appending an unrelated transcript to the previous one.
     conversationRef.current = null;
-    setMessages(draft ? [{ id: idRef.current++, role: "assistant", text: draft.persona.welcomeMessage }] : []);
+    setMessages(
+      draft
+        ? [
+            {
+              id: idRef.current++,
+              role: "assistant",
+              text: draft.persona.welcomeMessage,
+            },
+          ]
+        : [],
+    );
   };
 
   if (!draft) return null;
   const providerLabel =
-    providers.data?.find((p) => p.name === draft.model.provider)?.label ?? draft.model.provider;
+    providers.data?.find((p) => p.name === draft.model.provider)?.label ??
+    draft.model.provider;
   const modelLabel = `${providerLabel} · ${draft.model.model}`;
 
   return (
@@ -124,8 +202,12 @@ export function Playground() {
         <span className="grid size-7 place-items-center rounded-lg bg-ai-soft text-ai">
           <Sparkles className="size-4" />
         </span>
-        <span className="font-display text-sm font-extrabold text-text">Playground</span>
-        <span className="rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[10px] font-bold text-faint">draft</span>
+        <span className="font-display text-sm font-extrabold text-text">
+          Playground
+        </span>
+        <span className="rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[10px] font-bold text-faint">
+          draft
+        </span>
         <button
           onClick={reset}
           className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-muted transition-colors hover:bg-surface-2 hover:text-text"
@@ -134,7 +216,10 @@ export function Playground() {
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4 scroll-thin">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto p-4 scroll-thin"
+      >
         {messages.map((m) =>
           m.role === "user" ? (
             <div key={m.id} className="flex justify-end gap-2">
@@ -153,9 +238,22 @@ export function Playground() {
               <div className="flex min-w-0 flex-col gap-1.5">
                 {m.handoff && (
                   <div className="inline-flex w-fit items-center gap-1.5 rounded-md bg-warn-soft px-2 py-1 text-[11px] font-bold text-warn-text">
-                    <Headphones className="size-3" /> Handed off to a human — status set to &quot;handoff&quot;
+                    <Headphones className="size-3" /> Handed off to a human —
+                    status set to &quot;handoff&quot;
                   </div>
                 )}
+                {m.spoken?.map((sp, i) => (
+                  <div
+                    key={i}
+                    className="inline-flex w-fit items-center gap-1.5 rounded-md bg-surface-3 px-2 py-1 text-[11px] font-semibold text-muted"
+                  >
+                    <Wrench className="size-3" aria-hidden />
+                    <span className="font-mono text-faint">
+                      tool message ({sp.kind})
+                    </span>{" "}
+                    {sp.text}
+                  </div>
+                ))}
                 {m.tool && (
                   <div className="inline-flex w-fit items-center gap-1.5 rounded-md bg-surface-3 px-2 py-1 font-mono text-[11px] font-semibold text-muted">
                     <Wrench className="size-3" />
@@ -199,7 +297,9 @@ export function Playground() {
             disabled={!input.trim() || busy}
             className={cn(
               "grid size-8 shrink-0 place-items-center rounded-lg transition-colors",
-              input.trim() && !busy ? "bg-ai text-white hover:bg-ai/90" : "bg-surface-3 text-faint",
+              input.trim() && !busy
+                ? "bg-ai text-white hover:bg-ai/90"
+                : "bg-surface-3 text-faint",
             )}
             aria-label="Send message"
           >

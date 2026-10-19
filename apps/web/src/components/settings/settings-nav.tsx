@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, KeyRound, MessageSquareQuote, PlugZap, ScrollText, UserCircle, Webhook, Zap } from "lucide-react";
+import { Building2, KeyRound, Link2, MessageSquareQuote, PlugZap, ScrollText, UserCircle, Webhook, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -10,6 +10,7 @@ const items = [
   { label: "Canned responses", href: "/settings/canned-responses", icon: MessageSquareQuote },
   { label: "Macros", href: "/settings/macros", icon: Zap },
   { label: "Provider keys", href: "/settings/credentials", icon: PlugZap },
+  { label: "Connections", href: "/settings/connections", icon: Link2 },
   { label: "API keys", href: "/settings/api-keys", icon: KeyRound },
   { label: "Webhooks", href: "/settings/webhooks", icon: Webhook },
   { label: "Audit log", href: "/settings/audit", icon: ScrollText },

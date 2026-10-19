@@ -38,6 +38,8 @@ export function deleteApiKey(id: string) {
 export interface Webhook {
   id: string;
   url: string;
+  /** Set when the endpoint only receives one agent's events (docs/28 T3). */
+  agent_id?: string | null;
   events: string[];
   enabled: boolean;
   secret: string | null;
@@ -56,6 +58,15 @@ export interface WebhookDelivery {
 
 export function listWebhooks() {
   return api<Webhook[]>("/v1/webhooks", { orgScoped: true });
+}
+
+/** The endpoints that belong to one agent (they receive only that agent's events). */
+export function listAgentWebhooks(agentId: string) {
+  return api<Webhook[]>(`/v1/webhooks?agent_id=${agentId}`, { orgScoped: true });
+}
+
+export function createAgentWebhook(agentId: string, url: string, events: string[]) {
+  return api<Webhook>("/v1/webhooks", { method: "POST", orgScoped: true, body: { url, events, agent_id: agentId } });
 }
 
 export function webhookEventCatalog() {

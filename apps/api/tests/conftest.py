@@ -164,3 +164,23 @@ def _reset_rate_limiter() -> None:
     # shared Redis would carry their counters from one test run into the next (a lockout in run
     # N failing a login in run N+1). The Redis path is unit-tested in test_ratelimit.py.
     limiter._checked = True
+
+
+@pytest.fixture
+def dns(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
+    """Stage DNS answers for `app.core.egress`. Unlisted hostnames resolve to a public address, so a
+    test that mocks the HTTP transport never touches the network; add an entry to stage a rebind."""
+    from app.core import egress
+
+    answers: dict[str, list[str]] = {}
+    real = egress.resolve_host
+
+    async def fake(host: str, port: int) -> list[str]:
+        if host in answers:
+            return answers[host]
+        if egress._literal_ip(host) is not None:
+            return await real(host, port)
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(egress, "resolve_host", fake)
+    return answers

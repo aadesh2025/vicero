@@ -37,6 +37,8 @@ class Handoff(Base, UUIDPrimaryKey):
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     notes: Mapped[list[Any]] = mapped_column(JSONB, default=list, nullable=False)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
+    # What a tool-approval request is asking to run (docs/28 T4.4): {tool_id, run_id, args, agent_id}. NULL otherwise.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

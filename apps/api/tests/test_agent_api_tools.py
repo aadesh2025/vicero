@@ -188,7 +188,7 @@ async def test_binding_validation_and_rbac(client: AsyncClient) -> None:
     assert ghost.status_code == 404
     badov = await client.put(
         f"/v1/agents/{aid}/tools",
-        json={"tools": [{"tool_id": tid, "overrides": {"approval_required": True}}]},
+        json={"tools": [{"tool_id": tid, "overrides": {"temperature": 1}}]},
         headers=headers,
     )
     assert badov.status_code == 400 and badov.json()["error"]["code"] == "tools.bad_override"

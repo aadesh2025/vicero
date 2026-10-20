@@ -9,6 +9,7 @@ even if a `Tool` row somehow carried another org's `server_id`.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -67,9 +68,18 @@ async def resolve_server_config(session: AsyncSession, server: MCPServer) -> MCP
     return config
 
 
-async def execute_mcp_tool(
-    session: AsyncSession, org_id: UUID, config: dict[str, Any], args: dict[str, Any]
-) -> ToolResult:
+@dataclass(slots=True)
+class PreparedMCP:
+    """A call whose database work is done, so the network part can run without holding the session."""
+
+    server_cfg: MCPServerConfig
+    tool_name: str
+    secrets: list[str]
+
+
+async def prepare_mcp_call(session: AsyncSession, org_id: UUID, config: dict[str, Any]) -> PreparedMCP | ToolResult:
+    """Everything that needs the database: the server row, its credentials, the plan checks. Returns a ready call,
+    or the error to hand back."""
     server_id = config.get("server_id")
     tool_name = config.get("tool_name")
     if not server_id or not tool_name:
@@ -80,16 +90,31 @@ async def execute_mcp_tool(
         return ToolResult(output={}, status="error", error="MCP server not found for this organization")
     if not server.enabled:
         return ToolResult(output={}, status="error", error=f"MCP server '{server.name}' is disabled")
-
-    secrets: list[str] = []
     try:
         server_cfg = await resolve_server_config(session, server)
-        secrets = [v for v in (server_cfg.headers or {}).values() if len(v) >= 8]
-        secrets += [v for v in (server_cfg.env or {}).values() if len(v) >= 8]
-        output = await call_tool(server_cfg, str(tool_name), args)
     except MCPToolError as exc:
-        return ToolResult(output={}, status="error", error=str(conn_auth.scrub(str(exc), secrets)))
+        return ToolResult(output={}, status="error", error=str(exc))
+    secrets = [v for v in (server_cfg.headers or {}).values() if len(v) >= 8]
+    secrets += [v for v in (server_cfg.env or {}).values() if len(v) >= 8]
+    return PreparedMCP(server_cfg, str(tool_name), secrets)
+
+
+async def run_prepared_mcp(prepared: PreparedMCP, args: dict[str, Any]) -> ToolResult:
+    """The network half. Touches no database session, so several can run at once."""
+    try:
+        output = await call_tool(prepared.server_cfg, prepared.tool_name, args)
+    except MCPToolError as exc:
+        return ToolResult(output={}, status="error", error=str(conn_auth.scrub(str(exc), prepared.secrets)))
     text = output.get("text")
     if isinstance(text, str) and len(text) > MAX_RESULT_CHARS:
         output = {**output, "text": text[:MAX_RESULT_CHARS], "truncated": True}
-    return ToolResult(output=conn_auth.scrub(output, secrets), status="success")
+    return ToolResult(output=conn_auth.scrub(output, prepared.secrets), status="success")
+
+
+async def execute_mcp_tool(
+    session: AsyncSession, org_id: UUID, config: dict[str, Any], args: dict[str, Any]
+) -> ToolResult:
+    prepared = await prepare_mcp_call(session, org_id, config)
+    if isinstance(prepared, ToolResult):
+        return prepared
+    return await run_prepared_mcp(prepared, args)

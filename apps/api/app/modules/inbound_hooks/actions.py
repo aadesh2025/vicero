@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import usage
+from app.chat import convvars
 from app.chat.guardrails import neutralize_injections
 from app.core.config import settings
 from app.core.errors import AppError
@@ -205,13 +206,36 @@ async def _set_variables(session: AsyncSession, hook: InboundHook, mapped: dict[
     )
     if contact is None:
         raise HookError(404, "hooks.no_contact", "No contact with that reference on this channel.")
-    values = {k: v for k, v in mapped.items() if k != str(config.get("contact_field", "contact_id"))}
-    # Stored on the contact until conversation variables exist (docs/28 T4), then they move there.
+    values = {k: v for k, v in mapped.items() if k != str(config.get("contact_field", "contact_id")) and v is not None}
+    # The contact's latest conversation with this agent holds the variables, so the agent can use them in its
+    # prompt and tools. With none yet they wait on the contact and are the first thing a new conversation has.
+    conv = (
+        (
+            await session.execute(
+                select(Conversation)
+                .where(
+                    Conversation.organization_id == hook.organization_id,
+                    Conversation.agent_id == hook.agent_id,
+                    Conversation.contact_id == contact.id,
+                )
+                .order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if conv is not None:
+        try:
+            await convvars.apply(session, conv.id, values, source="hook")
+        except convvars.VariableError as exc:
+            raise HookError(422, "hooks.bad_variable", str(exc)) from exc
+        return {"set": sorted(values), "conversation_id": str(conv.id)}
     extra = dict(contact.extra or {})
     extra["variables"] = {**(extra.get("variables") or {}), **values}
     contact.extra = extra
     await session.flush()
-    return {"set": sorted(values)}
+    return {"set": sorted(values), "stored_on": "contact"}
 
 
 AGENT_TURN_PREFIX = (

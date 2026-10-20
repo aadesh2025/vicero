@@ -94,6 +94,23 @@ class ConversationFlagOut(BaseModel):
     resolved_at: dt.datetime | None
 
 
+class ToolApprovalOut(BaseModel):
+    """A tool call waiting on a person (docs/28 T4.4). `args` are redacted: secret-looking keys are masked."""
+
+    handoff_id: uuid.UUID
+    conversation_id: uuid.UUID | None
+    tool: str
+    args: dict[str, Any]
+    status: str
+    decision: str | None = None
+    created_at: dt.datetime
+    resolved_at: dt.datetime | None = None
+
+
+class ToolApprovalDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+
+
 class WorkflowApprovalOut(BaseModel):
     """A workflow paused on an Approval node, surfaced in the inbox (docs/17 Phase 2 item 4) —
     the same `Handoff` model a chat escalation uses, read through a workflow-shaped lens."""

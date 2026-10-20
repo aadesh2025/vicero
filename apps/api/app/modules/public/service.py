@@ -220,6 +220,8 @@ async def public_chat_sse(
     data: schemas.PublicChatRequest,
 ) -> AsyncIterator[str]:
     async for ev in public_chat_events(session, resolved, data):
+        if ev.type in ("tool_call", "tool_result"):
+            continue  # raw arguments and results (and any error text) are for the owner's logs, not the visitor
         yield f"data: {ev.model_dump_json()}\n\n"
 
 

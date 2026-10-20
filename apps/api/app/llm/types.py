@@ -86,6 +86,9 @@ StreamEventType = Literal[
     # An interactive block the agent chose to show (docs/27 Phase 2). Emitted once the output guard has
     # passed, so a turn that was rewritten or suppressed never shows one. Old widgets ignore unknown events.
     "block",
+    # What the agent says while a tool runs or after it fails (docs/28 T4.2): `tool_message` = {name, kind
+    # "start" | "delay" | "error", text}. Plain text the tool's owner wrote - never a raw error. Old widgets ignore it.
+    "tool_message",
 ]
 
 
@@ -105,3 +108,5 @@ class StreamEvent(BaseModel):
     message_id: str | None = None
     # A validated interactive block (see app.chat.blocks); only on `block` events.
     block: dict[str, Any] | None = None
+    # Only on `tool_message` events.
+    tool_message: dict[str, str] | None = None

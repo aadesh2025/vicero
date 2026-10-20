@@ -194,6 +194,26 @@ async def resolve_attention(
     return await service.resolve_attention(session, ctx, cid)
 
 
+@router.get("/tool-approvals", response_model=list[schemas.ToolApprovalOut])
+async def list_tool_approvals(
+    include_resolved: bool = False,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.ToolApprovalOut]:
+    """Tool calls the agent wants to make that need a person's yes first (docs/28 T4.4)."""
+    return await service.list_tool_approvals(session, ctx, include_resolved=include_resolved)
+
+
+@router.post("/tool-approvals/{handoff_id}/decide", response_model=schemas.ToolApprovalOut)
+async def decide_tool_approval(
+    handoff_id: uuid.UUID,
+    data: schemas.ToolApprovalDecisionRequest,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> schemas.ToolApprovalOut:
+    return await service.decide_tool_approval(session, ctx, handoff_id, data.decision)
+
+
 @router.get("/workflow-approvals", response_model=list[schemas.WorkflowApprovalOut])
 async def list_workflow_approvals(
     session: AsyncSession = Depends(get_session),

@@ -1868,6 +1868,11 @@
             bubble.innerHTML = renderMarkdown(acc);
             els.msgs.scrollTop = els.msgs.scrollHeight;
             dropTurnBlocks();
+          } else if (ev.type === "tool_message" && ev.tool_message && ev.tool_message.text) {
+            // What the agent says while a tool runs ("Let me check that for you..."). A normal bot bubble, put
+            // above the reply that is still on its way. An older cached widget.js simply ignores the event.
+            var noteRow = addMessage("bot", ev.tool_message.text).parentNode;
+            if (noteRow && bubble.parentNode) els.msgs.insertBefore(noteRow, bubble.parentNode);
           } else if (ev.type === "block" && ev.block) {
             // Interactive blocks (docs/27). Only ever sent to agents that opted in; an older cached
             // widget.js simply ignores the unknown event.

@@ -37,6 +37,7 @@ from app.models import (
 )
 from app.modules.orgs.deps import OrgContext
 from app.tools import connections as conn_auth
+from app.tools import policy as tool_policy
 from app.tools import schemas
 from app.tools.limits import MAX_TOOLS_PER_AGENT, is_managed_mcp
 from app.tools.mcp_client import MCPToolError
@@ -573,7 +574,9 @@ async def set_agent_mcp(
     for b in data.servers:
         server = servers[b.server_id]
         enabled_tools = sorted(set(b.enabled_tools))
-        overrides = {k: v.model_dump(exclude_none=True) for k, v in b.tool_overrides.items()}
+        overrides = {
+            k: tool_policy.clean_overrides(v.model_dump(exclude_none=True)) for k, v in b.tool_overrides.items()
+        }
         row = existing_bindings.get(server.id)
         if row is None:
             session.add(
@@ -651,4 +654,3 @@ async def set_agent_mcp(
         meta={"servers": {str(b.server_id): sorted(set(b.enabled_tools)) for b in data.servers}},
     )
     return await list_agent_mcp(session, ctx, agent_id)
-

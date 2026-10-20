@@ -96,6 +96,9 @@ class InboundTurn:
         #: The channel can send images, so the agent is offered `send_product_images` (docs/26 §M4).
         self.supports_images = supports_images
         self.result = TurnResult()
+        #: A channel that cannot stream sets this to send what the agent says while a tool runs as its own message
+        #: (docs/28 T4.2). The widget does not: it paints the same text from the `tool_message` stream event.
+        self.tool_message_sink: Callable[[str], Awaitable[None]] | None = None
         self.handed_off = False
         #: The plan is out (trial over / messages spent), so the bot stayed silent. The visitor's
         #: message is saved and the owner can still answer from the inbox; nothing is shown to
@@ -399,6 +402,8 @@ class InboundTurn:
             )
             if specs and executor is not None and provider.supports_tools():
                 req.tools = specs
+                if (self.version.features or {}).get("tool_choice") == "required_first_turn" and not history:
+                    req.tool_choice = "required"  # the first reply of a conversation must use a tool
             else:
                 executor = None
             budget = turn_budget(
@@ -415,6 +420,8 @@ class InboundTurn:
                 protected_prompt=system_prompt,
                 pii_allowlist=await self._pii_allowlist(),
             ):
+                if ev.type == "tool_message" and ev.tool_message and self.tool_message_sink is not None:
+                    await self.tool_message_sink(ev.tool_message["text"])
                 yield ev
             latency_ms = int((time.perf_counter() - t0) * 1000)
             stage_timing.add("llm", latency_ms)
@@ -483,6 +490,7 @@ class InboundTurn:
             user_email=getattr(contact, "email", None),
             agent_name=self.agent.name,
             business_name=org.name if org else None,
+            conversation_variables=self.conversation.variables,
         )
 
     async def _pii_allowlist(self) -> set[str]:

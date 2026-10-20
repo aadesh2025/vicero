@@ -18,6 +18,50 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-135: Advanced tool behaviour - variables, spoken messages, approval, background tools, limits (docs/28 T4)
+- **Date:** 2026-10-19
+- **Status:** accepted
+- **Context:** A tool call was synchronous, silent and unconditional. docs/28 wants a customer-facing agent that says
+  what it is doing, can wait for a person's approval on a risky action, can start slow work without freezing the chat,
+  and cannot be made to hammer an API.
+- **Decision:**
+  1. **Conversation variables are a JSONB column** (`conversations.variables`, migration 0041), not a table: at current
+     scale a bag of at most 50 short values per conversation does not justify a join. Written by `set_variable`,
+     `collect_field` (validates email / phone / number / date / text before storing), an API tool's `capture` mapping,
+     and inbound hooks; read by `get_variable`, `{{vars.name}}` in prompts (through the Phase F escaping: braces
+     stripped, newlines collapsed, 120 characters) and in API templates. Values are untrusted and cleaned on the way in.
+     `variables.captured` fires on every write.
+  2. **Tool messages** (`on_start`, `on_delay{after_s,text}`, `on_error`) are owner-written plain text, validated (no
+     placeholders, 300 characters). They travel as a `tool_message` stream event; the widget paints them as ordinary bot
+     bubbles above the reply, a channel that cannot stream sends them as separate messages (`InboundTurn.tool_message_sink`),
+     and the Playground shows them labelled. **Visitors no longer receive `tool_call` / `tool_result` events at all** (SSE
+     and WebSocket): those carried raw arguments, results and error text.
+  3. **Policy per tool, tightened per agent.** `ToolPolicy` = tool columns (`messages`, `approval_required`,
+     `rate_limit`, `mode`) overridden by the binding's `overrides`. An override can add a protection or lower a limit
+     but never remove one, so an agent editor cannot switch off what the tool's owner set.
+  4. **Approval reuses `Handoff`** (`requested_by="tool"`, `reason="tool_approval"`, new `payload`). It does not pause
+     the conversation and is excluded from the handoff queue, `_latest_handoff` and the analytics handoff counts. The
+     model is told the call is pending (not done). A decision runs the stored call or marks it declined, then the agent
+     reports the outcome. Without a conversation (a workflow tool node) an approval tool fails closed.
+  5. **Background tools** (`mode="async"`, API tools): the model gets "started" at once, a Celery task makes the call
+     and stores the outcome. **Both background results and approval decisions end in `chat/followup.py`**: one extra
+     generation through the normal pipeline (plan allowance, output guard, PII allowlist, persistence), delivered like
+     an operator reply; the outcome reaches the model wrapped and neutralized. It is skipped when a person has taken
+     over, the conversation is closed, or the plan is out, and sent once per run. The n8n async callback now queues the
+     same follow-up, which closes the "async late-result re-injection" roadmap item.
+  6. **Limits and concurrency.** `rate_limit` {per_conversation, per_minute}: the model gets `rate_limited` (the call never
+     leaves). `tool_choice` lives in the agent version's `features`: `none` offers no tools, `required_first_turn` forces
+     one on the first pass of a conversation's first turn only. Calls from one model step run together
+     (`asyncio.gather` semantics via tasks); everything that touches the database session takes one lock, the network
+     part of an API / MCP call does not, and each call still spends the shared `AgentBudget`. A per-organization
+     semaphore (`TOOL_MAX_CONCURRENCY_PER_ORG`, default 5) bounds outbound calls in flight per process.
+- **Alternatives considered:** a separate approvals table (rejected by the plan: one approval primitive); pausing the
+  conversation for an approval (rejected: the visitor would be left in silence); sessions per parallel call (rejected:
+  the run rows reference uncommitted conversation rows).
+- **Consequences:** a hook's `set_variables` now writes to the contact's latest conversation (falling back to the
+  contact when there is none). Rate limits are per process for the concurrency cap and per Redis window for per-minute
+  limits. `end_conversation` closes the conversation and announces `conversation.ended` with its variables.
+
 ### ADR-134: Per-agent outbound webhooks and inbound trigger hooks (docs/28 T3)
 - **Date:** 2026-10-19
 - **Status:** accepted

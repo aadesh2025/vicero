@@ -28,7 +28,7 @@ import re
 
 #: `{{ user_name }}` with or without inner spacing. Deliberately narrow — a bare `{` in a
 #: prompt (JSON examples, code samples) must not be treated as a template.
-_PATTERN = re.compile(r"\{\{\s*([a-z_][a-z0-9_]*)\s*\}\}")
+_PATTERN = re.compile(r"\{\{\s*((?:vars\.)?[a-z_][a-z0-9_]*)\s*\}\}")
 
 _MAX_VALUE_CHARS = 120
 
@@ -66,10 +66,17 @@ def build_context(
     agent_name: str | None = None,
     business_name: str | None = None,
     now: dt.datetime | None = None,
+    conversation_variables: dict[str, object] | None = None,
 ) -> dict[str, str]:
-    """Resolve the variable values for one turn. Every value is escaped here, once."""
+    """Resolve the variable values for one turn. Every value is escaped here, once.
+
+    `conversation_variables` become `{{vars.name}}`. They were collected from a customer or a third-party API, so
+    they go through the same escaping as a contact name and are looked up by exact name only.
+    """
     today = (now or dt.datetime.now(tz=dt.UTC)).strftime("%d %B %Y")
+    collected = {f"vars.{k}": escape_value(str(v)) for k, v in (conversation_variables or {}).items() if v is not None}
     return {
+        **collected,
         # "there" so "Hi {{user_name}}" reads as "Hi there" for an anonymous visitor rather
         # than "Hi ,".
         "user_name": escape_value(user_name) or "there",
@@ -93,7 +100,7 @@ def render(template: str | None, context: dict[str, str]) -> str | None:
 
     def _replace(match: re.Match[str]) -> str:
         name = match.group(1)
-        if name not in KNOWN_VARIABLES:
+        if name not in KNOWN_VARIABLES and not name.startswith("vars."):
             # Empty, never the literal `{{foo}}`: a typo should look like a missing word, not
             # like the template engine showing through to a customer.
             return ""

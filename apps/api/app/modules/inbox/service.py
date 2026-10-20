@@ -16,6 +16,7 @@ from app.channels.reconnect import flag_token_rejected
 from app.chat import attention
 from app.chat.handoff import trigger_handoff
 from app.core import rbac
+from app.core.audit import write_audit
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.models import (
@@ -60,7 +61,7 @@ async def _get_conversation(session: AsyncSession, ctx: OrgContext, cid: uuid.UU
 async def _latest_handoff(session: AsyncSession, conversation_id: uuid.UUID) -> Handoff | None:
     stmt = (
         select(Handoff)
-        .where(Handoff.conversation_id == conversation_id)
+        .where(Handoff.conversation_id == conversation_id, Handoff.requested_by != "tool")
         .order_by(Handoff.created_at.desc())
         .limit(1)
     )
@@ -152,7 +153,10 @@ async def list_conversations(
     #
     # `include_bot` (the "All chats" toggle) drops the handoff rule so bot-handled chats show up too, for
     # triage. It never widens the org scope: the same INBOX_HANDLE gate and organization filter apply.
-    handoff_ids = select(Handoff.conversation_id).where(Handoff.organization_id == ctx.org.id)
+    # A tool-approval request (requested_by "tool") is not a visitor asking for a person: it has its own list.
+    handoff_ids = select(Handoff.conversation_id).where(
+        Handoff.organization_id == ctx.org.id, Handoff.requested_by != "tool"
+    )
     stmt = (
         select(Conversation)
         .where(Conversation.organization_id == ctx.org.id)
@@ -489,6 +493,18 @@ async def deliver_template(session: AsyncSession, conv: Conversation, template: 
     return msg
 
 
+async def push_to_visitor(session: AsyncSession, conv: Conversation, text: str, message_id: uuid.UUID) -> None:
+    """Deliver an assistant message that is already saved (an action finished after the turn) to the visitor: out
+    through the channel, and live to an open widget. A closed WhatsApp window is logged and skipped; the message
+    stays in the transcript either way."""
+    try:
+        await _check_can_send(session, conv)
+        await _deliver_to_user(session, conv, text)
+    except AppError as exc:
+        log.warning("push_to_visitor_skipped", conversation=str(conv.id), reason=exc.code)
+    await hub.publish(conv_topic(conv.id), {"type": "operator_message", "content": text, "message_id": str(message_id)})
+
+
 async def send_proactive_message(session: AsyncSession, conv: Conversation, text: str, *, provider: str) -> Message:
     """An assistant message nobody typed at the keyboard (an inbound hook, an automation). The channel adapter's
     own `check_can_send` runs first, so WhatsApp's 24-hour window is respected exactly as for an operator reply."""
@@ -669,6 +685,53 @@ async def list_workflow_approvals(
         if item is not None:
             items.append(item)
     return items
+
+
+# A tool call that needs a person's yes is a `Handoff` with `requested_by="tool"` (docs/28 T4.4).
+
+
+async def list_tool_approvals(
+    session: AsyncSession, ctx: OrgContext, *, include_resolved: bool = False
+) -> list[schemas.ToolApprovalOut]:
+    rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
+    stmt = select(Handoff).where(Handoff.organization_id == ctx.org.id, Handoff.requested_by == "tool")
+    if not include_resolved:
+        stmt = stmt.where(Handoff.status != "resolved")
+    handoffs = (await session.execute(stmt.order_by(Handoff.created_at.asc()).limit(200))).scalars().all()
+    return [_tool_approval_out(h) for h in handoffs]
+
+
+def _tool_approval_out(h: Handoff) -> schemas.ToolApprovalOut:
+    p = h.payload or {}
+    return schemas.ToolApprovalOut(
+        handoff_id=h.id,
+        conversation_id=h.conversation_id,
+        tool=str(p.get("tool", "")),
+        args=dict(p.get("args") or {}),
+        status=h.status,
+        decision=(h.notes[-1].get("decision") if h.notes and isinstance(h.notes[-1], dict) else None),
+        created_at=h.created_at,
+        resolved_at=h.resolved_at,
+    )
+
+
+async def decide_tool_approval(
+    session: AsyncSession, ctx: OrgContext, handoff_id: uuid.UUID, decision: str
+) -> schemas.ToolApprovalOut:
+    """Approve (the stored call runs now) or reject (it never does). The agent then tells the customer how it went."""
+    from app.tools import deferred
+
+    rbac.require_permission(ctx.role, rbac.INBOX_HANDLE)
+    handoff = await deferred.get_open_approval(session, ctx.org.id, handoff_id)
+    handoff, run = await deferred.decide(session, handoff, approve=decision == "approved", decided_by=ctx.user.id)
+    await write_audit(
+        session, ctx.org.id, ctx.user.id, f"tool_approval.{decision}",
+        target_type="handoff", target_id=str(handoff.id), meta={"tool": (handoff.payload or {}).get("tool")},
+    )
+    if run is not None:
+        await session.commit()  # the outcome must be durable before a worker reads it
+        deferred.enqueue_followup(run.id)
+    return _tool_approval_out(handoff)
 
 
 async def decide_workflow_approval(

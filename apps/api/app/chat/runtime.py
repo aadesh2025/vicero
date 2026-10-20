@@ -6,6 +6,7 @@ tool calls, execute them (via `executor`), append the results, and loop — up t
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -165,8 +166,14 @@ async def run_turn(
         iters = base_iters
     step_index = 0
 
+    # What the visitor is told while each tool runs. Set by `build_tooling` on the executor (docs/28 T4.2).
+    tool_messages: dict[str, dict[str, Any]] = getattr(executor, "tool_messages", None) or {}
+
     for iteration in range(iters):
         req_i = req.model_copy(update={"messages": messages})
+        if iteration > 0 and req_i.tool_choice:
+            # "Use a tool on the first pass" must not force one forever: after the result is in, the model answers.
+            req_i = req_i.model_copy(update={"tool_choice": None})
         tool_calls: list[ToolCall] = []
         pass_content = ""
         iter_t0 = time.perf_counter()
@@ -246,8 +253,14 @@ async def run_turn(
                 messages = [
                     m for m in messages if not (m.role == "system" and (m.content or "").startswith(CONTEXT_MARKER))
                 ]
-            for call in tool_calls:
-                out = await executor(call)
+            # Several calls from one model step run together; the executor serialises what touches the database.
+            outs: list[dict[str, Any]] = []
+            async for kind, payload in _run_calls(executor, tool_calls, tool_messages):
+                if kind == "message":
+                    yield StreamEvent(type="tool_message", tool_message=payload)
+                else:
+                    outs = payload
+            for call, out in zip(tool_calls, outs, strict=True):
                 result.tool_runs.append({"name": call.name, **out})
                 yield StreamEvent(
                     type="tool_result",
@@ -258,6 +271,12 @@ async def run_turn(
                         "error": out.get("error"),
                     },
                 )
+                failed = out.get("status") in ("error", "timeout")
+                on_error = (tool_messages.get(call.name) or {}).get("on_error")
+                if failed and on_error:
+                    yield StreamEvent(
+                        type="tool_message", tool_message={"name": call.name, "kind": "error", "text": on_error}
+                    )
                 # Tool output is untrusted — MCP, n8n, and any future sub-agent result alike
                 # (docs/17 §6, no exceptions): neutralize instruction-override attempts before
                 # feeding it back to the model as a tool message (treat it as data, not
@@ -419,6 +438,49 @@ async def run_turn(
         usage=Usage(prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens),
         finish_reason=result.finish_reason or ("error" if result.error else "stop"),
     )
+
+
+async def _call_safely(executor: ToolExecutor, call: ToolCall) -> dict[str, Any]:
+    try:
+        return await executor(call)
+    except Exception as exc:  # the executor never raises by contract; belt and braces for the others
+        log.warning("tool_executor_raised", tool=call.name, error=str(exc))
+        return {"output": {}, "status": "error", "error": "tool failed"}
+
+
+async def _run_calls(
+    executor: ToolExecutor, calls: list[ToolCall], tool_messages: dict[str, dict[str, Any]]
+) -> AsyncIterator[tuple[str, Any]]:
+    """Run one model step's tool calls together (docs/28 T4.6), speaking while they run (T4.2).
+
+    Yields ("message", {name, kind, text}) as the visitor should hear something, then one ("results", [out, ...]) in
+    the order the calls were made. `on_start` goes out for every call first; one `on_delay` per call goes out if
+    the whole batch is still running after that call's `after_s`.
+    """
+    for call in calls:
+        start = (tool_messages.get(call.name) or {}).get("on_start")
+        if start:
+            yield "message", {"name": call.name, "kind": "start", "text": start}
+    tasks = [asyncio.ensure_future(_call_safely(executor, call)) for call in calls]
+    try:
+        delays = sorted(
+            (float(d["after_s"]), c.name, str(d["text"]))
+            for c in calls
+            if (d := (tool_messages.get(c.name) or {}).get("on_delay"))
+        )
+        waited = 0.0
+        for after, name, text in delays:
+            done, _pending = await asyncio.wait(tasks, timeout=max(after - waited, 0.0))
+            waited = max(waited, after)
+            if len(done) == len(tasks):
+                break
+            yield "message", {"name": name, "kind": "delay", "text": text}
+        outs = list(await asyncio.gather(*tasks))
+    except BaseException:
+        for t in tasks:  # the visitor left or the turn was cancelled: do not leave calls running unattended
+            t.cancel()
+        raise
+    yield "results", outs
 
 
 # Backwards-compatible single-pass helper (no tools).

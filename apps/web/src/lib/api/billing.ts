@@ -15,6 +15,10 @@ export interface PlanLimits {
   workflows: number | null;
   tools: number | null;
   webhooks: number | null;
+  /** docs/28 §10. 0 = locked on this plan. */
+  connections: number | null;
+  mcp_servers: number | null;
+  inbound_hooks: number | null;
   team_members: number | null;
 }
 

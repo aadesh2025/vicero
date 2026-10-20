@@ -3,6 +3,12 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ AGENT TOOLS T5 — 2026-10-19 (tools UI, ADR-136; stacked on T4)
+
+- Branch `feat/tools-t5-ui`. UI under `apps/web/src/components/tools/*`, `settings/connections`, `inbox/tool-approvals.tsx`; API `app/tools/router.py` (`tool_runs_router`).
+- E2E needs `ALLOW_SELF_SERVE_ORGS=true` on the API and `NEXT_PUBLIC_API_BASE_URL` pointing at it (8010).
+- Next: T6 (OpenAPI import + presets), T7 (agent as MCP server) - both "only when asked by name" in docs/28; user said all phases.
+
 ## ▶ AGENT TOOLS T4 — 2026-10-19 (tool behaviour, ADR-135, migration 0041; stacked on T3)
 
 - Branch `feat/tools-t4-behaviour`. Code: `app/tools/{policy,deferred,concurrency}.py`, `app/chat/{convvars,followup}.py`, `execute_tool_call` in `app/tools/service.py`, `_run_calls` in `app/chat/runtime.py`, widget `tool_message` handler (rebuilt via `node packages/widget/build.mjs`).

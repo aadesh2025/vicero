@@ -778,7 +778,12 @@ async def test_tool(
         )
     )
     return schemas.TestToolResponse(
-        status=result.status, output=result.output, error=result.error, latency_ms=latency_ms
+        status=result.status,
+        output=result.output,
+        error=result.error,
+        latency_ms=latency_ms,
+        request=result.request,
+        attempt=result.attempt,
     )
 
 
@@ -1054,6 +1059,7 @@ async def list_agent_tools(
             enabled=b.enabled,
             position=b.position,
             overrides=b.overrides or {},
+            managed=is_managed_mcp(t),
         )
         for t, b in (await session.execute(stmt)).all()
     ]
@@ -1167,4 +1173,97 @@ async def list_runs(
             attempt=r.attempt,
         )
         for r in (await session.execute(stmt)).scalars().all()
+    ]
+
+
+def _micros(at: dt.datetime) -> int:
+    """Exact microseconds since the epoch (a float timestamp would round and could skip or repeat a row)."""
+    delta = at.astimezone(dt.UTC) - dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
+    return (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
+
+
+def _run_out(r: ToolRun, names: dict[uuid.UUID, str]) -> schemas.ToolRunOut:
+    return schemas.ToolRunOut(
+        id=r.id,
+        tool_id=r.tool_id,
+        tool_name=names.get(r.tool_id),
+        conversation_id=r.conversation_id,
+        status=r.status,
+        input=r.input,
+        output=r.output,
+        latency_ms=r.latency_ms,
+        error=r.error,
+        created_at=r.created_at,
+        agent_id=r.agent_id,
+        provider=r.provider,
+        request_sanitized=r.request_sanitized,
+        attempt=r.attempt,
+    )
+
+
+async def list_run_page(
+    session: AsyncSession,
+    ctx: OrgContext,
+    *,
+    agent_id: uuid.UUID | None,
+    tool_id: uuid.UUID | None,
+    status: str | None,
+    cursor: str | None,
+    limit: int,
+) -> schemas.ToolRunPage:
+    """The tool-run log, newest first, filtered and paged (docs/28 section 8). The cursor is the last row seen."""
+    rbac.require_permission(ctx.role, rbac.READ)
+    limit = max(1, min(limit, 100))
+    stmt = select(ToolRun).where(ToolRun.organization_id == ctx.org.id)
+    if agent_id is not None:
+        stmt = stmt.where(ToolRun.agent_id == agent_id)
+    if tool_id is not None:
+        stmt = stmt.where(ToolRun.tool_id == tool_id)
+    if status:
+        stmt = stmt.where(ToolRun.status == status)
+    if cursor:
+        try:
+            micros, rid = cursor.split("_", 1)
+            before = dt.datetime(1970, 1, 1, tzinfo=dt.UTC) + dt.timedelta(microseconds=int(micros))
+            before_id = uuid.UUID(rid)
+        except ValueError:
+            raise AppError("tool_runs.bad_cursor", "That cursor is not valid.", 400) from None
+        stmt = stmt.where(
+            or_(ToolRun.created_at < before, (ToolRun.created_at == before) & (ToolRun.id < before_id))
+        )
+    rows = list(
+        (await session.execute(stmt.order_by(ToolRun.created_at.desc(), ToolRun.id.desc()).limit(limit + 1)))
+        .scalars()
+        .all()
+    )
+    more = len(rows) > limit
+    rows = rows[:limit]
+    names: dict[uuid.UUID, str] = {}
+    if rows:
+        found = await session.execute(select(Tool.id, Tool.name).where(Tool.id.in_({r.tool_id for r in rows})))
+        names = {tid: name for tid, name in found.all()}
+    # URL-safe on purpose (no "+" or ":" for a client to mangle): microseconds since the epoch, then the row id.
+    next_cursor = f"{_micros(rows[-1].created_at)}_{rows[-1].id}" if more and rows else None
+    return schemas.ToolRunPage(items=[_run_out(r, names) for r in rows], next_cursor=next_cursor)
+
+
+async def run_summary(
+    session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID | None
+) -> list[schemas.ToolRunSummary]:
+    """Per tool: calls in the last 7 days and the most recent outcome."""
+    rbac.require_permission(ctx.role, rbac.READ)
+    week_ago = dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=7)
+    stmt = select(ToolRun.tool_id, ToolRun.status, ToolRun.created_at).where(ToolRun.organization_id == ctx.org.id)
+    if agent_id is not None:
+        stmt = stmt.where(ToolRun.agent_id == agent_id)
+    latest: dict[uuid.UUID, tuple[str, dt.datetime]] = {}
+    counts: dict[uuid.UUID, int] = {}
+    for tid, status, created in (await session.execute(stmt.order_by(ToolRun.created_at.desc()))).all():
+        if tid not in latest:
+            latest[tid] = (status, created)
+        if created >= week_ago:
+            counts[tid] = counts.get(tid, 0) + 1
+    return [
+        schemas.ToolRunSummary(tool_id=tid, calls_7d=counts.get(tid, 0), last_status=s, last_run_at=at)
+        for tid, (s, at) in latest.items()
     ]

@@ -69,6 +69,7 @@ ssh vicero "/opt/vicero/rollback.sh api=sha256:<old> web=sha256:<old>"
 | 2026-10-09 | offline IP-to-country fallback for the display currency (PR #12, `ac3d754`); api `sha256:2e35b6156c2694336a3c2a628ffe0552cb7a71a2cbc3c0d443360b6dbb7b88cc`, web `sha256:2ba2e92740e9cff53a3d5505b12c29b59650bf791940068160b301372fce97ca` | `sha256:a8d8b6cf1fe2c0b2b2ce8052c7a6bb61f75d075ccd65195ba4ed778f616b5614` / `sha256:3cd07465a0f928d82fa99a4277dc1c03e0c57de4ba15fc4188dc292d1d849de8` (no migration; head stays `0031_automations`; the fallback is off until its database path is set) |
 | 2026-10-18 | Widget layouts + interactive blocks (docs/27, ADR-128 to ADR-131, section 17) on `ee12c2a`; migration 0037 was already applied by the 16:51Z deploy; new api `sha256:bd1228b4530960de35c3f470d506476746491272c059b9e435b0d4d5b0f1004f`, web `sha256:7429887ec3306ae0dbbec6638888c2e2fb6d3ea2ea35383a509444d0a6151163`; the 16:51Z deploy (`d2ab407`, images and catalog, token diet) is the step before this one | api `sha256:7ababe9911fdaf23c32730aaa0a4b7870ce809826ab56dd29e65bb3d9dcfdd1b` / web `sha256:352561a2cb1ea8c45e63e47bf641e244d86ba49dddf4fa8b0b681a328d831509` |
 | 2026-10-20 | docs/28 Agent tools, MCP, API and webhooks T1-T5 (ADR-132 to ADR-137) on `c41a8a0`; migrations 0038-0041 (the first attempt on `3ea1804` rolled back in 0039, see ADR-137); api `sha256:60f1bb7325e6e46756ce9093f6bc3337def1fa7d479644449f4e21f0ab369921`, web `sha256:d81bfd55de88ce870f1adb2aa1efb44699d0b4675f49b67efaa74dfeaa2742c0`; `MCP_TOOL_TIMEOUT_SECONDS=30` set with `set-env.sh` afterwards | api `sha256:bd1228b4530960de35c3f470d506476746491272c059b9e435b0d4d5b0f1004f` / web `sha256:7429887ec3306ae0dbbec6638888c2e2fb6d3ea2ea35383a509444d0a6151163` (migrations 0038-0041 are additive: roll back with these images, never `alembic downgrade`; restore a backup only if a migration is the problem) |
+| 2026-10-20 | MCP results sent once and capped at 8000 chars, readable MCP errors (PR #47, `73a99ba`); no migration (head stays `0041_tool_behaviour`); api `sha256:34ac61384597cc12bf590397ad04e921d23d2c0c8a96e9b3f6dcc62fa2efbcbc`, web `sha256:24d35e01a30deb2a13ef61ad8ffcce3888621767019bce690d48069a3fff5923`; done after freeing the disk (section 18) | api `sha256:60f1bb7325e6e46756ce9093f6bc3337def1fa7d479644449f4e21f0ab369921` / web `sha256:d81bfd55de88ce870f1adb2aa1efb44699d0b4675f49b67efaa74dfeaa2742c0` |
 | 2026-10-09 | n8n editor gate password reset (`N8N_EDITOR_GATE_HASH` replaced, only the `caddy` container recreated; no image change, no migration) | n/a (no rollback needed; the previous hash was not kept) |
 
 The pin lasts until the next `deploy.sh`, which returns to the moving `:master` tag. **The database only
@@ -336,3 +337,18 @@ Rollback: deactivate the three `ORG-<id> | Booking | ...` workflows in n8n (or d
 **Watch** `blocks_discarded` (a turn whose blocks were withdrawn by the output guard), `block_rejected` (the model proposed an invalid block) and the widget `GET /v1/public/agents/*/conversations/*/messages` rate (60/min per visitor).
 
 **Known limits:** the model can invent booking days and times (it has no availability tool in this release; day labels are derived from the date, times are not checked); block text with phone numbers or emails the organisation has not published is withheld by the PII guard; blocks need a tool-calling model.
+
+## 18. Freeing disk safely (RISK-REGISTER R21, 2026-10-20)
+
+`deploy.sh` prints free disk before and after, and **refuses to start under 3 GB free** (`DEPLOY_MIN_FREE_MB`, default 3072). `status.sh` warns above 85% use and is critical above 95%.
+
+Where the space goes: Docker here uses the containerd image store, so `/var/lib/docker` is small (about 0.5 GB) and the images live under `/var/lib/containerd`. Every release leaves the previous api (1.6 GB) and web (0.4 GB) images behind as untagged ("dangling") images; 52 of them took about 25 GB. The backups volume is only about 5 MB.
+
+**Safe, in this order** (look first with `df -h /`, `docker system df`, `docker images -a --digests`):
+1. Keep the **running** images and the **rollback target** (the digests `deploy.sh` printed as "previous images"; also in the release log). Remove every other dangling image one by one: `docker rmi <id>` (Docker refuses an image a container uses). Do not use `docker image prune`: it also removes the rollback target.
+2. `journalctl --vacuum-size=200M`, `apt-get clean`.
+3. Before trimming local backups, confirm the newest dump is on Drive (`status.sh`, "newest on Drive").
+
+**Never run:** `docker volume prune`, `docker system prune --volumes`, or anything touching the volumes `pgdata`, `uploads`, `media`, `caddydata`, `redisdata`, `ollamadata`, `n8ndata`.
+
+`du -xh --max-depth=2 /` takes many minutes here (millions of image files); run it in the background, or only on `/var/log /var/cache /var/lib/apt /opt`.

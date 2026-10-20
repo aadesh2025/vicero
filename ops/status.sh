@@ -24,6 +24,14 @@ oom="$(for c in $(docker ps -aq 2>/dev/null); do [ "$(docker inspect -f '{{.Stat
 [ -n "$oom" ] && echo "ALERT: OOM-killed container(s): $oom"
 echo; echo "=== disk"
 df -h / | tail -1
+disk_pct="$(used_pct)"
+if [ "$disk_pct" -ge 95 ]; then
+  echo "ALERT CRITICAL: disk ${disk_pct}% used ($(free_mb) MB free). Free space now: docs/25 section 18."
+elif [ "$disk_pct" -ge 85 ]; then
+  echo "ALERT WARNING: disk ${disk_pct}% used ($(free_mb) MB free). deploy.sh refuses under 3 GB free; docs/25 section 18."
+else
+  echo "disk OK: ${disk_pct}% used"
+fi
 docker system df --format '{{.Type}}: {{.Size}} (reclaimable {{.Reclaimable}})' 2>/dev/null
 echo; echo "=== backups"
 echo -n "local newest dump: "; docker exec vicero-prod-backup-1 sh -c 'ls -lt /backups/vicero_vicero_*.sql.gz 2>/dev/null | head -1 | awk "{print \$6, \$7, \$8, \$9}"' 2>/dev/null || echo unknown

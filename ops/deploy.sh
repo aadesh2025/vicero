@@ -17,6 +17,16 @@ main() {
   echo "  api: $PREV_API"; echo "  web: $PREV_WEB"
   echo "$(date -u +%FT%TZ) before-deploy api=$PREV_API web=$PREV_WEB" >> "$HISTORY"
 
+  # A pull needs about 2 GB and a migration needs room to write: a full disk with Postgres on it is an outage
+  # (2026-10-20, docs/RISK-REGISTER R21). Refuse before changing anything. Override only with DEPLOY_MIN_FREE_MB.
+  local FREE_BEFORE MIN_MB="${DEPLOY_MIN_FREE_MB:-3072}"
+  FREE_BEFORE="$(free_mb)"
+  echo "[deploy] free disk before: ${FREE_BEFORE} MB ($(used_pct)% used)"
+  if [ "$FREE_BEFORE" -lt "$MIN_MB" ]; then
+    echo "[deploy] REFUSED: under ${MIN_MB} MB free. Nothing was changed. Free space first (docs/25 section 18), then run again."
+    return 1
+  fi
+
   echo "[deploy] git pull --ff-only"
   git -C "$ROOT" pull --ff-only 2>&1 | tail -3
 
@@ -52,6 +62,7 @@ main() {
     echo "[deploy] NOTE: image digests are unchanged — nothing new was released (run the Release workflow first?)"
   fi
 
+  echo "[deploy] free disk after: $(free_mb) MB ($(used_pct)% used; was ${FREE_BEFORE} MB)"
   if wait_healthy 600; then
     echo "[deploy] PASS"
   else

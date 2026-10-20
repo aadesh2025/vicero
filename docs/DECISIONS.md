@@ -18,6 +18,13 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-137: Migrations suspend the viewer views around column changes; 0039 edited in place (docs/28 deploy, 2026-10-20)
+- **Status:** accepted. The first live deploy of docs/28 failed in migration 0039: `ALTER COLUMN mcp_servers.transport TYPE` is refused while `viewer.mcp_servers` (ADR-115) reads the column. Dev and test databases have no `viewer` schema, so no test could see it. The deploy stopped before restarting anything; the transaction rolled back and prod stayed at 0037.
+- **Fix:** `app/db/migration_helpers.views_suspended(*tables)` finds every dependent view through `pg_depend` (recursively, so views over views), saves definition, options and grants, drops them, runs the change, and recreates them in the same transaction. `drop_dependent_views` is for dropping a table. Applied to every ALTER COLUMN TYPE and DROP COLUMN in 0038-0041 (downgrades use `best_effort`: a view over a column being dropped stays dropped and `viewer-setup.sh --grants-only` rebuilds it).
+- **0039 and 0038 were edited in place** because prod never applied them (the deploy rolled back); a database that already ran the old text would be unaffected since the schema result is identical.
+- **Viewer SQL is one file**, `ops/viewer-grants.sql`, used by `viewer-setup.sh` and by `tests/test_viewer_migrations.py` (scratch database at 0037, viewer views built, `upgrade head`, down, up; views must survive; no secret column readable). `deploy.sh` already rebuilt the views after every migration; the comment now says so.
+- **Hidden columns** now also include, by name, `tools.config`, `connections.default_headers`, `mcp_servers.url_or_command`, `inbound_hooks.public_id` and `handoffs.payload` (free-form data that can carry a credential), on top of the `_enc|secret|password|token...` pattern. `tools.config` and `handoffs.payload` were readable before.
+
 ### ADR-136: Tools UI - one tab, sections by job, no new infrastructure (docs/28 T5)
 - **Status:** accepted. The Tools tab composes Built-in, API tools, MCP servers, Automations, Webhooks (outbound and inbound) and Logs; connections live in Settings. Locked features (plan limit 0) show a neutral lock note with an Upgrade link, never a hidden section. Forms are keyed dialogs (Radix unmounts on close) so each open starts fresh without effects. Secrets are shown once (hook secret, endpoint secret) and sample cURL reads `$HOOK_SECRET`, never the value. Tool approvals are an Inbox tab fed by `/v1/inbox/tool-approvals`; the pending count badge polls every 15s. Playground labels `tool_message` events so spoken lines are not mistaken for the answer.
 

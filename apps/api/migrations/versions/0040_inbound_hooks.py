@@ -14,6 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
+from app.db.migration_helpers import drop_dependent_views, views_suspended
+
 revision: str = "0040_inbound_hooks"
 down_revision: str | None = "0039_mcp_per_agent"
 branch_labels: str | Sequence[str] | None = None
@@ -68,7 +70,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    drop_dependent_views("inbound_hook_events", "inbound_hooks")
     op.drop_table("inbound_hook_events")
     op.drop_table("inbound_hooks")
     op.drop_index("ix_webhook_endpoints_agent_id", table_name="webhook_endpoints")
-    op.drop_column("webhook_endpoints", "agent_id")
+    with views_suspended("webhook_endpoints", best_effort=True):
+        op.drop_column("webhook_endpoints", "agent_id")

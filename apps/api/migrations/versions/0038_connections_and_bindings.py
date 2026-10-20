@@ -16,6 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 
+from app.db.migration_helpers import drop_dependent_views, views_suspended
+
 revision: str = "0038_connections_and_bindings"
 down_revision: str | None = "0037_message_blocks"
 branch_labels: str | Sequence[str] | None = None
@@ -45,7 +47,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_connections_organization_id", "connections", ["organization_id"])
 
-    op.alter_column("tools", "type", existing_type=sa.String(16), type_=sa.String(24), existing_nullable=False)
+    # Production has viewer.* views over tools (ADR-115); Postgres refuses to retype a column a view reads.
+    with views_suspended("tools"):
+        op.alter_column("tools", "type", existing_type=sa.String(16), type_=sa.String(24), existing_nullable=False)
     op.add_column(
         "tools",
         sa.Column("connection_id", UUID(as_uuid=True), sa.ForeignKey("connections.id", ondelete="RESTRICT")),
@@ -100,18 +104,21 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # The viewer views (ADR-115) read these tables and columns; `viewer-setup.sh --grants-only` rebuilds them.
+    drop_dependent_views("agent_tool_bindings", "connections")
     op.drop_index("ix_tool_runs_org_agent_created", table_name="tool_runs")
-    op.drop_column("tool_runs", "attempt")
-    op.drop_column("tool_runs", "request_sanitized")
-    op.drop_column("tool_runs", "provider")
-    op.drop_column("tool_runs", "agent_id")
-    op.drop_table("agent_tool_bindings")
-    op.drop_index("ix_tools_connection_id", table_name="tools")
-    op.drop_column("tools", "mode")
-    op.drop_column("tools", "rate_limit")
-    op.drop_column("tools", "approval_required")
-    op.drop_column("tools", "messages")
-    op.drop_column("tools", "connection_id")
-    # Narrowing back is only safe while no row uses a longer type name; none of the new ones do (`api` is 3).
-    op.alter_column("tools", "type", existing_type=sa.String(24), type_=sa.String(16), existing_nullable=False)
+    with views_suspended("tool_runs", "tools", best_effort=True):
+        op.drop_column("tool_runs", "attempt")
+        op.drop_column("tool_runs", "request_sanitized")
+        op.drop_column("tool_runs", "provider")
+        op.drop_column("tool_runs", "agent_id")
+        op.drop_table("agent_tool_bindings")
+        op.drop_index("ix_tools_connection_id", table_name="tools")
+        op.drop_column("tools", "mode")
+        op.drop_column("tools", "rate_limit")
+        op.drop_column("tools", "approval_required")
+        op.drop_column("tools", "messages")
+        op.drop_column("tools", "connection_id")
+        # Narrowing back is only safe while no row uses a longer type name; none of the new ones do (`api` is 3).
+        op.alter_column("tools", "type", existing_type=sa.String(24), type_=sa.String(16), existing_nullable=False)
     op.drop_table("connections")

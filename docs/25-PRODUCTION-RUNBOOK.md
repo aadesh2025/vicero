@@ -251,6 +251,8 @@ after every migration (no-op if the role does not exist); a table added later is
 server `ss -ltn | grep 5433` must show `127.0.0.1:5433` and nothing else. `tests/test_infra_prod_compose.py` fails if compose publishes
 anything but Caddy and that loopback port.
 
+**Migrations and the viewer views (ADR-137).** Postgres refuses to retype or drop a column a view reads, and prod has `viewer.*` views while dev does not. Migrations that change columns wrap the change in `views_suspended("table")` (`app/db/migration_helpers.py`). `deploy.sh` runs `viewer-setup.sh --grants-only` after every migration, which rebuilds every view from `ops/viewer-grants.sql`. What the viewer can read on the docs/28 tables: `connections` (not `secrets_enc`, `default_headers`), `mcp_servers` (not `auth_config_enc`, `url_or_command`), `inbound_hooks` (not `secret_enc`, `public_id`), `tools` (not `config`), `handoffs` (not `payload`); `agent_tool_bindings`, `agent_mcp_bindings`, `inbound_hook_events` and `tool_runs` are readable whole (no secrets in them). CI test: `tests/test_viewer_migrations.py`.
+
 ## 14. DNS for the containers (ADR-119)
 
 From the Hetzner network `1.1.1.1` and `8.8.8.8` time out on UDP/53, while `9.9.9.9`, `1.0.0.1` and `213.133.98.98` answer in

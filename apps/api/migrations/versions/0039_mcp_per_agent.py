@@ -20,6 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 
+from app.db.migration_helpers import drop_dependent_views, views_suspended
+
 revision: str = "0039_mcp_per_agent"
 down_revision: str | None = "0038_connections_and_bindings"
 branch_labels: str | Sequence[str] | None = None
@@ -41,7 +43,12 @@ def _tool_name(slug: str, tool: str) -> str:
 
 
 def upgrade() -> None:
-    op.alter_column("mcp_servers", "transport", existing_type=sa.String(16), type_=sa.String(24), existing_nullable=False)
+    # Production has viewer.mcp_servers (ADR-115) over `transport`; Postgres refuses to retype a column a view
+    # reads, which is what stopped the first deploy of this migration (rolled back, never applied in prod).
+    with views_suspended("mcp_servers"):
+        op.alter_column(
+            "mcp_servers", "transport", existing_type=sa.String(16), type_=sa.String(24), existing_nullable=False
+        )
     op.add_column("mcp_servers", sa.Column("slug", sa.String(32)))
     op.add_column(
         "mcp_servers",
@@ -116,9 +123,7 @@ def upgrade() -> None:
         }
         enabled.setdefault((agent_id, server_uuid), []).append(tool)
         bind.execute(
-            sa.text(
-                "UPDATE tools SET name = :n, config = jsonb_set(config, '{managed}', 'true'::jsonb) WHERE id = :i"
-            ),
+            sa.text("UPDATE tools SET name = :n, config = jsonb_set(config, '{managed}', 'true'::jsonb) WHERE id = :i"),
             {"n": _tool_name(slugs[server_uuid], tool), "i": tid},
         )
         org_of = org_id
@@ -149,11 +154,15 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Managed rows keep their `<slug>__<tool>` names and `managed` flag; as legacy rows they simply go back to
     # being gated on the agentic runtime flag. Nothing is deleted except the new structures.
+    drop_dependent_views("agent_mcp_bindings")
     op.drop_table("agent_mcp_bindings")
     op.drop_index("uq_mcp_servers_org_slug", table_name="mcp_servers")
-    op.drop_column("mcp_servers", "last_error")
-    op.drop_column("mcp_servers", "tools_cached_at")
-    op.drop_column("mcp_servers", "tools_cache")
-    op.drop_column("mcp_servers", "connection_id")
-    op.drop_column("mcp_servers", "slug")
-    op.alter_column("mcp_servers", "transport", existing_type=sa.String(24), type_=sa.String(16), existing_nullable=False)
+    with views_suspended("mcp_servers", best_effort=True):
+        op.drop_column("mcp_servers", "last_error")
+        op.drop_column("mcp_servers", "tools_cached_at")
+        op.drop_column("mcp_servers", "tools_cache")
+        op.drop_column("mcp_servers", "connection_id")
+        op.drop_column("mcp_servers", "slug")
+        op.alter_column(
+            "mcp_servers", "transport", existing_type=sa.String(24), type_=sa.String(16), existing_nullable=False
+        )

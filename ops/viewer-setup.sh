@@ -9,7 +9,8 @@
 # What `viewer` can do: SELECT. Nothing else (no write, no DDL, read-only transactions, 30 s statement limit,
 # 5 connections). Secrets are kept out of reach:
 #   * public tables with NO secret column are readable as they are;
-#   * public tables WITH a secret column (hash / encrypted / token / secret columns, and channels.config) are NOT
+#   * public tables WITH a secret column (hash / encrypted / token / secret columns, plus the columns named in
+#     viewer-grants.sql `hidden_pairs`) are NOT
 #     granted; the `viewer` schema holds a same-named view with only the safe columns, and it comes first in the
 #     role's search_path;
 #   * token tables and `sessions` are not exposed at all.
@@ -72,56 +73,9 @@ SQL
 fi
 
 # Grants. `REVOKE CONNECT ... FROM PUBLIC` was run by n8n-setup.sh, so CONNECT must be granted explicitly.
-psql_ "$PGDB_" <<SQL
-SET client_min_messages = warning;
-GRANT CONNECT ON DATABASE "${PGDB_}" TO viewer;
-ALTER ROLE viewer SET default_transaction_read_only = on;
-ALTER ROLE viewer SET statement_timeout = '30s';
-ALTER ROLE viewer SET idle_in_transaction_session_timeout = '60s';
-ALTER ROLE viewer SET search_path = viewer, public;
-
-CREATE SCHEMA IF NOT EXISTS viewer;
-GRANT USAGE ON SCHEMA public, viewer TO viewer;
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM viewer;
-REVOKE CREATE ON SCHEMA public FROM viewer;
-
-DO \$\$
-DECLARE
-  r record;
-  safe text;
-  hidden_table CONSTANT text := '(^|_)tokens?\$|^sessions\$';
-  secret_col   CONSTANT text := '(_enc|_encrypted|password|token_hash|key_hash|secret|access_token|refresh_token)';
-BEGIN
-  -- Rebuild the views every run so a column added by a migration is judged again.
-  FOR r IN SELECT viewname FROM pg_views WHERE schemaname = 'viewer' LOOP
-    EXECUTE format('DROP VIEW IF EXISTS viewer.%I', r.viewname);
-  END LOOP;
-
-  FOR r IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-           WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relispartition = false
-  LOOP
-    IF r.relname ~ hidden_table THEN CONTINUE; END IF;
-
-    SELECT string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum)
-      INTO safe
-      FROM pg_attribute a
-     WHERE a.attrelid = format('public.%I', r.relname)::regclass AND a.attnum > 0 AND NOT a.attisdropped
-       AND a.attname !~ secret_col
-       AND NOT (r.relname = 'channels' AND a.attname = 'config');
-
-    IF NOT EXISTS (
-         SELECT 1 FROM pg_attribute a
-          WHERE a.attrelid = format('public.%I', r.relname)::regclass AND a.attnum > 0 AND NOT a.attisdropped
-            AND (a.attname ~ secret_col OR (r.relname = 'channels' AND a.attname = 'config')))
-    THEN
-      EXECUTE format('GRANT SELECT ON public.%I TO viewer', r.relname);
-    ELSIF safe IS NOT NULL THEN
-      EXECUTE format('CREATE VIEW viewer.%I AS SELECT %s FROM public.%I', r.relname, safe, r.relname);
-      EXECUTE format('GRANT SELECT ON viewer.%I TO viewer', r.relname);
-    END IF;
-  END LOOP;
-END \$\$;
-SQL
+# The rest (settings, schema, hidden columns, the rebuilt views) is ops/viewer-grants.sql, shared with the CI test.
+SQL_FILE="$(dirname "$(readlink -f "$0")")/viewer-grants.sql"
+{ echo "GRANT CONNECT ON DATABASE \"${PGDB_}\" TO viewer;"; cat "$SQL_FILE"; } | psql_ "$PGDB_"
 
 echo "[viewer] grants applied (SELECT only; secret columns and token tables excluded)"
 if [ -n "$PW" ]; then

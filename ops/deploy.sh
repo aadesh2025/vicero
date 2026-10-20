@@ -38,7 +38,8 @@ main() {
   fi
   echo "[deploy] migrations OK"
 
-  # Re-judge table/column grants for the read-only DB role after any schema change (no-op if it was never created).
+  # Rebuild the read-only DB role's views and re-judge its grants after any schema change, so new columns appear and
+  # new secret columns stay hidden (ops/viewer-grants.sql; no-op if the role was never created).
   bash "$ROOT/ops/viewer-setup.sh" --grants-only || echo "[deploy] WARNING: viewer grants not refreshed"
 
   echo "[deploy] up -d --no-build"

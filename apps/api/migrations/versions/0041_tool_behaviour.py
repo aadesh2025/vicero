@@ -15,6 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.db.migration_helpers import views_suspended
+
 revision: str = "0041_tool_behaviour"
 down_revision: str | None = "0040_inbound_hooks"
 branch_labels: str | Sequence[str] | None = None
@@ -27,5 +29,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("handoffs", "payload")
-    op.drop_column("conversations", "variables")
+    with views_suspended("handoffs", "conversations", best_effort=True):
+        op.drop_column("handoffs", "payload")
+        op.drop_column("conversations", "variables")

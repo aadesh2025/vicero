@@ -38,6 +38,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 deployed (2026-10-20).** First deploy of T1-T5 stopped at migration 0039 (a `viewer.*` view blocked `ALTER COLUMN TYPE`; nothing restarted, prod stayed at 0037). Fixed in PR #46 (ADR-137: `views_suspended`, one shared viewer SQL, CI test), redeployed, head `0041_tool_behaviour`. Live smoke on a throwaway Pro org: connection + API tool from the Playground (secret scrubbed, 14 runs, 0 leaks), real streamable_http MCP (Microsoft Learn, DeepWiki) bound to one agent and invisible to another, stdio refused with 403 for non-staff, signed inbound hook 200 / bad signature 401 / event logged, tool approval approved from the Inbox, Trial and Starter locked (402 + lock chips). Found and fixed after: MCP results sent twice and too large, grouped-error text, `MCP_TOOL_TIMEOUT_SECONDS` 20 to 30 on the server. Test orgs deleted.
 - **docs/28 Phase T5: tools UI (2026-10-19, ADR-136).** Settings > Connections, rewritten Tools tab (API tool editor with
   test/replay, MCP panel with 20-tool ceiling, webhooks panel both directions, logs with replay), Inbox "Tool approvals" tab,
   playground `tool_message` labels. Backend adds `GET /v1/tool-runs` (+`/summary`), `managed` on bindings, plan limits for

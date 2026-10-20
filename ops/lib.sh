@@ -12,6 +12,10 @@ dc() {
 # Non-secret .env values only (domains). Never call with a secret name.
 env_get() { grep -E "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2-; }
 
+# Free space on / in MB, and use in percent (the root disk holds Docker's images, Postgres and the backups).
+free_mb() { df -BM --output=avail / | tail -1 | tr -dc '0-9'; }
+used_pct() { df --output=pcent / | tail -1 | tr -dc '0-9'; }
+
 # Image digest currently behind a reference, or "none" (used for the rollback trail).
 digest_of() { docker image inspect --format '{{index .RepoDigests 0}}' "$1" 2>/dev/null || echo "none"; }
 

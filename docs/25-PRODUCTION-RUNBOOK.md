@@ -336,3 +336,18 @@ Rollback: deactivate the three `ORG-<id> | Booking | ...` workflows in n8n (or d
 **Watch** `blocks_discarded` (a turn whose blocks were withdrawn by the output guard), `block_rejected` (the model proposed an invalid block) and the widget `GET /v1/public/agents/*/conversations/*/messages` rate (60/min per visitor).
 
 **Known limits:** the model can invent booking days and times (it has no availability tool in this release; day labels are derived from the date, times are not checked); block text with phone numbers or emails the organisation has not published is withheld by the PII guard; blocks need a tool-calling model.
+
+## 18. Freeing disk safely (RISK-REGISTER R21, 2026-10-20)
+
+`deploy.sh` prints free disk before and after, and **refuses to start under 3 GB free** (`DEPLOY_MIN_FREE_MB`, default 3072). `status.sh` warns above 85% use and is critical above 95%.
+
+Where the space goes: Docker here uses the containerd image store, so `/var/lib/docker` is small (about 0.5 GB) and the images live under `/var/lib/containerd`. Every release leaves the previous api (1.6 GB) and web (0.4 GB) images behind as untagged ("dangling") images; 52 of them took about 25 GB. The backups volume is only about 5 MB.
+
+**Safe, in this order** (look first with `df -h /`, `docker system df`, `docker images -a --digests`):
+1. Keep the **running** images and the **rollback target** (the digests `deploy.sh` printed as "previous images"; also in the release log). Remove every other dangling image one by one: `docker rmi <id>` (Docker refuses an image a container uses). Do not use `docker image prune`: it also removes the rollback target.
+2. `journalctl --vacuum-size=200M`, `apt-get clean`.
+3. Before trimming local backups, confirm the newest dump is on Drive (`status.sh`, "newest on Drive").
+
+**Never run:** `docker volume prune`, `docker system prune --volumes`, or anything touching the volumes `pgdata`, `uploads`, `media`, `caddydata`, `redisdata`, `ollamadata`, `n8ndata`.
+
+`du -xh --max-depth=2 /` takes many minutes here (millions of image files); run it in the background, or only on `/var/log /var/cache /var/lib/apt /opt`.

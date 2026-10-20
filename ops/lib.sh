@@ -29,6 +29,26 @@ running_digest() { # <container> <fallback-ref>
   digest_of "$2"
 }
 
+# After a good deploy: remove old untagged images (each release leaves a 2 GB pair behind, RISK-REGISTER R21).
+# Keeps every image a container is using, the :master tags, and the digests of the last KEEP_RELEASE_PAIRS release
+# pairs in .deploy-history (default 3 = the running pair + the 2 before it, so rollback.sh still has targets).
+# Images only: never a volume. PRUNE_DRY_RUN=1 prints what it would remove and removes nothing.
+prune_old_images() {
+  local pairs="${KEEP_RELEASE_PAIRS:-3}" dry="${PRUNE_DRY_RUN:-0}" keep id size n=0 before
+  before="$(free_mb)"
+  keep="$( { docker ps -q | xargs -r docker inspect --format '{{.Image}}'
+             [ -f "$ROOT/.deploy-history" ] && grep -o 'sha256:[0-9a-f]\{64\}' "$ROOT/.deploy-history" | tac | awk '!seen[$0]++' | grep -Fxf <(docker images -a --no-trunc --format '{{.ID}}') | head -n $((pairs * 2))
+           } | sort -u )" || true
+  echo "[prune] keeping $(echo "$keep" | grep -c .) image(s): running + last $pairs release pairs"
+  while IFS='|' read -r id size; do
+    [ -n "$id" ] || continue
+    if echo "$keep" | grep -qx "$id"; then continue; fi
+    if [ "$dry" = 1 ]; then echo "[prune] would remove ${id:0:19} ($size)"; n=$((n + 1)); continue; fi
+    if docker rmi "$id" >/dev/null 2>&1; then echo "[prune] removed ${id:0:19} ($size)"; n=$((n + 1)); else echo "[prune] kept ${id:0:19}: in use"; fi
+  done < <(docker images -a --no-trunc --filter dangling=true --format '{{.ID}}|{{.Size}}')
+  echo "[prune] $([ "$dry" = 1 ] && echo "would remove" || echo "removed") $n image(s); free disk now $(free_mb) MB ($(used_pct)% used; was ${before} MB)"
+}
+
 # Wait until api + web report healthy, caddy runs, and both HTTPS endpoints answer. PASS/FAIL, exit 0/1.
 wait_healthy() {
   local timeout="${1:-600}" api_domain domain start=$SECONDS

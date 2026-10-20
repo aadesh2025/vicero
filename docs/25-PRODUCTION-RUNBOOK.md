@@ -349,6 +349,8 @@ Where the space goes: Docker here uses the containerd image store, so `/var/lib/
 2. `journalctl --vacuum-size=200M`, `apt-get clean`.
 3. Before trimming local backups, confirm the newest dump is on Drive (`status.sh`, "newest on Drive").
 
+**Automatic (from 2026-10-20):** after a `deploy.sh` PASS it calls `prune_old_images` (`ops/lib.sh`). It removes untagged images only, one by one with `docker rmi`, and prints each one removed plus the free disk after. It keeps every image a container is using, the `:master` tags, and the digests of the last 3 release pairs in `.deploy-history` that still exist on disk (the running pair plus the 2 before it; `KEEP_RELEASE_PAIRS` changes the number). It never touches a volume and never fails a deploy that already passed. To preview on the server: `PRUNE_DRY_RUN=1 bash -c '. /opt/vicero/ops/lib.sh; prune_old_images'` (removes nothing).
+
 **Never run:** `docker volume prune`, `docker system prune --volumes`, or anything touching the volumes `pgdata`, `uploads`, `media`, `caddydata`, `redisdata`, `ollamadata`, `n8ndata`.
 
 `du -xh --max-depth=2 /` takes many minutes here (millions of image files); run it in the background, or only on `/var/log /var/cache /var/lib/apt /opt`.

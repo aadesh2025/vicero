@@ -38,6 +38,11 @@ Legend: ⬜ not started · 🟨 in progress · ✅ complete · ⏸️ deferred
   be blended into the Groq number. Ollama is excluded from the NFR-1 first-token figure by design.
 
 ## Shipped enhancements (post-v1)
+- **docs/28 Phase T1: connections, API tool v2, egress guard v2, tool bindings (2026-10-19, ADR-132, migration 0038).**
+  `app/core/egress.py` (DNS-pinned, redirect/size-bounded outbound requests), `app/modules/connections/` (CRUD + `/test`,
+  secrets encrypted and masked, audited, plan-gated), `app/tools/api_tool.py` (`type="api"`; `type="http"` now runs on
+  it), `agent_tool_bindings` with `GET/PUT /v1/agents/{id}/tools`, and a workflow `http` node. Existing agents resolve
+  the same tools as before (backfill + insert hook). Not in T1: MCP, webhooks, approval/async/variables, UI (T2-T5).
 - **docs/22 Phase A1: billing period, payment ledger, storage accounting (2026-09-28, ADR-102,
   migration 0029).** The migration/model/`usage.py`/`cycles.py` side of paid-plan billing, run
   in parallel with another agent's `app/modules/billing/` track (path-scoped commit, file

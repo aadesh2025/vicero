@@ -39,6 +39,7 @@ from app.modules.billing.router import router as billing_router
 from app.modules.bookings.router import internal_router as bookings_internal_router
 from app.modules.campaigns.router import router as campaigns_router
 from app.modules.canned_responses.router import router as canned_responses_router
+from app.modules.connections.router import router as connections_router
 from app.modules.contacts.router import router as contacts_router
 from app.modules.conversations.router import router as conversations_router
 from app.modules.credentials.router import router as credentials_router
@@ -59,6 +60,7 @@ from app.modules.workflow_tests.router import tests_router as workflow_tests_rou
 from app.rag import converters, rerank
 from app.realtime.hub import hub
 from app.tools.mcp_router import router as mcp_router
+from app.tools.router import agent_tools_router
 from app.tools.router import router as tools_router
 from app.webhooks.router import router as webhooks_router
 from app.workflows.router import agent_workflows_router
@@ -221,6 +223,8 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_router)
     app.include_router(conversations_router)
     app.include_router(tools_router)
+    app.include_router(agent_tools_router)
+    app.include_router(connections_router)
     app.include_router(mcp_router)
     app.include_router(agent_workflows_router)
     app.include_router(workflows_router)

@@ -54,11 +54,14 @@ from app.models import (
 )
 from app.modules.orgs.deps import OrgContext
 from app.realtime.hub import hub, inbox_topic
+from app.tools.api_tool import execute_api_tool
 from app.tools.base import ToolContext
+from app.tools.connections import load_connection
 from app.tools.service import execute_tool_call, resolve_agent_tools
 from app.workflows import schemas
 from app.workflows.diff import diff_graphs
 from app.workflows.graph import (
+    HTTP_NODE_PREFIX,
     WorkflowAgentExecutor,
     WorkflowRunResult,
     WorkflowSubExecutor,
@@ -178,23 +181,51 @@ async def _tool_executor_for(
     RBAC-checked callers (`run_workflow_now` etc.) still take `OrgContext`; only the pure
     execution layer was narrowed to what it actually uses.
     """
-    if agent_id is None:
-        return None
-    agent = await session.get(Agent, agent_id)
-    if agent is None or agent.current_version_id is None:
-        return None
-    version = await session.get(AgentVersion, agent.current_version_id)
-    if version is None:
-        return None
-    _specs, by_name = await resolve_agent_tools(session, org.id, agent_id, include_mcp=True)
-    tool_ctx = ToolContext(session=session, org_id=org.id, agent_id=agent_id, version=version)
+    tool_ctx: ToolContext | None = None
+    by_name: dict[str, Any] = {}
+    agent = await session.get(Agent, agent_id) if agent_id is not None else None
+    version = (
+        await session.get(AgentVersion, agent.current_version_id)
+        if agent is not None and agent.current_version_id is not None
+        else None
+    )
+    if agent_id is not None and version is not None:
+        _specs, by_name = await resolve_agent_tools(session, org.id, agent_id, include_mcp=True)
+        tool_ctx = ToolContext(
+            session=session, org_id=org.id, agent_id=agent_id, version=version,
+            bound_tool_ids=frozenset(t.id for t in by_name.values()),
+        )
 
     async def executor(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        # An `http` node needs no agent: it carries its whole request, and its connection is the org's.
+        if name.startswith(HTTP_NODE_PREFIX):
+            return await _run_http_node(session, org, args)
+        if tool_ctx is None:
+            return {"output": {}, "status": "error", "error": "no tool executor configured for this run"}
         call = ToolCall(id=str(uuid.uuid4()), name=name, arguments=args)
         res = await execute_tool_call(session, tool_ctx, by_name, call)
         return {"output": res.output, "status": res.status, "error": res.error}
 
     return executor
+
+
+async def _run_http_node(session: AsyncSession, org: Organization, args: dict[str, Any]) -> dict[str, Any]:
+    config: dict[str, Any] = args.get("config") or {}
+    variables: dict[str, Any] = args.get("variables") or {}
+    if not usage.feature_allowed(org, "tool_calling"):
+        return {"output": {}, "status": "error", "error": "plan_limit: HTTP requests are not included in this plan"}
+    connection = None
+    if config.get("connection_id"):
+        try:
+            connection = await load_connection(session, org.id, uuid.UUID(str(config["connection_id"])))
+        except ValueError:
+            connection = None
+        if connection is None:
+            return {"output": {}, "status": "error", "error": "this node's connection was not found"}
+    res = await execute_api_tool(
+        config, variables, connection=connection, input_schema=config.get("input_schema"), variables=variables
+    )
+    return {"output": res.output, "status": res.status, "error": res.error}
 
 
 async def _agent_executor_for(session: AsyncSession, org: Organization) -> WorkflowAgentExecutor:

@@ -61,6 +61,8 @@ dependencies = [
     # Generic MCP tool provider (docs/17 Phase 1, ADR-070). Official SDK — gives us the
     # stdio and SSE ClientSession transports rather than hand-rolling the wire protocol.
     "mcp>=1.0",
+    # JSON Schema validation of model-supplied tool arguments (docs/28 T1.4). Already pulled in by mcp.
+    "jsonschema>=4.23",
 ]
 
 [dependency-groups]

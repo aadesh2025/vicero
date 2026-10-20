@@ -29,6 +29,9 @@ class ToolContext:
     # Where the interactive-block tools queue their (validated) blocks for this turn (docs/27 Phase 2).
     # `None` means blocks are not offered in this conversation — the tools are not registered either.
     blocks: list[dict[str, Any]] | None = None
+    # Ids of the tools bound to this agent for the turn, set by resolution. A tool owned by another agent is
+    # refused unless it is in this set (docs/28 T1.5: one tool row may be bound to several agents).
+    bound_tool_ids: frozenset[uuid.UUID] | None = None
 
 
 @dataclass(slots=True)
@@ -36,3 +39,6 @@ class ToolResult:
     output: dict[str, Any]
     status: str = "success"  # success | error | timeout
     error: str | None = None
+    # docs/28 §6: which try this was, and the request as sent (sanitized - never carries a secret).
+    attempt: int = 1
+    request: dict[str, Any] | None = None

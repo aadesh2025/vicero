@@ -88,6 +88,7 @@ from app.chat.budget import AgentBudget
 from app.chat.guardrails import neutralize_injections
 from app.chat.variables import escape_value
 from app.core.config import settings
+from app.tools import api_tool
 
 # (tool_name, arguments) -> {"output": dict, "status": str, "error": str | None} — identical
 # shape to app.chat.runtime.ToolExecutor, deliberately, so the same tool dispatch used for
@@ -104,8 +105,12 @@ WorkflowSubExecutor = Callable[[str, dict[str, Any], "AgentBudget"], Awaitable["
 
 NODE_TYPES = frozenset({
     "start", "end", "message", "condition", "set_variable", "approval", "tool",
-    "switch", "loop", "transform", "agent", "sub_agent", "delay",
+    "switch", "loop", "transform", "agent", "sub_agent", "delay", "http",
 })
+
+# An `http` node reaches the executor under this name so one executor serves tools and HTTP calls, and a
+# cached workflow test can script it like any tool (`scripted_node_outputs.tools["http:<node_id>"]`).
+HTTP_NODE_PREFIX = "http:"
 _TERMINAL_TYPES = frozenset({"end"})
 _TRANSFORM_OPS = frozenset({"uppercase", "lowercase", "trim", "to_number", "length", "concat"})
 
@@ -156,11 +161,37 @@ def validate_graph(graph: dict[str, Any]) -> list[str]:
     ends = [n for n in nodes if n.get("type") == "end"]
     if not ends:
         errors.append("graph must have at least one end node")
+    for n in nodes:
+        if n.get("type") == "http":
+            errors.extend(_http_node_errors(n))
     for e in edges:
         if e.get("source") not in node_ids:
             errors.append(f"edge source {e.get('source')!r} is not a node in this graph")
         if e.get("target") not in node_ids:
             errors.append(f"edge target {e.get('target')!r} is not a node in this graph")
+    return errors
+
+
+def _http_node_errors(node: dict[str, Any]) -> list[str]:
+    """Save-time checks for an `http` node, so a typo fails at publish and not on a live run."""
+    nid = node.get("id")
+    config = node.get("config") or {}
+    if not isinstance(config, dict):
+        return [f"http node {nid!r} needs a config object"]
+    errors: list[str] = []
+    url, path = config.get("url"), config.get("path")
+    if not url and not path:
+        errors.append(f"http node {nid!r} requires config.url, or config.path with a connection_id")
+    if path and not config.get("connection_id"):
+        errors.append(f"http node {nid!r} uses config.path, which needs a config.connection_id")
+    if url and api_tool.template_has_host_placeholder(str(url)):
+        errors.append(f"http node {nid!r}: the host of config.url cannot contain placeholders")
+    if str(config.get("method", "GET")).upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}:
+        errors.append(f"http node {nid!r}: unsupported method {config.get('method')!r}")
+    response = config.get("response")
+    pick = response.get("pick") if isinstance(response, dict) else None
+    if pick is not None and (problem := api_tool.validate_selectors(pick)):
+        errors.append(f"http node {nid!r}: {problem}")
     return errors
 
 
@@ -325,6 +356,28 @@ async def _run_tool(
     out = await executor(tool_name, rendered_args)
     # Untrusted, no exception for tool source (docs/17 §6) — identical treatment to
     # `run_turn`'s `neutralize_injections(json.dumps(out.get("output") or {}))` call.
+    sanitized_text = neutralize_injections(json.dumps(out.get("output") or {}))
+    result_variable = config.get("result_variable")
+    if result_variable:
+        variables[result_variable] = sanitized_text
+    return NodeResult(
+        status="failed" if out.get("status") == "error" else "completed",
+        output={"sanitized_text": sanitized_text},
+        error=out.get("error"),
+    )
+
+
+async def _run_http(
+    node: dict[str, Any],
+    variables: dict[str, Any],
+    executor: WorkflowToolExecutor | None,
+) -> NodeResult:
+    """An HTTP request made with the same executor as the API tool (docs/28 T1.6). The workflow's variables are
+    the template arguments (`{{order_id}}`); the response is untrusted exactly like a tool result."""
+    config = node.get("config") or {}
+    if executor is None:
+        return NodeResult(status="failed", error="no tool executor configured for this run")
+    out = await executor(f"{HTTP_NODE_PREFIX}{node['id']}", {"config": config, "variables": dict(variables)})
     sanitized_text = neutralize_injections(json.dumps(out.get("output") or {}))
     result_variable = config.get("result_variable")
     if result_variable:
@@ -552,6 +605,7 @@ _HANDLERS: dict[str, Callable[..., Awaitable[NodeResult]]] = {
     "condition": _run_condition,
     "approval": _run_approval,
     "tool": _run_tool,
+    "http": _run_http,
     "switch": _run_switch,
     "loop": _run_loop,
     "transform": _run_transform,
@@ -641,7 +695,7 @@ async def run_workflow(
                 node, variables, tool_executor,
                 resume_input=resume_input if first_iteration else None,
             )
-        elif node["type"] == "tool":
+        elif node["type"] in ("tool", "http"):
             budget.record_tool_calls(1)
             result = await handler(node, variables, tool_executor)
         elif node["type"] == "agent":

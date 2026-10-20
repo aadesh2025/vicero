@@ -6,8 +6,9 @@ rolled back after each test, so nothing persists and tests stay isolated.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,3 +165,45 @@ def _reset_rate_limiter() -> None:
     # shared Redis would carry their counters from one test run into the next (a lockout in run
     # N failing a login in run N+1). The Redis path is unit-tested in test_ratelimit.py.
     limiter._checked = True
+
+
+@pytest.fixture
+def dns(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
+    """Stage DNS answers for `app.core.egress`. Unlisted hostnames resolve to a public address, so a
+    test that mocks the HTTP transport never touches the network; add an entry to stage a rebind."""
+    from app.core import egress
+
+    answers: dict[str, list[str]] = {}
+    real = egress.resolve_host
+
+    async def fake(host: str, port: int) -> list[str]:
+        if host in answers:
+            return answers[host]
+        if egress.literal_ip(host) is not None:
+            return await real(host, port)
+        return ["93.184.216.34"]
+
+    monkeypatch.setattr(egress, "resolve_host", fake)
+    return answers
+
+
+class HttpMock:
+    """Scriptable stand-in for the network: `.requests` records calls, `.handler` decides the answer."""
+
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
+        self.handler: Callable[[httpx.Request], httpx.Response] = lambda r: httpx.Response(200, json={"ok": True})
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        return self.handler(request)
+
+
+@pytest.fixture
+def mock_http(dns: dict[str, list[str]], monkeypatch: pytest.MonkeyPatch) -> HttpMock:
+    """Route every egress request (tools, connection tests, token fetches) through `HttpMock`; no network."""
+    from app.core import egress
+
+    mock = HttpMock()
+    monkeypatch.setattr(egress, "DEFAULT_TRANSPORT", httpx.MockTransport(mock))
+    return mock

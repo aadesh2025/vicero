@@ -16,6 +16,26 @@ from app.modules.orgs.deps import OrgContext, current_org
 from app.tools import schemas, service
 
 router = APIRouter(prefix="/v1/tools", tags=["tools"])
+agent_tools_router = APIRouter(prefix="/v1/agents", tags=["tools"])
+
+
+@agent_tools_router.get("/{agent_id}/tools", response_model=list[schemas.ToolBindingOut])
+async def list_agent_tools(
+    agent_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.ToolBindingOut]:
+    return await service.list_agent_tools(session, ctx, agent_id)
+
+
+@agent_tools_router.put("/{agent_id}/tools", response_model=list[schemas.ToolBindingOut])
+async def set_agent_tools(
+    agent_id: uuid.UUID,
+    data: schemas.SetAgentToolsRequest,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.ToolBindingOut]:
+    return await service.set_agent_tools(session, ctx, agent_id, data)
 
 
 # ── n8n binding (static paths; registered before /{tool_id}) ─────────────────────

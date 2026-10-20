@@ -82,6 +82,15 @@ async def _seed_org_a(client: AsyncClient, headers: Headers, org_id: str) -> dic
             {"name": "m", "transport": "sse", "url_or_command": "https://mcp.example.com/sse"},
         )
     )["id"]
+    ids["connection"] = (
+        await _create(
+            client, headers, "/v1/connections",
+            {
+                "name": "crm", "base_url": "https://api.example.com",
+                "auth_type": "bearer", "auth": {"token": "tok-secret-1234"},
+            },
+        )
+    )["id"]
     chat = await client.post(
         f"/v1/agents/{agent['id']}/chat", json={"message": "hello", "stream": False}, headers=headers
     )
@@ -115,6 +124,12 @@ PROBES: list[tuple[str, str, dict | None]] = [
     ("POST", "/v1/tools/{tool}/test", {"args": {"expression": "1+1"}}),
     ("DELETE", "/v1/tools/{tool}", None),
     ("POST", "/v1/mcp/servers/{mcp}/test-connection", None),
+    ("GET", "/v1/connections/{connection}", None),
+    ("PATCH", "/v1/connections/{connection}", {"name": "pwned"}),
+    ("POST", "/v1/connections/{connection}/test", None),
+    ("DELETE", "/v1/connections/{connection}", None),
+    ("GET", "/v1/agents/{agent}/tools", None),
+    ("PUT", "/v1/agents/{agent}/tools", {"tools": []}),
     ("POST", "/v1/apikeys/{apikey}/revoke", None),
     ("DELETE", "/v1/apikeys/{apikey}", None),
     ("PATCH", "/v1/webhooks/{webhook}", {"url": "https://evil.example/h"}),
@@ -185,7 +200,7 @@ async def test_other_orgs_member_cannot_touch_org_a_resources(
         ("agent", "/v1/agents/{agent}"), ("kb", "/v1/knowledge/{kb}"), ("tool", "/v1/tools/{tool}"),
         ("conv", "/v1/conversations/{conv}"), ("workflow", "/v1/workflows/{workflow}"),
         ("channel", "/v1/channels/{channel}"), ("contact", "/v1/contacts/{contact}"),
-        ("article", "/v1/help-articles/{article}"),
+        ("article", "/v1/help-articles/{article}"), ("connection", "/v1/connections/{connection}"),
     ]:
         got = await client.get(_fmt(url, ids), headers=a_headers)
         assert got.status_code == 200, f"after {method} {path}, org A lost {kind}: {got.status_code}"
@@ -212,7 +227,7 @@ async def test_lists_only_contain_the_callers_own_rows(client: AsyncClient) -> N
     for path in ("/v1/agents", "/v1/knowledge", "/v1/tools", "/v1/apikeys", "/v1/webhooks", "/v1/macros",
                  "/v1/canned-responses", "/v1/campaigns", "/v1/channels",
                  "/v1/help-articles", "/v1/contacts", "/v1/credentials", "/v1/conversations",
-                 "/v1/mcp/servers"):
+                 "/v1/mcp/servers", "/v1/connections"):
         r = await client.get(path, headers=b_headers)
         assert r.status_code == 200, f"GET {path}: {r.status_code} {r.text[:120]}"
         payload = r.json()

@@ -3,6 +3,13 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ AGENT TOOLS T1 — 2026-10-19 (newest; docs/28, ADR-132)
+
+- Branch `feat/tools-t1-connections` (off `master`), tag `tools-phase-T1-complete` once merged. Migration `0038_connections_and_bindings` (round-trip verified).
+- Pick-up points: `app/core/egress.py`, `app/tools/{api_tool,connections}.py`, `app/modules/connections/`, `app/tools/service.py` (`set_agent_tools`, `resolve_agent_tools` now reads bindings), workflow `http` node in `app/workflows/graph.py`.
+- Next: T2 (per-agent MCP) per `docs/28-IMPLEMENTATION-PROMPT.md`. T2.0 first: check the installed `mcp` SDK has `streamablehttp_client`.
+- Open: the built-in `http_request` tool still uses `is_blocked_host`; `approval_required`/`messages`/`rate_limit` columns exist but are not exposed or enforced until T4.
+
 ## ▶ WIDGET STYLES + INTERACTIVE BLOCKS — 2026-10-17 (newest; docs/27, ADR-128 to ADR-131)
 
 - Shipped in two commits: `feat(widget): 10 selectable layouts + corner radius + density` and `feat(widget): interactive blocks (opt-in)`. Everything is additive; reverting the commits is the rollback (migration 0037 drops `messages.blocks` on downgrade).

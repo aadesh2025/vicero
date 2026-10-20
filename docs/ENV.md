@@ -387,7 +387,7 @@ to RRF ordering, logged, never an error and never an empty result set.
   §2 rule 3: nested calls decrement the SAME budget, never a fresh one). A workflow's `loop`
   node is hard-capped by `AGENTIC_MAX_STEPS` too — every loop iteration is a node visit like
   any other.
-- `MCP_TOOL_TIMEOUT_SECONDS` (default `20`) — wider than `TOOL_TIMEOUT_SECONDS`: an MCP call
+- `MCP_TOOL_TIMEOUT_SECONDS` (default `20`; the production server sets `30`, the code cap, because MCP calls there take 11-21 s) — wider than `TOOL_TIMEOUT_SECONDS`: an MCP call
   involves a subprocess spawn or a third-party network round trip.
 - `WORKFLOW_MAX_CALL_DEPTH` (default `5`) — how deep a chain of workflow `sub_agent` nodes may
   nest before `AgentBudget.call_depth` trips it. Bounds a direct self-call and an indirect

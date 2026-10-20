@@ -21,8 +21,10 @@ from app.tools import connections as conn_auth
 from app.tools.base import ToolResult
 from app.tools.mcp_client import MCPServerConfig, MCPToolError, call_tool
 
-#: A tool result larger than this is cut before it goes anywhere (it will still be neutralized downstream).
-MAX_RESULT_CHARS = 16000
+#: A tool result larger than this is cut before it goes anywhere (it will still be neutralized downstream). About 2k
+#: tokens: a free-tier model allows ~8k tokens a minute in all, and a live Microsoft Learn result at twice 16000
+#: characters made the follow-up model call fail with a 413 (2026-10-20).
+MAX_RESULT_CHARS = 8000
 
 
 def server_config(server: MCPServer) -> MCPServerConfig:

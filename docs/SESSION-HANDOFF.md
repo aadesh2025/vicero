@@ -3,6 +3,12 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ DEPLOY docs/28 — 2026-10-20 (live; head 0041)
+
+- Live on https://viceroai.duckdns.org. Rollback images and what was checked: docs/25 release log (2026-10-20 row) and `docs/PROGRESS.md`. ADR-137 explains the failed first attempt.
+- **Open before the next deploy:** production disk is 98% full (RISK-REGISTER R21). Free space first.
+- Open: R19/R20 test issues, R22 MCP latency. T6 and T7 not started (asked for by name only).
+
 ## ▶ AGENT TOOLS T5 — 2026-10-19 (tools UI, ADR-136; stacked on T4)
 
 - Branch `feat/tools-t5-ui`. UI under `apps/web/src/components/tools/*`, `settings/connections`, `inbox/tool-approvals.tsx`; API `app/tools/router.py` (`tool_runs_router`).

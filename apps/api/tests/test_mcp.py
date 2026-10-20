@@ -404,3 +404,26 @@ async def test_execute_mcp_tool_surfaces_a_protocol_error_as_a_result_not_an_exc
     )
     assert result.status == "error"
     assert result.error == "server closed the connection"
+
+
+def test_structured_content_is_not_sent_twice() -> None:
+    from mcp import types as mcp_types
+
+    from app.tools.mcp_client import _flatten_content
+
+    both = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text='{"a": 1}')], structuredContent={"a": 1}
+    )
+    assert _flatten_content(both) == {"text": '{"a": 1}'}
+    only_structured = mcp_types.CallToolResult(content=[], structuredContent={"a": 1})
+    assert _flatten_content(only_structured) == {"text": "", "structured": {"a": 1}}
+
+
+def test_a_grouped_connection_error_reads_as_its_cause() -> None:
+    import httpx
+
+    from app.tools.mcp_client import _reason
+
+    group = BaseExceptionGroup("unhandled errors in a TaskGroup", [httpx.ReadTimeout("slow")])
+    assert _reason(group) == "ReadTimeout: slow"
+    assert "TaskGroup" not in _reason(group)

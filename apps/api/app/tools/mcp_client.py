@@ -137,6 +137,15 @@ async def _check_destination(config: MCPServerConfig) -> None:
         raise MCPToolError(exc.reason) from exc
 
 
+def _reason(exc: BaseException) -> str:
+    """A readable cause. The SDK runs on anyio task groups, so a dropped connection surfaces as "unhandled errors in
+    a TaskGroup (1 sub-exception)", which tells neither the model nor the owner anything."""
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
+        exc = exc.exceptions[0]
+    text = str(exc).strip()
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+
+
 async def _with_session(config: MCPServerConfig, fn: Any, *, timeout_s: float) -> Any:
     timeout_s = min(timeout_s, MAX_TIMEOUT_S)
     await _check_destination(config)
@@ -154,7 +163,7 @@ async def _with_session(config: MCPServerConfig, fn: Any, *, timeout_s: float) -
     except MCPToolError:
         raise
     except Exception as exc:  # connection refused, bad handshake, subprocess spawn failure, ...
-        raise MCPToolError(str(exc)) from exc
+        raise MCPToolError(_reason(exc)) from exc
 
 
 def _texts_of(content: list[Any]) -> list[str]:
@@ -163,7 +172,9 @@ def _texts_of(content: list[Any]) -> list[str]:
 
 def _flatten_content(result: mcp_types.CallToolResult) -> dict[str, Any]:
     out: dict[str, Any] = {"text": "\n".join(_texts_of(result.content))}
-    if result.structured_content is not None:
+    # Most servers send the same data as text AND structured content; sending both doubled what the model had to
+    # read. Structured content is kept only when there is no text to carry it.
+    if result.structured_content is not None and not out["text"].strip():
         out["structured"] = result.structured_content
     return out
 

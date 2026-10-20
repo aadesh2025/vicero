@@ -18,6 +18,39 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-133: Per-agent MCP (Streamable HTTP, discovery cache, allowlist bindings) (docs/28 T2)
+- **Date:** 2026-10-19
+- **Status:** accepted
+- **Context:** MCP servers were org-wide, SSE-only, found by connecting during setup, and an MCP tool reached a turn
+  only behind the agentic-runtime flag. docs/28 wants a customer to attach their own MCP server to one agent.
+- **Decision:**
+  1. `mcp` SDK 2.0.0 (already installed) has `streamable_http_client`; no pin change. `transport` is now
+     `stdio | sse | streamable_http` (default `streamable_http`). stdio is refused in the service layer for non-staff
+     with `mcp.transport_forbidden` (403).
+  2. The SDK opens its own connections, so `mcp_client.PinnedTransport` (an httpx2 transport) re-validates every
+     request and redirect and dials the validated IP with the original Host and TLS server name: the same rebinding
+     defence as `egress.safe_request`. Calls are capped at 30 s. A Connection may supply header credentials; its
+     `allowed_hosts` must include the server's host, so a credential can never be pointed at a stranger.
+  3. Discovery fills `mcp_servers.tools_cache` (on `POST .../refresh-tools`, and hourly by Celery for servers an agent
+     uses whose cache is over 24 h old). A visitor turn never discovers. Descriptions and schema text from a server are
+     untrusted ("tool poisoning") and go through `neutralize_injections` before they are cached.
+  4. `agent_mcp_bindings` is the allowlist (`enabled_tools`; empty means none). The tools an agent may use are
+     materialised as ordinary `tools` rows (`type="mcp"`, `config.managed`, named `<server slug>__<tool>`) shared
+     through `agent_tool_bindings`, so the dispatcher, run log, per-agent ordering and description override are the
+     existing ones. `PUT /v1/agents/{id}/mcp-servers` owns those rows; `PUT .../tools` refuses to touch them. 20
+     enabled tools per agent, MCP and others together.
+  5. Plan: an MCP server is one `max_mcp_servers` slot (Pro 2, Starter/trial locked) and its materialised rows are not
+     counted in `max_tools`. Runtime and dispatch both re-check the plan, and a disabled server's tools are not offered.
+  6. Migration 0039 gives every server a slug, and for orgs that had the agentic flag on turns their hand-made MCP tool
+     rows into managed ones plus bindings, so those orgs lose nothing. Orgs with the flag off keep dormant rows
+     untouched (registration still does not imply usage); such rows stay behind the flag.
+- **Alternatives considered:** one binding model with no tool rows (rejected: `tool_runs.tool_id` is a foreign key and
+  the plan counters, ordering and overrides would all need MCP-specific code); a `Tool` row per agent (rejected:
+  duplicates on every share).
+- **Consequences:** a renamed server keeps its slug so tool names the model has seen do not change. A changed URL
+  clears the cache and switches its tools off until the next refresh. Deleting a server removes its managed rows, and
+  is refused while an older hand-made tool still points at it.
+
 ### ADR-132: Connections, API tool v2, egress guard v2, and agent tool bindings (docs/28 T1)
 - **Date:** 2026-10-19
 - **Status:** accepted

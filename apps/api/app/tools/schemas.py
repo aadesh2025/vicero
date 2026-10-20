@@ -136,22 +136,87 @@ class ToolBindingOut(BaseModel):
 
 class CreateMCPServerRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
-    transport: str = Field(pattern="^(stdio|sse)$")
-    # stdio: the command to spawn. sse: the server URL.
+    # streamable_http is the current MCP standard and the default; sse is the older one. stdio is staff only.
+    transport: str = Field(default="streamable_http", pattern="^(stdio|sse|streamable_http)$")
+    # stdio: the command to spawn. sse / streamable_http: the server URL.
     url_or_command: str = Field(min_length=1)
     args: list[str] | None = None
     env: dict[str, str] | None = None
     headers: dict[str, str] | None = None
+    # Credentials from a saved Connection (header auth only). Its allowed hosts must include the server's host.
+    connection_id: uuid.UUID | None = None
     enabled: bool = True
+
+
+class UpdateMCPServerRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    url_or_command: str | None = Field(default=None, min_length=1)
+    # Replaces the stored headers when sent (an empty object clears them). Never returned.
+    headers: dict[str, str] | None = None
+    # Send null to detach the connection; leave out to keep it.
+    connection_id: uuid.UUID | None = None
+    enabled: bool | None = None
+
+
+class MCPCachedTool(BaseModel):
+    name: str
+    description: str
 
 
 class MCPServerOut(BaseModel):
     id: uuid.UUID
     name: str
+    slug: str | None = None
     transport: str
     url_or_command: str
     enabled: bool
     created_at: dt.datetime
+    connection_id: uuid.UUID | None = None
+    tools: list[MCPCachedTool] = Field(default_factory=list)
+    tools_cached_at: dt.datetime | None = None
+    last_error: str | None = None
+    agents_count: int = 0
+
+
+class MCPRefreshResponse(BaseModel):
+    ok: bool
+    tools: list[MCPCachedTool] = Field(default_factory=list)
+    error: str | None = None
+
+
+class MCPToolOverride(BaseModel):
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class MCPBindingIn(BaseModel):
+    server_id: uuid.UUID
+    enabled: bool = True
+    # Only these tools reach the model. Empty means none, never all.
+    enabled_tools: list[str] = Field(default_factory=list, max_length=100)
+    tool_overrides: dict[str, MCPToolOverride] = Field(default_factory=dict)
+
+
+class SetAgentMCPRequest(BaseModel):
+    servers: list[MCPBindingIn] = Field(default_factory=list, max_length=50)
+
+
+class MCPAvailableTool(BaseModel):
+    name: str
+    description: str
+    exposed_as: str
+    enabled: bool
+
+
+class MCPBindingOut(BaseModel):
+    server_id: uuid.UUID
+    server_name: str
+    slug: str | None
+    enabled: bool
+    enabled_tools: list[str]
+    tool_overrides: dict[str, MCPToolOverride]
+    available_tools: list[MCPAvailableTool]
+    tools_cached_at: dt.datetime | None = None
+    cache_stale: bool = False
 
 
 class MCPToolInfo(BaseModel):

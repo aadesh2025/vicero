@@ -20,7 +20,7 @@ from app.core import rbac
 from app.core.audit import write_audit
 from app.core.egress import EgressBlocked, EgressError, ip_is_public, literal_ip, safe_request
 from app.core.errors import AppError
-from app.models import Connection, Tool
+from app.models import Connection, MCPServer, Tool
 from app.modules.connections import schemas
 from app.modules.orgs.deps import OrgContext
 from app.tools import connections as conn_auth
@@ -86,6 +86,13 @@ async def _get(session: AsyncSession, ctx: OrgContext, connection_id: uuid.UUID)
 
 async def _tool_names(session: AsyncSession, connection_id: uuid.UUID) -> list[str]:
     rows = await session.execute(select(Tool.name).where(Tool.connection_id == connection_id).order_by(Tool.name))
+    return [r[0] for r in rows.all()]
+
+
+async def _mcp_server_names(session: AsyncSession, connection_id: uuid.UUID) -> list[str]:
+    rows = await session.execute(
+        select(MCPServer.name).where(MCPServer.connection_id == connection_id).order_by(MCPServer.name)
+    )
     return [r[0] for r in rows.all()]
 
 
@@ -243,12 +250,13 @@ async def delete_connection(session: AsyncSession, ctx: OrgContext, connection_i
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
     conn = await _get(session, ctx, connection_id)
     names = await _tool_names(session, conn.id)
-    if names:
+    servers = await _mcp_server_names(session, conn.id)
+    if names or servers:
         raise AppError(
             "connections.in_use",
-            "This connection is used by tools. Delete or repoint them first.",
+            "This connection is used by tools or MCP servers. Delete or repoint them first.",
             409,
-            details={"tools": names},
+            details={"tools": names, "mcp_servers": servers},
         )
     await write_audit(
         session, ctx.org.id, ctx.user.id, "connection.deleted",

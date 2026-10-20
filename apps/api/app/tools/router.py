@@ -13,10 +13,29 @@ from app.core.ratelimit import rate_limit
 from app.db.session import get_session
 from app.integrations.n8n_client import verify_callback
 from app.modules.orgs.deps import OrgContext, current_org
-from app.tools import schemas, service
+from app.tools import mcp_service, schemas, service
 
 router = APIRouter(prefix="/v1/tools", tags=["tools"])
 agent_tools_router = APIRouter(prefix="/v1/agents", tags=["tools"])
+
+
+@agent_tools_router.get("/{agent_id}/mcp-servers", response_model=list[schemas.MCPBindingOut])
+async def list_agent_mcp(
+    agent_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.MCPBindingOut]:
+    return await mcp_service.list_agent_mcp(session, ctx, agent_id)
+
+
+@agent_tools_router.put("/{agent_id}/mcp-servers", response_model=list[schemas.MCPBindingOut])
+async def set_agent_mcp(
+    agent_id: uuid.UUID,
+    data: schemas.SetAgentMCPRequest,
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
+) -> list[schemas.MCPBindingOut]:
+    return await mcp_service.set_agent_mcp(session, ctx, agent_id, data)
 
 
 @agent_tools_router.get("/{agent_id}/tools", response_model=list[schemas.ToolBindingOut])

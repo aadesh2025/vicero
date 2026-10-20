@@ -36,6 +36,11 @@ celery_app.conf.update(
             "task": "disposable.refresh",
             "schedule": 7 * 86400.0,
         },
+        "mcp-tools-refresh": {
+            # MCP servers whose discovered tool list is over a day old (tools/mcp_service.stale_server_ids).
+            "task": "mcp.refresh_stale",
+            "schedule": 3600.0,
+        },
         "automation-runs-pull": {
             # Backup for n8n's signed push: fills gaps from n8n's execution list (registered workflows only).
             "task": "automations.pull",

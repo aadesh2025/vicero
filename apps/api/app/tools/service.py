@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import json
 import re
@@ -11,7 +10,7 @@ import uuid
 from typing import Any
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import automations as automation_rules
@@ -21,10 +20,8 @@ from app.core import rbac
 from app.core.audit import write_audit
 from app.core.catalog import catalog_enabled
 from app.core.config import settings
-from app.core.crypto import encrypt
 from app.core.errors import AppError
 from app.core.logging import get_logger
-from app.core.ssrf import is_blocked_host
 from app.integrations.n8n_client import N8nClient, get_client, valid_callback_token
 from app.integrations.n8n_signature import FIX_HINT, unverified_reason
 from app.llm.types import ToolCall, ToolSpec
@@ -35,10 +32,8 @@ from app.tools.base import ToolContext, ToolResult
 from app.tools.builtins import BUILTINS, CATALOG_TOOLS
 from app.tools.compact import compact_description, compact_schema
 from app.tools.connections import load_connection
-from app.tools.mcp_client import MCPToolError
-from app.tools.mcp_client import list_tools as mcp_list_tools
+from app.tools.limits import MAX_TOOLS_PER_AGENT, is_managed_mcp
 from app.tools.mcp_tool import execute_mcp_tool
-from app.tools.mcp_tool import resolve_server_config as mcp_resolve_server_config
 from app.tools.n8n_tool import execute_n8n_tool, n8n_args_schema, relax_n8n_schema
 
 log = get_logger("tools")
@@ -262,8 +257,10 @@ async def resolve_agent_tools(
         .order_by(AgentToolBinding.position, Tool.created_at, Tool.id)
     )
     if not include_mcp:
-        stmt = stmt.where(Tool.type != "mcp")
+        # Rows an agent's MCP binding created are always offered; the older hand-made ones stay behind the flag.
+        stmt = stmt.where(or_(Tool.type != "mcp", Tool.config["managed"].as_boolean().is_(True)))
     rows = list((await session.execute(stmt)).all())
+    rows = await _drop_unusable_mcp(session, org_id, rows)
     tools = [t for t, _b in rows]
     overrides = {t.name: (b.overrides or {}) for t, b in rows}
     specs = [
@@ -282,6 +279,34 @@ async def resolve_agent_tools(
     for t in tools:
         by_name.setdefault(t.name, t)  # the first of two same-named tools wins, as the model sees only one
     return specs, by_name
+
+
+async def _drop_unusable_mcp(
+    session: AsyncSession, org_id: uuid.UUID, rows: list[Any]
+) -> list[Any]:
+    """Managed MCP tools whose server is switched off, or whose plan no longer includes MCP, are not offered:
+    the model should not be told about a tool the dispatcher will refuse."""
+    server_ids = {
+        uuid.UUID(str(t.config["server_id"])) for t, _b in rows if is_managed_mcp(t) and t.config.get("server_id")
+    }
+    if not server_ids:
+        return rows
+    on = set(
+        (
+            await session.execute(
+                select(MCPServer.id).where(
+                    MCPServer.id.in_(server_ids), MCPServer.organization_id == org_id, MCPServer.enabled.is_(True)
+                )
+            )
+        ).scalars()
+    )
+    org = await session.get(Organization, org_id)
+    plan_ok = org is None or usage.mcp_allowed(org)
+    return [
+        (t, b)
+        for t, b in rows
+        if not is_managed_mcp(t) or (plan_ok and uuid.UUID(str(t.config.get("server_id"))) in on)
+    ]
 
 
 async def build_tooling(
@@ -398,6 +423,17 @@ async def _dispatch(tool: Tool, ctx: ToolContext, args: dict[str, Any]) -> ToolR
     if tool.type == "n8n":
         return await execute_n8n_tool(tool.config, args, ctx)
     if tool.type == "mcp":
+        if is_managed_mcp(tool):
+            org = await ctx.session.get(Organization, tool.organization_id)
+            if org is not None and not usage.mcp_allowed(org):
+                return ToolResult(output={}, status="error", error="MCP is not included in this plan")
+            problems = api_tool.validate_args(tool.input_schema, args)
+            if problems:
+                return ToolResult(
+                    output={"error": "invalid_arguments", "details": problems},
+                    status="error",
+                    error="invalid arguments: " + "; ".join(problems),
+                )
         return await execute_mcp_tool(ctx.session, ctx.org_id, tool.config, args)
     return ToolResult(output={}, status="error", error=f"unsupported tool type '{tool.type}'")
 
@@ -760,108 +796,7 @@ async def resolve_n8n_callback(session: AsyncSession, data: schemas.N8nCallbackR
     return True
 
 
-# ── MCP servers (docs/17 Phase 1 §4) ────────────────────────────────────────────────
-def _mcp_server_out(server: MCPServer) -> schemas.MCPServerOut:
-    return schemas.MCPServerOut(
-        id=server.id,
-        name=server.name,
-        transport=server.transport,
-        url_or_command=server.url_or_command,
-        enabled=server.enabled,
-        created_at=server.created_at,
-    )
-
-
-async def create_mcp_server(
-    session: AsyncSession, ctx: OrgContext, data: schemas.CreateMCPServerRequest
-) -> schemas.MCPServerOut:
-    """Register an org-scoped MCP server. Registration alone never attaches it to any agent —
-    a `Tool` row of type `mcp` still has to be created (POST /v1/tools), and even then it is
-    only usable in a turn once the agentic runtime is on for this org (docs/17 §2)."""
-    rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
-    await usage.require_feature(session, ctx.org, "tool_calling")
-    await usage.require_tool_slot(session, ctx.org)
-    if data.transport == "stdio":
-        # A stdio server is a command run on the API host. Any org role with TOOLS_MANAGE
-        # (including the client `editor` role) could otherwise execute arbitrary code there.
-        if not ctx.user.is_staff:
-            raise AppError(
-                "tools.mcp_stdio_forbidden",
-                "stdio MCP servers can only be registered by platform staff. Use an SSE server.",
-                403,
-            )
-    else:
-        parsed = urlparse(data.url_or_command)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname:
-            raise AppError("tools.mcp_url_invalid", "An SSE MCP server needs an http(s) URL.", 422)
-        if await asyncio.to_thread(is_blocked_host, parsed.hostname):
-            raise AppError(
-                "tools.mcp_url_blocked", "That URL points at a private or loopback address.", 422
-            )
-    auth: dict[str, Any] = {}
-    if data.args:
-        auth["args"] = data.args
-    if data.env:
-        auth["env"] = data.env
-    if data.headers:
-        auth["headers"] = data.headers
-    server = MCPServer(
-        organization_id=ctx.org.id,
-        name=data.name,
-        transport=data.transport,
-        url_or_command=data.url_or_command,
-        auth_config_enc=encrypt(json.dumps(auth)) if auth else None,
-        enabled=data.enabled,
-        created_by=ctx.user.id,
-    )
-    session.add(server)
-    await session.flush()
-    return _mcp_server_out(server)
-
-
-async def list_mcp_servers(session: AsyncSession, ctx: OrgContext) -> list[schemas.MCPServerOut]:
-    rbac.require_permission(ctx.role, rbac.READ)
-    stmt = (
-        select(MCPServer)
-        .where(MCPServer.organization_id == ctx.org.id)
-        .order_by(MCPServer.created_at.desc())
-    )
-    return [_mcp_server_out(s) for s in (await session.execute(stmt)).scalars().all()]
-
-
-async def _get_mcp_server(session: AsyncSession, ctx: OrgContext, server_id: uuid.UUID) -> MCPServer:
-    server = await session.get(MCPServer, server_id)
-    if server is None or server.organization_id != ctx.org.id:
-        raise AppError("tools.mcp_server_not_found", "MCP server not found.", 404)
-    return server
-
-
-async def test_mcp_server_connection(
-    session: AsyncSession, ctx: OrgContext, server_id: uuid.UUID
-) -> schemas.MCPTestConnectionResponse:
-    """Connect, list the server's tools, and disconnect. Never raises — a bad connection is a
-    normal test result, not a 5xx."""
-    rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
-    await usage.require_feature(session, ctx.org, "tool_calling")
-    server = await _get_mcp_server(session, ctx, server_id)
-    try:
-        tools = await mcp_list_tools(await mcp_resolve_server_config(session, server))
-    except MCPToolError as exc:
-        return schemas.MCPTestConnectionResponse(ok=False, error=str(exc))
-    return schemas.MCPTestConnectionResponse(
-        ok=True,
-        tools=[
-            schemas.MCPToolInfo(name=t["name"], description=t["description"], input_schema=t["input_schema"])
-            for t in tools
-        ],
-    )
-
-
 # ── Agent tool bindings (docs/28 T1.5) ────────────────────────────────────────────────
-#: More tools than this and tool-choice accuracy and prompt cost both degrade (docs/28 §5.3, §13).
-MAX_TOOLS_PER_AGENT = 20
-
-
 async def _get_agent(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID) -> Agent:
     agent = await session.get(Agent, agent_id)
     if agent is None or agent.organization_id != ctx.org.id:
@@ -904,7 +839,16 @@ async def set_agent_tools(
     ids = [b.tool_id for b in data.tools]
     if len(set(ids)) != len(ids):
         raise AppError("tools.duplicate_binding", "A tool can be listed only once.", 400)
-    if sum(1 for b in data.tools if b.enabled) > MAX_TOOLS_PER_AGENT:
+    mcp_rows = (
+        await session.execute(
+            select(AgentToolBinding, Tool)
+            .join(Tool, Tool.id == AgentToolBinding.tool_id)
+            .where(AgentToolBinding.agent_id == agent_id, AgentToolBinding.organization_id == ctx.org.id)
+        )
+    ).all()
+    managed_ids = {t.id for _b, t in mcp_rows if is_managed_mcp(t)}
+    managed_enabled = sum(1 for b, t in mcp_rows if t.id in managed_ids and b.enabled)
+    if sum(1 for b in data.tools if b.enabled) + managed_enabled > MAX_TOOLS_PER_AGENT:
         raise AppError(
             "tools.too_many",
             f"An agent can have at most {MAX_TOOLS_PER_AGENT} enabled tools. "
@@ -918,6 +862,12 @@ async def set_agent_tools(
     missing = [str(i) for i in ids if i not in found]
     if missing:
         raise AppError("tools.not_found", "Tool not found.", 404, details={"tool_ids": missing})
+    if any(is_managed_mcp(t) for t in found.values()):
+        raise AppError(
+            "tools.managed_binding",
+            "MCP tools are chosen per server with PUT /v1/agents/{id}/mcp-servers, not here.",
+            400,
+        )
     for b in data.tools:
         extra = set(b.overrides) - {"description"}
         if extra:
@@ -938,7 +888,7 @@ async def set_agent_tools(
         .all()
     }
     for tool_id, stale in existing.items():
-        if tool_id not in found:
+        if tool_id not in found and tool_id not in managed_ids:  # MCP bindings belong to /mcp-servers
             await session.delete(stale)
     for position, b in enumerate(data.tools):
         row = existing.get(b.tool_id)

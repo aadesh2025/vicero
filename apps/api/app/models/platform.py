@@ -53,6 +53,8 @@ class WebhookEndpoint(Base, UUIDPrimaryKey, TimestampMixin):
     events: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
     secret: Mapped[str | None] = mapped_column(String(255))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # docs/28 T3: when set, the endpoint only receives this agent's events. NULL keeps the org-wide behaviour.
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
 
 
 class WebhookDelivery(Base, UUIDPrimaryKey):

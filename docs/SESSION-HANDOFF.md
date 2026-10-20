@@ -3,6 +3,12 @@
 > **Read this first, then continue the build.** This file is the pick-up point for the next
 > session. It records what's done, what's half-done, and exactly what to do next.
 
+## ▶ AGENT TOOLS T3 — 2026-10-19 (webhooks, ADR-134, migration 0040; stacked on T2)
+
+- Branch `feat/tools-t3-webhooks`. Code: `app/modules/inbound_hooks/{actions,service,router}.py`, `app/webhooks/{dispatch,events}.py`, `app/core/idempotency.py`.
+- `set_variables` writes to `Contact.extra["variables"]` until T4 adds conversation variables; move it then.
+- Next: T4 (tool messages, async, approval, variables, flow built-ins, rate limits, parallel calls).
+
 ## ▶ AGENT TOOLS T2 — 2026-10-19 (per-agent MCP, ADR-133, migration 0039; stacked on T1)
 
 - Branch `feat/tools-t2-mcp`. Code: `app/tools/mcp_service.py` (servers, discovery, bindings), `app/tools/mcp_client.py` (`PinnedTransport`), `app/tools/limits.py`, Celery `mcp.refresh_stale`.

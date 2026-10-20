@@ -771,6 +771,39 @@ async def _create_and_dispatch_run(
     return _run_out(run)
 
 
+async def start_published_run(
+    session: AsyncSession, org: Organization, workflow_id: uuid.UUID, variables: dict[str, Any]
+) -> schemas.WorkflowRunOut:
+    """Start the published version of one of `org`'s workflows from a trigger that is not a signed-in person
+    (an inbound hook). The caller has already authenticated the trigger; this enforces org ownership and plan."""
+    if not usage.feature_allowed(org, "workflows"):
+        raise AppError("plan_limit", "Workflows are not included in this plan.", 402)
+    workflow = await session.get(Workflow, workflow_id)
+    if workflow is None or workflow.organization_id != org.id or workflow.deleted_at is not None:
+        raise AppError("workflows.not_found", "Workflow not found.", 404)
+    if workflow.current_version_id is None:
+        raise AppError("workflows.not_published", "This workflow has no published version.", 400)
+    version = await session.get(WorkflowVersion, workflow.current_version_id)
+    assert version is not None
+    run = WorkflowRun(
+        workflow_version_id=version.id, organization_id=org.id, conversation_id=None, status="running",
+        variables=dict(variables), budget=_budget_to_dict(default_budget()), is_test=False,
+    )
+    session.add(run)
+    await session.flush()
+    await _dispatch_run(session, run, workflow, version)
+    return _run_out(run)
+
+
+async def run_single_agent_turn(
+    session: AsyncSession, org: Organization, agent_id: uuid.UUID, message: str
+) -> dict[str, Any]:
+    """One non-streaming, non-persisted turn of a published agent (the engine behind a workflow `agent` node),
+    for triggers that want the reply back directly. Returns {content, status, error, cost_usd}."""
+    executor = await _agent_executor_for(session, org)
+    return await executor(str(agent_id), message, default_budget())
+
+
 async def run_workflow_now(
     session: AsyncSession, ctx: OrgContext, workflow_id: uuid.UUID, data: schemas.RunWorkflowRequest
 ) -> schemas.WorkflowRunOut:

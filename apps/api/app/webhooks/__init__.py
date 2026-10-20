@@ -10,6 +10,10 @@ EVENT_CATALOG = (
     "document.ready",
     "document.failed",
     "tool.run",
+    "tool.called",
+    "variables.captured",
+    "conversation.ended",
+    "lead.captured",
     "usage.threshold",
     "channel.needs_reconnect",
 )

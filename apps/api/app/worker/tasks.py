@@ -463,3 +463,18 @@ def refresh_stale_mcp_tools_task() -> int:
     """Hourly (Celery beat): re-discover the tools of MCP servers whose cache is a day old. A visitor's turn
     only ever reads the cache; this is the only place discovery happens off a person's click (docs/28 T2.4)."""
     return _run(_run_mcp_refresh())
+
+
+async def _run_inbound_hook_retention() -> int:
+    from app.modules.inbound_hooks.service import purge_old_events
+
+    async with SessionFactory() as session:
+        removed = await purge_old_events(session)
+        await session.commit()
+        return removed
+
+
+@celery_app.task(name="inbound_hooks.retention")  # type: ignore[untyped-decorator]
+def purge_inbound_hook_events_task() -> int:
+    """Daily (Celery beat): delete inbound hook call logs older than 30 days."""
+    return _run(_run_inbound_hook_retention())

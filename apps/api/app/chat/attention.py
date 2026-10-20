@@ -111,7 +111,9 @@ async def raise_flag(
     }
     # Same topic the inbox already listens on, so an open Attention tab updates live.
     await hub.publish(inbox_topic(conversation.organization_id), {"type": "attention", **payload})
-    await emit_event(session, conversation.organization_id, "conversation.attention", payload)
+    await emit_event(
+        session, conversation.organization_id, "conversation.attention", payload, agent_id=conversation.agent_id
+    )
     return flag
 
 

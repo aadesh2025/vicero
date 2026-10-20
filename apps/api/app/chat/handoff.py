@@ -65,6 +65,7 @@ async def trigger_handoff(
         conversation.organization_id,
         "handoff.requested",
         {"conversation_id": str(conversation.id), "handoff_id": str(handoff.id), "reason": reason},
+        agent_id=conversation.agent_id,
     )
     return handoff
 

@@ -12,7 +12,7 @@ from app.billing import usage
 from app.core import rbac
 from app.core.audit import write_audit
 from app.core.errors import AppError
-from app.models import WebhookDelivery, WebhookEndpoint
+from app.models import Agent, WebhookDelivery, WebhookEndpoint
 from app.modules.orgs.deps import OrgContext
 from app.webhooks import schemas
 from app.webhooks.dispatch import deliver_delivery
@@ -22,6 +22,7 @@ def _out(ep: WebhookEndpoint, *, reveal_secret: bool = False) -> schemas.Webhook
     return schemas.WebhookOut(
         id=ep.id,
         url=ep.url,
+        agent_id=ep.agent_id,
         events=ep.events,
         enabled=ep.enabled,
         secret=ep.secret if reveal_secret else ("••••set" if ep.secret else None),
@@ -41,8 +42,11 @@ async def create_webhook(
 ) -> schemas.WebhookOut:
     rbac.require_permission(ctx.role, rbac.TOOLS_MANAGE)
     await usage.require_webhook_slot(session, ctx.org)
+    if data.agent_id is not None:
+        await _require_agent(session, ctx, data.agent_id)
     ep = WebhookEndpoint(
         organization_id=ctx.org.id,
+        agent_id=data.agent_id,
         url=data.url,
         events=data.events,
         secret=data.secret or secrets.token_urlsafe(24),
@@ -54,11 +58,22 @@ async def create_webhook(
     return _out(ep, reveal_secret=True)  # secret shown once
 
 
-async def list_webhooks(session: AsyncSession, ctx: OrgContext) -> list[schemas.WebhookOut]:
+async def _require_agent(session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID) -> None:
+    agent = await session.get(Agent, agent_id)
+    if agent is None or agent.organization_id != ctx.org.id:
+        raise AppError("agents.not_found", "Agent not found.", 404)
+
+
+async def list_webhooks(
+    session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID | None = None
+) -> list[schemas.WebhookOut]:
+    """`agent_id` narrows to that agent's own endpoints; without it every endpoint in the org is listed."""
     rbac.require_permission(ctx.role, rbac.READ)
     stmt = select(WebhookEndpoint).where(WebhookEndpoint.organization_id == ctx.org.id).order_by(
         WebhookEndpoint.created_at.desc()
     )
+    if agent_id is not None:
+        stmt = stmt.where(WebhookEndpoint.agent_id == agent_id)
     return [_out(ep) for ep in (await session.execute(stmt)).scalars().all()]
 
 

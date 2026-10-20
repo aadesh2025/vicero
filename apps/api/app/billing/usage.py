@@ -566,6 +566,26 @@ async def require_connection_slot(session: AsyncSession, org: Organization) -> N
     await _require_slot(session, org, "connections", "API connections", count)
 
 
+async def require_inbound_hook_slot(session: AsyncSession, org: Organization) -> None:
+    """Inbound trigger hooks (docs/28 section 10). 0 on trial/Starter, so the 402 is the locked state."""
+    from app.models import InboundHook
+
+    count = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(InboundHook).where(InboundHook.organization_id == org.id)
+            )
+        ).scalar_one()
+    )
+    await _require_slot(session, org, "inbound_hooks", "inbound hooks", count)
+
+
+def inbound_hooks_allowed(org: Organization) -> bool:
+    """Non-raising: a hook created on a plan that has since lapsed must stop answering, not keep running."""
+    ent = get_entitlements(org.plan, trial_ends_at=org.trial_ends_at, plan_expires_at=org.plan_expires_at)
+    return ent.limit_for("inbound_hooks") != 0 and not ent.is_expired
+
+
 async def require_team_member_slot(session: AsyncSession, org: Organization) -> None:
     """Checked on invitation **and** acceptance (docs/22 §11) — checking only one lets an org
     exceed its cap by pre-inviting more people than it can seat."""

@@ -18,6 +18,38 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-134: Per-agent outbound webhooks and inbound trigger hooks (docs/28 T3)
+- **Date:** 2026-10-19
+- **Status:** accepted
+- **Context:** Webhooks were org-wide and delivered through a name check followed by an unpinned HTTP call. There was
+  no way for an outside system to start or feed an agent.
+- **Decision:**
+  1. `webhook_endpoints.agent_id` (NULL = org-wide, unchanged). An agent endpoint receives only that agent's events;
+     an org-wide endpoint still receives all. `emit_event` takes `agent_id` (or reads it from the payload) and every
+     emit site that knows its agent now passes it. Delivery goes through `egress.safe_request` (DNS-pinned, no
+     redirects, capped body); a destination that resolves inside the network fails permanently instead of retrying.
+  2. New events: `tool.called` (redacted args through `sanitize_payload`, which masks secret-looking keys and cuts long
+     text), `conversation.ended` (message count + first/last message; no model call; `variables` is empty until
+     conversation variables ship in T4), `lead.captured` (CRM person created or enriched), `variables.captured`
+     (catalogue only; emitted by T4).
+  3. `inbound_hooks` / `inbound_hook_events` (migration 0040). `POST /v1/hooks/in/{public_id}` is public and answers
+     JSON in every case. Order of defences: unknown/disabled -> 404; per-IP pre-auth limit (so strangers cannot drain
+     the real sender's quota); 256 KB body cap; HMAC-SHA256 over `timestamp.body` within 300 s or a bearer secret, both
+     constant-time, secret Fernet-encrypted and shown once; exact-signature replay refused; per-hook rate limit; plan
+     re-check on every call; `Idempotency-Key` (24 h, Redis with a per-process fallback). Failed authentication writes
+     no event row. The log keeps a sanitized, 4 KB-capped payload for 30 days (Celery beat).
+  4. Four actions, each inside a SAVEPOINT. Only fields named by `payload_mapping` are read; text is stripped of control
+     characters, capped, and passed through `neutralize_injections` before anything uses it. `send_message` continues an
+     existing conversation (no cold messages) and goes through the channel adapter's `check_can_send` or a WhatsApp
+     template. `run_workflow` starts the published version. `set_variables` writes to `Contact.extra["variables"]`
+     until T4 adds conversation variables. `agent_turn` runs one non-persisted published-agent turn (25 s cap) inside a
+     data-not-instructions wrapper and reserves from the org's message allowance.
+- **Alternatives considered:** rejecting a payload that trips the injection screen (rejected: a customer's legitimate
+  order note would fail; neutralizing matches how every other untrusted channel is treated).
+- **Consequences:** two genuine signed events in the same second with identical bodies look like a replay, so senders
+  include an event id (documented). Webhook endpoint secrets are still stored in plaintext (pre-existing, unchanged).
+  Public docs: `/docs/api/inbound-hooks` (placeholders only, ADR-098).
+
 ### ADR-133: Per-agent MCP (Streamable HTTP, discovery cache, allowlist bindings) (docs/28 T2)
 - **Date:** 2026-10-19
 - **Status:** accepted

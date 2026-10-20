@@ -8,10 +8,16 @@ import json
 import uuid
 
 import httpx
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.webhooks.dispatch import deliver_delivery, emit_event
+
+
+@pytest.fixture(autouse=True)
+def _public_dns(dns: dict[str, list[str]]) -> None:
+    """Delivery now resolves the endpoint host itself (egress guard v2); made-up names resolve to a public IP."""
 
 
 def _mock(handler: object) -> httpx.MockTransport:

@@ -1,0 +1,83 @@
+---
+title: Inbound hooks
+description: Let another system trigger an agent - send a message, start a workflow, save details, or ask for a reply.
+group: API
+order: 5
+---
+
+An **inbound hook** is a private URL that another system can call to make one of your agents do something. Your shop
+says "order shipped", your booking tool says "appointment moved" - a hook turns that call into an action.
+
+You create hooks in the agent builder, under **Tools -> Webhooks -> Inbound hooks**. Each hook has its own URL and its
+own secret. Inbound hooks are included in the Pro and Business plans.
+
+## The URL
+
+```text
+https://YOUR_API_HOST/v1/hooks/in/YOUR_HOOK_ID
+```
+
+`YOUR_HOOK_ID` is the unguessable part of the URL. It is not a password - every call must also prove who it is from
+(next section).
+
+## Authenticating a call
+
+Choose one way when you create the hook.
+
+### Signed requests (recommended)
+
+Send two headers. `X-Vicero-Signature` is the hex HMAC-SHA256 of `TIMESTAMP.BODY`, keyed with the hook secret, where
+`TIMESTAMP` is the Unix time in seconds and `BODY` is the exact bytes you send.
+
+```bash
+BODY='{"customer":{"phone":"+15550100"},"order":{"id":"A-1","status":"shipped"}}'
+TS=$(date +%s)
+SIG=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$HOOK_SECRET" | sed 's/^.* //')
+
+curl -X POST "https://YOUR_API_HOST/v1/hooks/in/YOUR_HOOK_ID" \
+  -H "Content-Type: application/json" \
+  -H "X-Vicero-Timestamp: $TS" \
+  -H "X-Vicero-Signature: $SIG" \
+  -d "$BODY"
+```
+
+A request is refused with `401` if the signature is wrong, if the timestamp is more than five minutes away from our
+clock, or if the exact same signed request was already used. Include something that changes in each event (an event id)
+so two genuine events in the same second do not look like a replay.
+
+### Bearer secret
+
+Send the secret as `Authorization: Bearer $HOOK_SECRET`. Simpler, but the secret travels with every request, so prefer
+signing when the sender can do it.
+
+## Avoiding duplicates
+
+Add an `Idempotency-Key` header. If a second call arrives with the same key within 24 hours, it is acknowledged with
+`{"status": "duplicate"}` and nothing runs again.
+
+## What the call can do
+
+Each hook performs exactly one action. You also choose which fields of your JSON the action may read (a *payload
+mapping* such as `order_id` -> `$.order.id`); everything else in the body is ignored.
+
+| Action | What happens |
+|---|---|
+| `send_message` | Sends a message into an existing conversation with that contact. It cannot start a conversation with a stranger, and it follows each channel's rules (for WhatsApp, the 24-hour window, or an approved template). |
+| `run_workflow` | Starts a published workflow with the mapped fields as its variables. |
+| `set_variables` | Saves the mapped fields on the contact so the agent can use them later. |
+| `agent_turn` | Runs the agent once on a message you wrote (with the mapped values filled in) and returns its reply in the response. It counts toward your monthly messages and gives up after 25 seconds. |
+
+Text taken from the request is treated as data, never as instructions to the agent.
+
+## Responses
+
+A successful call answers `200` with `{"status": "ok", ...}`. For `agent_turn` the reply is in `reply`. Failures use the
+standard [error format](/docs/api/errors): `401` bad credentials, `404` unknown or disabled hook, `413` body over
+256 KB, `429` too many calls, `402` your plan does not include hooks.
+
+## Limits and safety
+
+- Each hook accepts a limited number of calls per minute; beyond it you get `429` with a `Retry-After` header.
+- Bodies are limited to 256 KB.
+- The last 20 calls to each hook are visible in the agent builder, with secrets removed; call logs are kept for 30 days.
+- You can rotate a hook's secret at any time. The old secret stops working immediately, and the new one is shown once.

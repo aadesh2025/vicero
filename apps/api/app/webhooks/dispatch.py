@@ -6,15 +6,15 @@ import datetime as dt
 import hashlib
 import hmac
 import json
+import re
 import time
 import uuid
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
+from app.core.egress import EgressBlocked, EgressError, safe_request
 from app.core.logging import get_logger
-from app.core.ssrf import is_blocked_host
 from app.models import WebhookDelivery, WebhookEndpoint
 
 log = get_logger("webhooks")
@@ -33,11 +33,34 @@ def _backoff(attempts: int) -> dt.datetime:
     return dt.datetime.now(tz=dt.UTC) + dt.timedelta(seconds=min(3600, 2 ** (attempts + 3)))
 
 
+_SECRET_KEY = re.compile(r"authorization|cookie|token|secret|password|api[-_]?key|bearer", re.IGNORECASE)
+_MAX_VALUE_CHARS = 300
+
+
+def sanitize_payload(value: Any, depth: int = 0) -> Any:
+    """What may leave the platform in an event: values under secret-looking keys are masked and long text is
+    cut. Tool arguments and results are customer data at best and credentials at worst, so events carry a
+    redacted view of them, never the raw object (docs/28 section 9)."""
+    if depth > 6:
+        return "..."
+    if isinstance(value, dict):
+        return {
+            str(k): ("••••" if _SECRET_KEY.search(str(k)) else sanitize_payload(v, depth + 1)) for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [sanitize_payload(v, depth + 1) for v in value[:50]]
+    if isinstance(value, str) and len(value) > _MAX_VALUE_CHARS:
+        return value[:_MAX_VALUE_CHARS] + "..."
+    return value
+
+
 async def emit_event(
-    session: Any, org_id: uuid.UUID, event: str, data: dict[str, Any]
+    session: Any, org_id: uuid.UUID, event: str, data: dict[str, Any], *, agent_id: uuid.UUID | None = None
 ) -> list[uuid.UUID]:
     """Create pending deliveries for every enabled endpoint subscribed to `event`; enqueue them.
 
+    An endpoint with an `agent_id` only receives that agent's events; an org-wide endpoint (NULL) receives
+    every event, whatever agent it came from. `agent_id` is also read from `data["agent_id"]` when not given.
     Best-effort: never raises into the calling request path.
     """
     from sqlalchemy import select
@@ -48,8 +71,15 @@ async def emit_event(
             WebhookEndpoint.organization_id == org_id, WebhookEndpoint.enabled.is_(True)
         )
         endpoints = (await session.execute(stmt)).scalars().all()
+        if agent_id is None and data.get("agent_id"):
+            try:
+                agent_id = uuid.UUID(str(data["agent_id"]))
+            except ValueError:
+                agent_id = None
         for ep in endpoints:
             if event not in ep.events and "*" not in ep.events:
+                continue
+            if ep.agent_id is not None and ep.agent_id != agent_id:
                 continue
             delivery = WebhookDelivery(
                 webhook_endpoint_id=ep.id,
@@ -115,13 +145,6 @@ async def deliver_delivery(
         delivery.status = "failed"
         return False
 
-    parsed = urlparse(endpoint.url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname or (
-        transport is None and is_blocked_host(parsed.hostname)
-    ):
-        delivery.status = "failed"  # SSRF guard / bad URL — permanent
-        return False
-
     body = json.dumps(delivery.payload).encode()
     headers = {"Content-Type": "application/json", "X-Vicero-Event": delivery.event}
     if endpoint.secret:
@@ -131,14 +154,27 @@ async def deliver_delivery(
 
     delivery.attempts += 1
     try:
-        async with httpx.AsyncClient(timeout=15.0, transport=transport, follow_redirects=False) as client:
-            resp = await client.post(endpoint.url, content=body, headers=headers)
+        resp = await safe_request(
+            "POST",
+            endpoint.url,
+            headers=headers,
+            content=body,
+            timeout_s=15.0,
+            max_bytes=64_000,
+            transport=transport,
+        )
         delivery.response_status = resp.status_code
         if resp.status_code < 400:
             delivery.status = "delivered"
             delivery.next_retry_at = None
             return True
-    except httpx.HTTPError as exc:
+    except EgressBlocked as exc:
+        # SSRF guard / bad URL / a name that now resolves inside the network: permanent, not retried.
+        log.warning("webhook_destination_refused", delivery=str(delivery_id), reason=exc.reason)
+        delivery.status = "failed"
+        delivery.next_retry_at = None
+        return False
+    except EgressError as exc:
         log.warning("webhook_delivery_error", delivery=str(delivery_id), error=str(exc))
 
     if delivery.attempts >= MAX_ATTEMPTS:

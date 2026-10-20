@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -30,9 +30,11 @@ async def create_webhook(
 
 @router.get("", response_model=list[schemas.WebhookOut])
 async def list_webhooks(
-    session: AsyncSession = Depends(get_session), ctx: OrgContext = Depends(current_org)
+    agent_id: uuid.UUID | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+    ctx: OrgContext = Depends(current_org),
 ) -> list[schemas.WebhookOut]:
-    return await service.list_webhooks(session, ctx)
+    return await service.list_webhooks(session, ctx, agent_id)
 
 
 @router.patch("/{endpoint_id}", response_model=schemas.WebhookOut)

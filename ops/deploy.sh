@@ -65,6 +65,7 @@ main() {
   echo "[deploy] free disk after: $(free_mb) MB ($(used_pct)% used; was ${FREE_BEFORE} MB)"
   if wait_healthy 600; then
     echo "[deploy] PASS"
+    prune_old_images || echo "[deploy] WARNING: image cleanup failed (the deploy itself passed)"
   else
     echo "[deploy] FAIL. Roll back images with: $ROOT/rollback.sh api=$PREV_API web=$PREV_WEB"
     return 1

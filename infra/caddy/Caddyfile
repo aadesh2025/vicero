@@ -38,6 +38,13 @@
 {$N8N_DOMAIN} {
 	encode zstd gzip
 
+	@leadgen path /webhook/next-job /webhook/leads
+	handle @leadgen {
+		reverse_proxy n8n:5678 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
 	@workflow_endpoints path /webhook /webhook/* /webhook-test /webhook-test/* /webhook-waiting /webhook-waiting/* /form /form/* /form-test /form-test/* /form-waiting /form-waiting/* /mcp /mcp/* /mcp-test /mcp-test/*
 	handle @workflow_endpoints {
 		respond "Not found" 404

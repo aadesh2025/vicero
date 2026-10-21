@@ -168,6 +168,8 @@ Staff reach the editor at `https://viceroai-n8n.duckdns.org` behind a second pas
 owner login. `/webhook*`, `/webhook-test*`, forms and MCP are answered `404` publicly; Vicero calls n8n at
 `http://n8n:5678` on the compose network.
 
+**Two public exceptions (AUROZEN lead-gen, in the repo from 2026-10-21):** `POST /webhook/leads` and `/webhook/next-job` on the n8n domain skip the 404 rule and the editor gate (the `@leadgen` block in `infra/caddy/Caddyfile`), because an outside scraper calls them. Each workflow checks an `x-token` header against a token written inside its own Code node and rejects a wrong one. Known limits (2026-10-21 review, not changed): the token compare is not constant-time; the token lives in the workflow, not in an n8n credential; and in "next job" the check runs after the two Google Sheets reads, so an unauthenticated call still costs two sheet reads. Moving the check before the reads is the first fix. The n8n container also sets `NODE_OPTIONS=--dns-result-order=ipv4first` because this host has no usable IPv6 (ADR-119).
+
 **First-time setup (once)**
 
 1. `ssh vicero /opt/vicero/ops/n8n-setup.sh` (type the editor password at the hidden prompt, or add `--random-gate`: the

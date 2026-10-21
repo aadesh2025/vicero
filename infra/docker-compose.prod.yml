@@ -345,7 +345,7 @@ services:
       # A runaway workflow is stopped, not left to eat the 768m.
       EXECUTIONS_TIMEOUT: "300"
       EXECUTIONS_TIMEOUT_MAX: "600"
-      NODE_OPTIONS: "--max-old-space-size=512"
+      NODE_OPTIONS: "--dns-result-order=ipv4first --max-old-space-size=512"
       # Workflows read the shared secrets from the environment (HMAC check on the way in, signed report on the
       # way out) -- see infra/n8n/README.md.
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"

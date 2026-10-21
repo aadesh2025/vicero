@@ -366,4 +366,4 @@ Covered by automated tests but never run on production: the **follow-up assistan
 2. In that workspace: Settings > Connections, add `https://jsonplaceholder.typicode.com` with no auth. On a new agent, Tools tab: add an API tool `delete_todo` (DELETE `/todos/{{id}}`, input `id` integer) with **approval required** on. Model tab: tools on, tool choice "required first turn". **Publish** the agent (the follow-up is only sent for a published agent; publishing also needs a verified email).
 3. Open the agent's widget chat as a visitor and send: `Yes, I confirm: call delete_todo now for to-do number 7.`
 4. Inbox > Tool approvals: **click Approve**. Expect: the call runs (Tool runs shows `success`), and within a few seconds the **conversation gets a new assistant message** that reports the outcome. Repeat with a second request and click **Decline**: nothing runs, and the follow-up says so.
-5. Delete the throwaway workspace (Settings > Delete workspace). Note the date and result here.
+5. Delete the throwaway workspace (Settings > Organization > Delete organization). Note the date and result here.

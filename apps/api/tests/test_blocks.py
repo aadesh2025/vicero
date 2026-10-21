@@ -601,7 +601,10 @@ async def test_a_forms_values_are_not_stored_a_second_time(
     )
     rows = (await db_session.execute(select(DbMessage).where(DbMessage.conversation_id == conv_id))).scalars().all()
     assert any(m.role == "user" and m.content == "Email: someone@example.com" for m in rows)
-    stored = next(m.blocks[0] for m in rows if m.blocks)
+    # The scripted model asks for the form again on the second turn, so two messages carry a block. The query has no
+    # ORDER BY and every row of one test shares the same created_at (R20): pick the answered block by its id, not
+    # by whichever row Postgres returns first (the UPDATE that resolved it can move it behind the newer row).
+    stored = next(b for m in rows for b in (m.blocks or []) if b["id"] == block_id)
     assert stored["resolved"]["value"] is None, "the typed values must not be copied into the block"
     assert "someone@example.com" not in json.dumps([m.blocks for m in rows if m.blocks])
     hist = (

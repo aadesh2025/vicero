@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -208,6 +208,9 @@ async def test_audit_flags_a_preexisting_unverified_bind(
     client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     headers, org_id, slug = await _staff(client, db_session, "auditor@example.com")
+    # The audit sweeps every org, so n8n tools already in a shared dev database (a real bound tool, a leftover from a
+    # script) would be counted too (R19). Clear them inside this test's transaction; it is rolled back at teardown.
+    await db_session.execute(delete(Tool).where(Tool.type == "n8n"))
     # Rows inserted directly = binds that predate the gate (it would refuse them now).
     for name, wf_id, path in (("old_bad", "2", "gate-bad"), ("old_ok", "1", "gate-ok"), ("old_gone", "9", "vanished")):
         db_session.add(

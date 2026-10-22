@@ -80,7 +80,7 @@ rechunk: ## Re-chunk + re-embed from the persisted DoclingDocument — no re-con
 	cd $(API) && uv run python ../../scripts/rechunk_documents.py
 
 test-scripts: ## Unit-test the provisioning script's helpers
-	node --test scripts/provision-client.test.mjs scripts/generate-env-reference.test.mjs
+	node --test scripts/provision-client.test.mjs scripts/generate-env-reference.test.mjs scripts/n8n-push.test.mjs
 
 docs-generate: ## Regenerate the docs site's OpenAPI + env reference from the code
 	cd $(API) && uv run python ../../scripts/generate-openapi.py

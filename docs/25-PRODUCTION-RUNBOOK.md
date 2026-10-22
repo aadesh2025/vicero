@@ -45,6 +45,8 @@ prints a message; the real deploy is `deploy.sh`.
 | `/opt/vicero/rollback.sh api=<ref> [web=<ref>]` | Redeploy a tag (`sha-1a2b3c4`) or digest (`sha256:…`) with the same health checks. Images only; no migration is run. |
 | `/opt/vicero/status.sh` | Containers, memory, disk, newest local and Drive backup, certificate expiry, HTTPS health, running images, repo state. Read-only. |
 | `/opt/vicero/set-env.sh KEY` | Set one `.env` value at a hidden prompt, keep mode 600, recreate only the services that use it. Refuses `POSTGRES_*` (see §6). |
+| `/opt/vicero/n8n-push.sh push - <flags> [--apply] < file.json` | Create or update ONE client workflow in n8n, inactive and org-tagged. Dry run unless `--apply`. Runs `scripts/n8n-push.mjs` in the web container (the host has no Node); state in `/opt/vicero/n8n-push-state/` (manifests, `history.log`). See §12. |
+| `ssh -t vicero /opt/vicero/n8n-push.sh activate "<name>" --org <slug>` | Activate a pushed workflow. Refuses without a real terminal; you type the workflow name to confirm. Only a person runs this. |
 
 Common settings, always together: `docker compose --env-file ../.env -f docker-compose.prod.yml -f docker-compose.ghcr.yml …`
 from `/opt/vicero/infra`, and **always `--no-build`**. `--env-file` is mandatory for `${VAR}` interpolation.
@@ -216,18 +218,23 @@ Real automations are built only from a client's request in the queue (Admin → 
    note the client will read. Ask the client for anything missing; never ask for a password in chat.
 2. **Plan check.** The request was already refused with an upgrade message if the plan has no free slot (Pro 5, Business 20;
    Trial/Starter 0). Check the org's plan and monthly run cap (2,000 / 10,000) before promising anything.
-3. **Build** in the n8n editor.
-   * Name `ORG-<org_id> | <client name> | <purpose>` and tag it with the org slug. No emails, phones or other personal data in names or tags.
-   * No Code nodes. Reuse a shared workflow when the capability fits several clients; a per-org workflow only when needed.
+3. **Build** as JSON in git (`infra/n8n/clients/<slug>/`) and push it with `ops/n8n-push.sh` (CLAUDE.md §13). Client builds use
+   `n8n-push.mjs` only; `import-n8n-workflows.mjs` and `provision-client.mjs` are not for client builds (they activate on their own).
+   * Name `<Client> - <Agent> - <Job>`, webhook path `<slug>-<agent>-<job>`, tag = the org slug and nothing else. (This replaces the
+     older `ORG-<org_id> | …` workflow name; the credential name `ORG-<org_id> | <service>` is unchanged.) No emails, phones or other personal data in names or tags.
+   * No Code nodes, with one exception: the template's `Verify Vicero signature` node (the signature check). The push script refuses any other Code node. Reuse a shared workflow when the capability fits several clients; a per-org workflow only when needed.
    * Credentials: one per org, named `ORG-<org_id> | <service>`. Never paste a secret into a node.
    * Webhook trigger (if an agent will call it): verify Vicero's signature first (see `infra/n8n/`); async workflows echo `callback_token`.
    * End with the signed **report run to Vicero** step (`POST /internal/automations/runs`, `AUTOMATION_REPORT_SECRET`); the global
      Error Workflow reports failures the same way.
+   * The push is a dry run until `--apply`, always leaves the workflow **inactive**, and never overwrites a live one: to change a live
+     workflow, push a new copy under a new job name, test it, then switch over by hand. Every push and activation adds one line to
+     `/opt/vicero/n8n-push-state/history.log`.
 4. **Test** with sample data in the editor: one success and one forced failure. Check the failure reads as a plain sentence on the
    client's Automations page (never the raw n8n text).
 5. **Register** (Admin → Client automations → *Register workflow*, or `POST /v1/admin/automation-registry`): org, agent (optional),
    the n8n workflow id, the `/webhook/<path>` if an agent calls it. One workflow belongs to exactly one org.
-6. **Activate** the workflow in n8n, confirm the first real run appears in the client's history and the request shows *active*.
+6. **Activate** (a person, at a terminal: `ssh -t vicero /opt/vicero/n8n-push.sh activate "<name>" --org <slug>`), confirm the first real run appears in the client's history and the request shows *active*.
    To stop it: *Pause* in the registry (agents stop calling it at once); the run history stays.
 
 ## 13. Visual DB access (read-only, SSH tunnel)

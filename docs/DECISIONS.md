@@ -18,6 +18,41 @@ Format each entry as below. Newest at the top.
 
 ## Build decisions
 
+### ADR-140: Ingest progress through Redis, embedding batches in parallel, several uploads at once (2026-10-21)
+- **Date:** 2026-10-21
+- **Status:** accepted
+- **Context:** "Uploading takes so long." Measured on the owner's machine: a 300 KB document is 511 chunks; reading took 0.2 s, chunking 0.3 s, and **embedding 48 s (~99%)** on a laptop GPU through Ollama. The row said "Queued" the whole time, because the ingest transaction commits only at the end, so the work looked stuck. On production the HTTP upload itself took 39 s for 1.8 MB: that is the lossy uplink (ADR-138), not the server.
+- **Decision:**
+  1. `app/rag/progress.py` writes `{stage, done, total}` to a short-lived Redis key per document (`fetching | crawling | reading | chunking | embedding | saving`). `GET .../documents` reads them in one `MGET` and returns `progress`; a queued row with live progress is reported as `processing`. Best-effort both ways; a Redis failure backs off for 30 s so it cannot add a timeout per batch.
+  2. Embedding runs in batches of 32 with `EMBED_CONCURRENCY` (default 2) in flight, reporting after each batch. The concurrency gain is small on a single local Ollama (measured ~8%); the visible progress is the real fix.
+  3. The upload control takes several files, sends up to 3 at once over XHR (fetch has no upload progress), and shows bytes sent per file.
+- **Rejected:** committing status mid-ingest (makes a re-ingest observable half-done); a dedicated ingest Celery queue + worker (the 4 GB VPS has no headroom for another worker process, and prod already runs `--concurrency=2`, so chat is not blocked behind one ingest).
+- **Also fixed:** `DocumentOut.pii_flags` was declared but never populated, so the knowledge page's PII badge and summary could never show anything.
+
+### ADR-139: Whole-website import: sitemap + same-site crawl, full-recall extraction, one citation per page (2026-10-21)
+- **Date:** 2026-10-21
+- **Status:** accepted
+- **Context:** "Website scraping can't extract the full data." A URL import read one page through trafilatura's main-article extractor. On a business site that drops pricing cards, service grids and the footer (address, phone, hours). Production's last import: 7 chunks. The bot User-Agent `Vicero-Ingest/1.0` is also refused by common CDN bot rules.
+- **Decision:**
+  1. New `source_type="website"` (`app/rag/crawler.py`). Discovery: start URL, then `robots.txt` `Sitemap:` lines / `sitemap.xml` / `sitemap_index.xml` (one nested level), then breadth-first same-site links. Same host with or without `www.` only; robots.txt respected; binaries and account/cart/login/admin paths never fetched. Caps: `max_pages` (request, default 25, hard limit `CRAWL_MAX_PAGES_LIMIT`), `CRAWL_TIME_BUDGET_SECONDS`, 5 MB per page, `CRAWL_CONCURRENCY`. Every URL and every redirect hop goes through `ssrf.is_blocked_host`, the same rule as single-page ingest, which now shares `crawler.fetch`.
+  2. `app/rag/web.py`: stdlib `html.parser` extractor that keeps every visible block as light markdown (headings, lists, table rows, image alt text), drops `<nav>`/`role=navigation` (their links are still collected for the crawl), and adds the title, meta description and JSON-LD facts. Across a crawl, lines repeated on most pages (header/footer) are removed from each page and kept once as "Site-wide information".
+  3. Single-page imports keep trafilatura's article first, then add back every substantive line it dropped (five or more words, or a number, price, email or phone). Menu labels stay out, so the docs.n8n.io nav regression test still holds.
+  4. Each page is chunked separately; chunks carry their own `source_url` and `page_title`, so a citation points at the right page. `documents.crawl_info` (migration 0042) stores the page limit, the pages read and warnings.
+  5. Browser-shaped User-Agent that still names `ViceroBot`; a 401/403/429/503 start page fails with a message saying how to allow it.
+- **Not done (deliberately):** JavaScript rendering. A headless browser in the worker image is ~300 MB+ RAM on a 4 GB host, and every subresource it loads would need its own SSRF check (docs/14 §9). JS-only pages are detected and reported in `crawl_info.warnings` and in the UI, and their title/description/JSON-LD are still read.
+
+### ADR-138: The host drops packets: DNS cache with stale fallback, keep-alive provider clients, one connect retry, readable errors (revises ADR-119) (2026-10-21)
+- **Date:** 2026-10-21
+- **Status:** accepted
+- **Context:** Visitors saw `network error: [Errno -3] Temporary failure in name resolution` and slow replies. Measured on the VPS: 10-22% packet loss starting at the provider's upstream router (mtr hop 2, bharatdatacenter), affecting DNS over UDP *and* TCP on every public resolver tried. `dns_check.py` inside the api container failed live. `213.133.98.98` (ADR-119's third resolver) refuses every query from this host. Every chat-provider call also opened a fresh client (DNS + TCP + TLS per call), multiplying the exposure.
+- **Decision:**
+  1. `app/core/dnscache.py` patches `socket.getaddrinfo` in the API (`create_app`) and the Celery worker (`worker_init`/`worker_process_init`): fresh answers cached 300 s; `EAI_AGAIN` retried twice; when all retries fail, an answer up to 24 h old is served (logged `dns_served_stale`). Dot-less Docker service names and IP literals are never cached; `EAI_NONAME` is never retried.
+  2. `app/llm/http.py`: one keep-alive `httpx.AsyncClient` per event loop for Groq/OpenAI-compatible, Gemini and Anthropic calls (test transports and SSRF-guarded tenant endpoints still get a throwaway client). A 5 s connect timeout, and one retry on `ConnectError`/`ConnectTimeout` only: the request never left, so it cannot double-bill.
+  3. The stream `error` event says what happened in words (`readable_error`): network, 429 rate limit, 413 too large. Each has a next step; the raw message stays in logs and `result.error`.
+  4. Compose `dns:` becomes `9.9.9.9, 1.0.0.1, 149.112.112.112` with `attempts:3`.
+  5. The builder warns when the system prompt exceeds ~1,500 tokens. The production "lead gen" agent's prompt is 32,853 characters (~8,200 tokens per message), which alone exhausts Groq's free per-minute budget and produced the 429/413 failovers seen in the logs.
+- **Not fixable in code:** the packet loss itself. Raise it with the host (evidence: mtr loss from hop 2), or move per docs/24.
+
 ### ADR-137: Migrations suspend the viewer views around column changes; 0039 edited in place (docs/28 deploy, 2026-10-20)
 - **Status:** accepted. The first live deploy of docs/28 failed in migration 0039: `ALTER COLUMN mcp_servers.transport TYPE` is refused while `viewer.mcp_servers` (ADR-115) reads the column. Dev and test databases have no `viewer` schema, so no test could see it. The deploy stopped before restarting anything; the transaction rolled back and prod stayed at 0037.
 - **Fix:** `app/db/migration_helpers.views_suspended(*tables)` finds every dependent view through `pg_depend` (recursively, so views over views), saves definition, options and grants, drops them, runs the change, and recreates them in the same transaction. `drop_dependent_views` is for dropping a table. Applied to every ALTER COLUMN TYPE and DROP COLUMN in 0038-0041 (downgrades use `best_effort`: a view over a column being dropped stays dropped and `viewer-setup.sh --grants-only` rebuilds it).

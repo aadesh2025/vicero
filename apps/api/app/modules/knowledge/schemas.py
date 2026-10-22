@@ -62,12 +62,40 @@ class KBOut(BaseModel):
 
 
 class CreateDocumentRequest(BaseModel):
-    """Add a document from raw text or a URL (file uploads use the /upload endpoint)."""
+    """Add a document from raw text, one web page (`url`) or a whole website (`website`).
 
-    source_type: str = Field(pattern="^(text|url)$")
+    File uploads use the /upload endpoint. `max_pages` applies to `website` only and is capped
+    server-side by `CRAWL_MAX_PAGES_LIMIT`.
+    """
+
+    source_type: str = Field(pattern="^(text|url|website)$")
     text: str | None = None
     url: str | None = Field(default=None, max_length=2048)
     filename: str | None = Field(default=None, max_length=512)
+    max_pages: int | None = Field(default=None, ge=1, le=500)
+
+
+class IngestProgress(BaseModel):
+    """Where a queued/processing document is right now (app/rag/progress.py)."""
+
+    stage: str
+    done: int = 0
+    total: int = 0
+
+
+class CrawlPage(BaseModel):
+    url: str
+    title: str = ""
+    chars: int = 0
+
+
+class CrawlInfo(BaseModel):
+    """What a whole-website import read. `pages` is empty until the crawl has run."""
+
+    max_pages: int | None = None
+    pages: list[CrawlPage] = []
+    warnings: list[str] = []
+    stopped_by: str | None = None
 
 
 class DocumentOut(BaseModel):
@@ -85,6 +113,10 @@ class DocumentOut(BaseModel):
     #: values are never returned. `None` = ingested before the scan existed and never
     #: checked; `{}` = scanned and clean. The UI must not present those as the same thing.
     pii_flags: dict[str, int] | None = None
+    #: Live stage while ingesting (`None` once ready/failed, or when progress is unavailable).
+    progress: IngestProgress | None = None
+    #: Whole-website imports only.
+    crawl: CrawlInfo | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
 

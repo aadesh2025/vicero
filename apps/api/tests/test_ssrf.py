@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.core.ssrf import is_blocked_host
-from app.rag import loaders
+from app.rag import crawler
 from app.rag.loaders import LoaderError, load_url
 
 
@@ -29,7 +29,8 @@ def internal_host_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake(host: str, transport: httpx.AsyncBaseTransport | None) -> bool:
         return host == "internal.example"
 
-    monkeypatch.setattr(loaders, "_host_blocked", fake)
+    # Every URL fetch (single page and whole-site crawl) goes through crawler.fetch -> crawler._blocked.
+    monkeypatch.setattr(crawler, "_blocked", fake)
 
 
 async def test_redirect_to_a_blocked_host_is_refused(internal_host_blocked: None) -> None:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,7 @@ from app.models import Agent, AgentVersion, Chunk, Document, KnowledgeBase
 from app.modules.knowledge import schemas
 from app.modules.orgs.deps import OrgContext
 from app.rag import formats, retrieval
+from app.rag import progress as ingest_progress
 from app.worker.tasks import enqueue_document_ingestion
 
 log = get_logger("knowledge")
@@ -154,7 +157,22 @@ async def delete_kb(session: AsyncSession, ctx: OrgContext, kb_id: uuid.UUID) ->
 
 
 # ── Documents ───────────────────────────────────────────────────────────────────
-def _doc_out(doc: Document) -> schemas.DocumentOut:
+_BUSY = ("queued", "processing")
+
+
+def _doc_out(doc: Document, live: dict[str, Any] | None = None) -> schemas.DocumentOut:
+    status = doc.status
+    prog = None
+    if live and status in _BUSY:
+        prog = schemas.IngestProgress(
+            stage=str(live.get("stage")), done=int(live.get("done") or 0), total=int(live.get("total") or 0)
+        )
+        # The ingest transaction commits only at the end, so the row still says "queued" while the
+        # worker is busy with it. Live progress is the evidence that it has started.
+        status = "processing"
+    crawl = None
+    if doc.source_type == "website":
+        crawl = schemas.CrawlInfo.model_validate(doc.crawl_info or {})
     return schemas.DocumentOut(
         id=doc.id,
         knowledge_base_id=doc.knowledge_base_id,
@@ -163,12 +181,27 @@ def _doc_out(doc: Document) -> schemas.DocumentOut:
         mime_type=doc.mime_type,
         size_bytes=doc.size_bytes,
         source_url=doc.source_url,
-        status=doc.status,
+        status=status,
         error_message=doc.error_message,
         chunk_count=doc.chunk_count,
+        # Was never passed, so the UI's PII badge and summary could not show anything.
+        pii_flags=doc.pii_flags,
+        progress=prog,
+        crawl=crawl,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
     )
+
+
+async def _with_progress(docs: list[Document]) -> list[schemas.DocumentOut]:
+    live = await ingest_progress.read_many([d.id for d in docs if d.status in _BUSY])
+    return [_doc_out(d, live.get(str(d.id))) for d in docs]
+
+
+def _site_name(url: str) -> str:
+    """`https://www.example.com/about` -> `example.com (website)`, the document's display name."""
+    host = (urlparse(url).hostname or url).lower()
+    return f"{host.removeprefix('www.')} (website)"
 
 
 def _store_file(org_id: uuid.UUID, document_id: uuid.UUID, filename: str | None, data: bytes) -> str:
@@ -239,15 +272,20 @@ async def create_document(
         await session.flush()
         doc.storage_path = _store_file(ctx.org.id, doc.id, doc.filename, raw)
         await usage.record_document_stored(session, ctx.org.id, len(raw))
-    else:  # url
+    else:  # url | website
         if not data.url:
             raise AppError("kb.url_required", "url is required for a url document.", 400)
+        if data.source_type == "website":
+            requested = data.max_pages or settings.crawl_default_max_pages
+            doc.crawl_info = {"max_pages": max(1, min(requested, settings.crawl_max_pages_limit))}
         # The fetched size isn't known until the worker ingests it, so only the document-count
         # cap applies here — `org_storage_usage` is updated once a real size exists, same as
         # every other size-unknown-at-creation path in this codebase.
         await usage.require_document_slot(session, ctx.org, 0)
         doc.source_url = data.url
-        doc.filename = data.filename or data.url
+        doc.filename = data.filename or (
+            _site_name(data.url) if data.source_type == "website" else data.url
+        )
         session.add(doc)
         await session.flush()
 
@@ -312,12 +350,12 @@ async def list_documents(session: AsyncSession, ctx: OrgContext, kb_id: uuid.UUI
         .where(Document.knowledge_base_id == kb_id, Document.organization_id == ctx.org.id)
         .order_by(Document.created_at.desc())
     )
-    return [_doc_out(d) for d in (await session.execute(stmt)).scalars().all()]
+    return await _with_progress(list((await session.execute(stmt)).scalars().all()))
 
 
 async def get_document(session: AsyncSession, ctx: OrgContext, document_id: uuid.UUID) -> schemas.DocumentOut:
     rbac.require_permission(ctx.role, rbac.READ)
-    return _doc_out(await _get_document(session, ctx, document_id))
+    return (await _with_progress([await _get_document(session, ctx, document_id)]))[0]
 
 
 async def delete_document(session: AsyncSession, ctx: OrgContext, document_id: uuid.UUID) -> None:
@@ -333,6 +371,9 @@ async def reingest_document(session: AsyncSession, ctx: OrgContext, document_id:
     doc = await _get_document(session, ctx, document_id)
     doc.status = "queued"
     doc.error_message = None
+    if doc.source_type == "website":
+        # Re-crawl from scratch with the same page limit; the old page list describes the old crawl.
+        doc.crawl_info = {"max_pages": (doc.crawl_info or {}).get("max_pages") or settings.crawl_default_max_pages}
     await session.flush()
     enqueue_document_ingestion(doc.id)
     return _doc_out(doc)

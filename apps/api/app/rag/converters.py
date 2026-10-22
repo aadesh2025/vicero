@@ -63,6 +63,10 @@ class ConvertedDocument:
     document: dict[str, Any] | None = None
     #: Free-form, logged rather than stored: page count, whether OCR fired, and so on.
     info: dict[str, Any] = field(default_factory=dict)
+    #: Whole-website imports only: one `(url, title, text)` per crawled page, so each page is chunked
+    #: separately and every chunk cites the page it came from (ADR-139). `text` is then all pages
+    #: joined, for the PII scan.
+    sections: list[tuple[str, str, str]] | None = None
 
     @property
     def has_structure(self) -> bool:

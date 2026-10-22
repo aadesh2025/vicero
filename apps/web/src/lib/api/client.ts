@@ -133,7 +133,43 @@ export async function apiBlob(path: string): Promise<Blob> {
 }
 
 /** Upload multipart form data (used for document file uploads). */
-export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+/** Upload progress: bytes sent so far and the total, as the browser reports them. */
+export type UploadProgress = (loaded: number, total: number) => void;
+
+/**
+ * POST a multipart body with XMLHttpRequest, because `fetch` cannot report upload progress.
+ * Resolves to a standard `Response` so the error handling below stays one code path.
+ */
+function sendWithProgress(
+  url: string,
+  headers: Record<string, string>,
+  form: FormData,
+  onProgress: UploadProgress,
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onload = () => {
+      const body = xhr.status === 204 ? null : xhr.responseText;
+      resolve(
+        new Response(body, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: { "content-type": xhr.getResponseHeader("content-type") ?? "application/json" },
+        }),
+      );
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network_error", "Upload failed: the connection dropped."));
+    xhr.ontimeout = () => reject(new ApiError(0, "network_error", "Upload timed out."));
+    xhr.send(form);
+  });
+}
+
+export async function apiForm<T>(path: string, form: FormData, onProgress?: UploadProgress): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getAccessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -141,7 +177,11 @@ export async function apiForm<T>(path: string, form: FormData): Promise<T> {
   if (orgId) headers["X-Org-Id"] = orgId;
   // Note: no Content-Type — the browser sets the multipart boundary itself.
 
-  const send = () => fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  const url = `${API_BASE}${path}`;
+  const send = () =>
+    onProgress
+      ? sendWithProgress(url, headers, form, onProgress)
+      : fetch(url, { method: "POST", headers, body: form });
   const sentToken = getAccessToken();
   let res = await send();
   if (res.status === 401) {

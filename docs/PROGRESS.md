@@ -2295,3 +2295,11 @@ PR #20 was rolled back after Instagram DMs stopped getting replies. This PR fixe
 
 - The persona message of every turn now ends with the current date, weekday and time in `BOOKING_TIMEZONE`, so "Saturday 11 am" resolves to a real Saturday. Tests: `tests/test_turn_date.py`, Saturday booking tests in `tests/test_bookings.py`.
 - Follow-up: the line also lists the next seven days (Sun 18 Oct -> `Sat 24 Oct`), because the model still mis-counted dates when it only knew today.
+
+## Lossy-host resilience, whole-website import, ingest progress (2026-10-21, ADR-138 to ADR-140)
+- **Diagnosed on production:** 10-22% packet loss upstream of the VPS (mtr from hop 2) caused the visitor-facing `[Errno -3] Temporary failure in name resolution`, slow uploads (1.8 MB in 39 s) and extra latency per model call. The "lead gen" agent's 32,853-character prompt (~8,200 tokens/message) also exhausted Groq's free per-minute budget, which produced the 429/413 failovers in the logs.
+- **Network (ADR-138):** process-wide DNS cache with retry + stale fallback (`app/core/dnscache.py`, API + worker); keep-alive provider clients per event loop with a 5 s connect timeout and one connect-only retry (`app/llm/http.py`); readable stream errors; compose resolvers `9.9.9.9 / 1.0.0.1 / 149.112.112.112`, `attempts:3` (213.133.98.98 refuses this host); builder warns above ~1,500 prompt tokens.
+- **Website import (ADR-139):** `source_type="website"`: sitemap + same-site crawl (robots.txt, SSRF per hop, page/time caps), full-recall extraction with header/footer kept once, one citation per page; single-page import adds back facts trafilatura dropped; browser-shaped UA. Migration `0042_document_crawl`. JS-only pages are reported, not rendered.
+- **Ingest (ADR-140):** live stage + embedding progress via Redis, shown in the documents table; batched parallel embedding; multi-file upload with per-file byte progress. Fixed `pii_flags` never being returned to the UI.
+- Suites: new `test_network_resilience.py` (21), `test_website_crawl.py` (20), vitest `ingest-progress` + `persona-tab`, Playwright `43-knowledge-uploads-and-website`.
+- **Owner action:** ticket to the host about the packet loss (or docs/24 move); shorten the lead-gen prompt and move business facts into a knowledge base.

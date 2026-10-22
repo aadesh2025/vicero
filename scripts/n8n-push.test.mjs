@@ -285,6 +285,16 @@ test("push --apply creates an INACTIVE, org-tagged workflow, a manifest and one 
   assert.ok(!history[0].includes(FAKE_KEY));
 });
 
+test("push --apply prints the host manifest path when N8N_PUSH_STATE_DISPLAY is set", async () => {
+  resetDb();
+  const env = { ...freshEnv(), N8N_PUSH_STATE_DISPLAY: "/opt/vicero/n8n-push-state" };
+  const { out, lines } = quiet();
+  await runPush(argsFor({ apply: true }), { env, readWorkflow: readerOf(goodWorkflow()), out });
+  const line = lines.find((l) => l.startsWith("Manifest:"));
+  assert.equal(line.replaceAll("\\", "/"), "Manifest: /opt/vicero/n8n-push-state/acme-co/support-bot-book-appointment.manifest.yaml");
+  assert.ok(existsSync(join(env.N8N_PUSH_STATE_DIR, "acme-co", "support-bot-book-appointment.manifest.yaml")), "still written to the real state dir");
+});
+
 test("push --apply twice updates in place instead of duplicating", async () => {
   resetDb();
   const env = freshEnv();

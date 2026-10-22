@@ -36,9 +36,14 @@ docker exec -u root "$C" chown -R node:node "$IN_STATE" /tmp/n8n-push.mjs
 FLAGS=(-i)
 { [ -t 0 ] && [ -t 1 ]; } && FLAGS=(-it)
 rc=0
-docker exec "${FLAGS[@]}" -e N8N_API_KEY -e N8N_BASE_URL -e "N8N_PUSH_STATE_DIR=$IN_STATE" "$C" node /tmp/n8n-push.mjs "$@" || rc=$?
+docker exec "${FLAGS[@]}" -e N8N_API_KEY -e N8N_BASE_URL -e "N8N_PUSH_STATE_DIR=$IN_STATE" -e "N8N_PUSH_STATE_DISPLAY=$STATE" "$C" node /tmp/n8n-push.mjs "$@" || rc=$?
 
-docker cp "$C:$IN_STATE/." "$STATE" 2>/dev/null || true
+# The host copy is the real one; clear the container's copy only once the copy-out worked.
+if docker cp "$C:$IN_STATE/." "$STATE"; then
+  docker exec -u root "$C" rm -rf "$IN_STATE"
+else
+  echo "WARNING: could not copy the state out of $C; left in $IN_STATE there" >&2
+fi
 chmod -R go-rwx "$STATE"
 docker exec -u root "$C" rm -f /tmp/n8n-push.mjs
 exit "$rc"

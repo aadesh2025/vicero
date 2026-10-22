@@ -211,3 +211,28 @@ an unrelated app**, so Vicero web runs on **3001**. The keyless-E2E API runs on 
 **n8n** is expected at **5678** (`N8N_BASE_URL`) — note the running `:5678` belongs to the separate
 AUROZEN AI compose, not Vicero's own `n8n` service. Always run API/web commands from `apps/api` /
 `apps/web` (not the repo root) to avoid `ModuleNotFoundError: app` / npm ENOENT.
+
+## 13. How to build n8n workflows for clients
+
+Client automations are built as **JSON in git** and pushed to the VPS's n8n with `scripts/n8n-push.mjs` (run on the server through
+`ops/n8n-push.sh`). Runbook: `docs/25-PRODUCTION-RUNBOOK.md` §12. Do this only when asked for a specific client job.
+
+**Rules (hard):**
+1. Build on the VPS only. Never run a local n8n for client work.
+2. Never log in to anything (n8n editor, Vicero admin, client accounts). Never read or print secrets (`.env`, `N8N_API_KEY`, tokens).
+3. Never create credentials with secret values. Reference credentials by name; the human enters the values in the editor.
+4. **Never activate.** `activate` is for the human, at a terminal, typing the workflow name. Do not try to get around that.
+5. Never edit a live workflow in place. Push a new copy under a new job name; the human switches over.
+6. Names: workflow `<Client> - <Agent> - <Job>`, webhook path `<slug>-<agent>-<job>` (unique), tag = the org slug and nothing else.
+7. Keep the 3 signature nodes first and wired as in `infra/n8n/template-starter-automation.json`: `Verify Vicero signature` →
+   `Signature valid?` → (false) `Reject 401`. The signature node is the only Code node allowed.
+8. Use the ids the human gives you (org id, agent id, org slug). Never guess one; the script refuses if one is missing.
+9. Client builds use `n8n-push.mjs` only. Do not use `import-n8n-workflows.mjs` or `provision-client.mjs` for them (they activate).
+10. Leave `/webhook/leads` and `/webhook/next-job` (AUROZEN lead-gen) alone.
+
+**Flow:**
+1. Write `infra/n8n/clients/<slug>/<agent>-<job>.json` (+ a draft `<agent>-<job>.manifest.yaml` and notes). Commit; the human merges and runs `git pull` on the server.
+2. Dry run (changes nothing):
+   `ssh vicero '/opt/vicero/n8n-push.sh push - --org <slug> --org-id <uuid> --client "<Client>" --agent "<Agent>" --agent-id <uuid> --job "<Job>"' < infra/n8n/clients/<slug>/<agent>-<job>.json`
+3. Same command with `--apply` once the plan shows every check passed. The workflow lands **inactive** and tagged.
+4. Tell the human what to test and which credentials they must create (the manifest's `credentials_needed`). The human tests, then activates.

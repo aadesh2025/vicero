@@ -136,3 +136,9 @@ workflows. Rebuild in this order:
    tags it `demo` (`--org acme --dir infra/n8n` for other sets). Idempotent.
 5. Restart the API so it picks up the new `N8N_API_KEY`. Tools bound before the wipe keep working (they store
    the webhook URL, which is unchanged); the Automations page needs the key.
+
+## Client workflows are pushed with `n8n-push.mjs` only
+
+`provision-client.mjs` and `import-n8n-workflows.mjs` activate what they create. A client build must stay inactive until a person
+activates it, so client workflows go through `scripts/n8n-push.mjs` (via `ops/n8n-push.sh`), with the JSON under
+`infra/n8n/clients/<slug>/`. See CLAUDE.md §13 and `docs/25-PRODUCTION-RUNBOOK.md` §12.

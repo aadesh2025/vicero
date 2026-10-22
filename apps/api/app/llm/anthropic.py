@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 import httpx
 
 from app.llm.base import ProviderError
+from app.llm.http import provider_client, with_connect_retry
+from app.llm.http import timeout as llm_timeout
 from app.llm.types import ChatRequest, ChatResponse, ModelInfo, StreamEvent, ToolCall, Usage
 
 BASE_URL = "https://api.anthropic.com/v1"
@@ -89,18 +92,28 @@ class AnthropicProvider:
         self._transport = transport
         self._timeout = timeout
 
-    def _client(self) -> httpx.AsyncClient:
+    def _headers(self) -> dict[str, str]:
         headers = {"anthropic-version": API_VERSION, "content-type": "application/json"}
         if self.api_key:
             headers["x-api-key"] = self.api_key
-        return httpx.AsyncClient(
-            base_url=BASE_URL, headers=headers, timeout=self._timeout, transport=self._transport
-        )
+        return headers
+
+    def _client(self) -> AbstractAsyncContextManager[httpx.AsyncClient]:
+        return provider_client(transport=self._transport)
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         async with self._client() as client:
             try:
-                resp = await client.post("/messages", json=to_anthropic_payload(req))
+                payload = to_anthropic_payload(req)
+                resp = await with_connect_retry(
+                    lambda: client.post(
+                        f"{BASE_URL}/messages",
+                        json=payload,
+                        headers=self._headers(),
+                        timeout=llm_timeout(self._timeout),
+                    ),
+                    provider=self.name,
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"network error: {exc}") from exc
             if resp.status_code >= 400:

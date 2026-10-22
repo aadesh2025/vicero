@@ -71,3 +71,29 @@ class EmbeddingProvider(Protocol):
     dim: int
 
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+def readable_error(exc: ProviderError) -> str:
+    """The provider failure as a person should read it in the Playground or Conversations view.
+
+    The raw message (``network error: [Errno -3] Temporary failure in name resolution``) still goes
+    to the log and to `result.error`; this is only the text of the `error` stream event. The three
+    cases below are the ones production actually produced on 2026-10-21, each with what to do.
+    """
+    raw = str(exc)
+    if exc.status == 429:
+        return (
+            "The AI provider is rate-limiting this agent (too many tokens per minute). "
+            "Wait a minute and try again, or shorten the system prompt so each message uses fewer tokens."
+        )
+    if exc.status == 413:
+        return (
+            "This message is too large for the selected model's limit. Shorten the system prompt "
+            "(move business details into the knowledge base) or pick a model with a higher limit."
+        )
+    if exc.status is None and raw.startswith(("network error", "embedding network error")):
+        return (
+            "Couldn't reach the AI provider because of a network problem (it was retried). "
+            "Please send the message again."
+        )
+    return raw

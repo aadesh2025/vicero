@@ -20,7 +20,7 @@ from app.chat.budget import AgentBudget
 from app.chat.guardrails import neutralize_injections
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.llm.base import ChatProvider, ProviderError
+from app.llm.base import ChatProvider, ProviderError, readable_error
 from app.llm.pricing import compute_cost_micros
 from app.llm.types import ChatRequest, Message, StreamEvent, ToolCall, Usage
 from app.rag.context import CONTEXT_MARKER
@@ -207,7 +207,7 @@ async def run_turn(
             if fallback_message and not result.content.strip():
                 result.content += fallback_message
                 yield StreamEvent(type="token", delta=fallback_message)
-            yield StreamEvent(type="error", error=str(exc))
+            yield StreamEvent(type="error", error=readable_error(exc))
             break
 
         iter_cost_usd = 0.0

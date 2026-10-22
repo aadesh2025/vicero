@@ -266,7 +266,12 @@ anything but Caddy and that loopback port.
 
 ## 14. DNS for the containers (ADR-119)
 
-From the Hetzner network `1.1.1.1` and `8.8.8.8` time out on UDP/53, while `9.9.9.9`, `1.0.0.1` and `213.133.98.98` answer in
+**Revised 2026-10-21 (ADR-138):** the current host loses 10-22% of packets upstream, so *every* resolver drops some queries, and
+`213.133.98.98` refuses all of them. Compose now uses `9.9.9.9`, `1.0.0.1`, `149.112.112.112` with `attempts:3`, and the app caches
+and retries lookups itself (`app/core/dnscache.py`; log events `dns_served_stale`, `dns_lookup_failed`). Check the loss with
+`ssh vicero "mtr -rwc 20 1.0.0.1"`; anything above 0% from hop 2 onward is the provider's network.
+
+Original note: from the Hetzner network `1.1.1.1` and `8.8.8.8` time out on UDP/53, while `9.9.9.9`, `1.0.0.1` and `213.133.98.98` answer in
 under 200 ms. Docker's embedded resolver forwards to the host's resolvers in order, so every uncached lookup
 (`api.groq.com`, `graph.facebook.com`) cost about 4 s and made the L2/L3 guard calls time out. `docker-compose.prod.yml` now
 gives `api`, `worker` and `beat` their own `dns:` (those three, in that order) and `dns_opt: ["timeout:1", "attempts:2"]`.
@@ -281,7 +286,7 @@ ssh vicero "docker exec vicero-prod-worker-1 cat /etc/resolv.conf"   # 127.0.0.1
 **Host-wide (optional, later).** To fix the same for every container (n8n, caddy, ollama) put this in `/etc/docker/daemon.json`
 (merge with what is there; do not overwrite other keys):
 ```
-{ "dns": ["9.9.9.9", "1.0.0.1", "213.133.98.98"] }
+{ "dns": ["9.9.9.9", "1.0.0.1", "149.112.112.112"] }
 ```
 It only takes effect when the Docker daemon restarts, which restarts or stops every container. Do it in a maintenance window
 (`systemctl restart docker`, or `live-restore` if enabled), never as part of a deploy. Until then the per-service setting above

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 import httpx
 
 from app.llm.base import ProviderError
+from app.llm.http import provider_client, with_connect_retry
+from app.llm.http import timeout as llm_timeout
 from app.llm.types import ChatRequest, ChatResponse, ModelInfo, StreamEvent, ToolCall, Usage
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -61,18 +64,25 @@ class GeminiProvider:
         self._transport = transport
         self._timeout = timeout
 
-    def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            base_url=BASE_URL,
-            params={"key": self.api_key} if self.api_key else None,
-            timeout=self._timeout,
-            transport=self._transport,
-        )
+    def _client(self) -> AbstractAsyncContextManager[httpx.AsyncClient]:
+        return provider_client(transport=self._transport)
+
+    def _params(self) -> dict[str, str] | None:
+        return {"key": self.api_key} if self.api_key else None
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         async with self._client() as client:
             try:
-                resp = await client.post(f"/models/{req.model}:generateContent", json=to_gemini_payload(req))
+                payload = to_gemini_payload(req)
+                resp = await with_connect_retry(
+                    lambda: client.post(
+                        f"{BASE_URL}/models/{req.model}:generateContent",
+                        json=payload,
+                        params=self._params(),
+                        timeout=llm_timeout(self._timeout),
+                    ),
+                    provider=self.name,
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"network error: {exc}") from exc
             if resp.status_code >= 400:
@@ -125,7 +135,12 @@ class GeminiProvider:
     async def list_models(self) -> list[ModelInfo]:
         async with self._client() as client:
             try:
-                resp = await client.get("/models")
+                resp = await with_connect_retry(
+                    lambda: client.get(
+                        f"{BASE_URL}/models", params=self._params(), timeout=llm_timeout(self._timeout)
+                    ),
+                    provider=self.name,
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"network error: {exc}") from exc
             if resp.status_code >= 400:

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from celery import Celery
-from celery.signals import worker_ready
+from celery.signals import worker_init, worker_process_init, worker_ready
 
 from app.core.config import settings
+from app.core.dnscache import install_from_settings as install_dns_cache
 
 celery_app = Celery(
     "vicero",
@@ -87,3 +88,14 @@ def _warm_on_start(**_: object) -> None:
     if settings.celery_task_always_eager or not settings.warmup_enabled:
         return
     celery_app.send_task("warmup.keep_warm")
+
+
+@worker_init.connect  # type: ignore[untyped-decorator]
+@worker_process_init.connect  # type: ignore[untyped-decorator]
+def _install_dns_cache(**_: object) -> None:
+    """Before any task resolves api.groq.com or graph.facebook.com (app/core/dnscache.py).
+
+    A signal, not module import time: the API and the test suite import this module too, and the
+    API installs the cache itself in `create_app` (the suite turns it off in conftest).
+    """
+    install_dns_cache()

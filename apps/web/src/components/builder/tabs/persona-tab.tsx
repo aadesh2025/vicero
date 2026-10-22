@@ -15,6 +15,14 @@ import { toneOptions } from "@/lib/mock/builder";
 // ~4 chars per token is a fine heuristic for a live counter.
 const estTokens = (s: string) => Math.ceil(s.length / 4);
 
+/**
+ * Above this the prompt alone eats most of a free-tier per-minute token budget. Groq's free tier
+ * allows roughly 6-8k tokens a minute per model, and the system prompt is re-sent with every
+ * message. Measured in production on 2026-10-21: an 8,000-token prompt drew 429 rate limits and
+ * 413 "too large" rejections, then failed over to slower models.
+ */
+export const PROMPT_TOKEN_WARN = 1500;
+
 /** What a template-created agent still needs wired up by hand.
  *
  * A pointer, never an action: the template deliberately doesn't auto-attach a calendar or CRM
@@ -95,6 +103,13 @@ export function PersonaTab() {
             <span>{p.systemPrompt.length} characters</span>
             <span className="font-mono">~{estTokens(p.systemPrompt)} tokens</span>
           </div>
+          {estTokens(p.systemPrompt) > PROMPT_TOKEN_WARN && (
+            <p role="status" className="rounded-md border border-warn/30 bg-warn-soft px-3 py-2 text-xs text-warn-text">
+              This prompt is long (~{estTokens(p.systemPrompt).toLocaleString()} tokens) and is sent with every
+              message, so replies get slower and free-tier models start rate-limiting. Keep the rules and tone
+              here, and move business details (services, prices, FAQs, policies) into a knowledge base.
+            </p>
+          )}
         </div>
       </SectionCard>
 

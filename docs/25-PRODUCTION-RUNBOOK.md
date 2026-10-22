@@ -126,7 +126,7 @@ Run `ssh -t vicero /opt/vicero/set-env.sh NAME` and type the value at the hidden
 1. Ubuntu 24.04, `apt install docker.io docker-compose-v2 git curl ufw rclone`, ufw allow 22/80/443, 4 GB swapfile.
 2. `git clone https://github.com/aadesh2025/vicero /opt/vicero`; create `/opt/vicero/.env` from `.env.prod.example`
    (generate secrets with `openssl rand -hex 32`; memory limits as in ADR-107), `chmod 600`.
-3. `ln -s ops/deploy.sh /opt/vicero/deploy.sh` (and the other three), then start Postgres, Redis and Ollama first
+3. `ln -s ops/deploy.sh /opt/vicero/deploy.sh` (and the same for `rollback.sh`, `status.sh`, `set-env.sh`, `n8n-push.sh`; relative links, each also listed in `/opt/vicero/.git/info/exclude` so `git status` stays clean), then start Postgres, Redis and Ollama first
    (`dc up -d --no-build postgres redis ollama`), restore the newest Drive dump (§5) or let `deploy.sh` run the
    migrations on an empty database, and run `deploy.sh`.
 4. Reinstall the off-server backup (ADR-108) and point DNS (DuckDNS) at the new IP.

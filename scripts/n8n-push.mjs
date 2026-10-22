@@ -16,7 +16,8 @@
  * from N8N_API_KEY in the environment only — never from a file, never printed. No npm dependencies.
  *
  * Env: N8N_API_KEY, N8N_BASE_URL (default http://n8n:5678), N8N_PUSH_STATE_DIR (manifests + history.log;
- *      default <repo>/infra/n8n/clients).
+ *      default <repo>/infra/n8n/clients), N8N_PUSH_STATE_DISPLAY (host path shown in messages when the
+ *      state dir is a container-internal copy; set by ops/n8n-push.sh).
  */
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -253,6 +254,7 @@ function settings(env = process.env) {
     base: (env.N8N_BASE_URL || "http://n8n:5678").replace(/\/+$/, ""),
     key: env.N8N_API_KEY || "",
     stateDir: env.N8N_PUSH_STATE_DIR || join(REPO_ROOT, "infra", "n8n", "clients"),
+    stateDisplay: env.N8N_PUSH_STATE_DISPLAY || env.N8N_PUSH_STATE_DIR || join(REPO_ROOT, "infra", "n8n", "clients"),
   };
 }
 
@@ -398,7 +400,7 @@ export async function runPush(args, { env = process.env, readWorkflow = readSour
   writeFileSync(file, manifestYaml(id, { workflowId: saved.id, status: "inactive", credentials: credentialsNeeded(wf.nodes), now: now().toISOString() }));
   audit(cfg.stateDir, "push", id.name, `${plan.action}d id=${saved.id} inactive`, now().toISOString());
   out(`\n${plan.action === "create" ? "Created" : "Updated"} workflow ${saved.id}, INACTIVE, tagged "${id.org}".`);
-  out(`Manifest: ${file}`);
+  out(`Manifest: ${join(cfg.stateDisplay, id.org, id.manifestFile)}`);
   out("Next: test it, then a person activates it at a terminal with the 'activate' command.");
   return { applied: true, id: saved.id, manifest: file };
 }

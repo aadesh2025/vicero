@@ -235,4 +235,4 @@ Client automations are built as **JSON in git** and pushed to the VPS's n8n with
 2. Dry run (changes nothing):
    `ssh vicero '/opt/vicero/n8n-push.sh push - --org <slug> --org-id <uuid> --client "<Client>" --agent "<Agent>" --agent-id <uuid> --job "<Job>"' < infra/n8n/clients/<slug>/<agent>-<job>.json`
 3. Same command with `--apply` once the plan shows every check passed. The workflow lands **inactive** and tagged.
-4. Tell the human what to test and which credentials they must create (the manifest's `credentials_needed`). The human tests, then activates.
+4. Finish with a "Credentials needed" table (node, service, credential type, credential name `ORG-<org_id> | <service>`, method 1 to 7 from `docs/29-CREDENTIAL-METHODS.md`) and stop. The human creates the credentials, tests, then activates.

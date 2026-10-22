@@ -78,8 +78,32 @@ class Settings(BaseSettings):
     warmup_enabled: bool = True
     warmup_interval_seconds: float = 240.0
     warmup_cold_ms: int = 1500
+    # Process-wide DNS cache with retry + stale fallback for public hostnames (app/core/dnscache.py).
+    # The production VPS loses 10-22% of packets upstream, which surfaced to visitors as
+    # "[Errno -3] Temporary failure in name resolution". Off only to debug resolution itself.
+    dns_cache_enabled: bool = True
+    # A fresh answer is reused for this long without a lookup.
+    dns_cache_ttl_seconds: float = 300.0
+    # When every retry fails, an answer up to this old is used instead of failing the call.
+    dns_cache_stale_seconds: float = 86400.0
+    # Extra lookups after a transient (EAI_AGAIN) failure, 0.25 s apart and growing.
+    dns_lookup_retries: int = 2
+    # Connect phase of an LLM provider call. A dropped SYN on a lossy link otherwise waits out the
+    # whole read timeout; with this, it fails fast and is retried once (app/llm/http.py).
+    llm_connect_timeout_seconds: float = 5.0
+    llm_connect_retries: int = 1
 
     # --- Knowledge base / RAG ---
+    # Embedding batches sent at once during ingest. >1 only helps when the embedding server runs requests in
+    # parallel (Ollama with OLLAMA_NUM_PARALLEL>1, or a hosted API); it never hurts correctness.
+    embed_concurrency: int = 2
+    # Whole-website import (app/rag/crawler.py). The pages a client may ask for per import is capped here.
+    crawl_default_max_pages: int = 25
+    crawl_max_pages_limit: int = 100
+    # Pages fetched at once. Small on purpose: it is the client's own site, often on cheap hosting.
+    crawl_concurrency: int = 4
+    # The whole crawl stops here and keeps what it has read.
+    crawl_time_budget_seconds: float = 240.0
     # Directory for uploaded/ingested document files (created on demand).
     upload_dir: str = "./var/uploads"
     # --- Media: images on WhatsApp / Instagram / Messenger + product catalog (docs/26, ADR-124) ---

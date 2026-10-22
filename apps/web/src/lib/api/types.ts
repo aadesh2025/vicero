@@ -186,7 +186,7 @@ export type ApiDocStatus = "queued" | "processing" | "ready" | "failed";
 export interface ApiDocument {
   id: string;
   knowledge_base_id: string;
-  source_type: "file" | "url" | "text";
+  source_type: "file" | "url" | "text" | "website";
   filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
@@ -200,8 +200,34 @@ export interface ApiDocument {
    * it was scanned and is clean. Those are different things and the UI must not merge them.
    */
   pii_flags: Record<string, number> | null;
+  /** Live ingest stage while queued/processing; `null` once ready/failed. */
+  progress?: ApiIngestProgress | null;
+  /** Whole-website imports only: the page limit and, after the crawl, what was read. */
+  crawl?: ApiCrawlInfo | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ApiIngestStage =
+  | "starting"
+  | "fetching"
+  | "crawling"
+  | "reading"
+  | "chunking"
+  | "embedding"
+  | "saving";
+
+export interface ApiIngestProgress {
+  stage: ApiIngestStage;
+  done: number;
+  total: number;
+}
+
+export interface ApiCrawlInfo {
+  max_pages: number | null;
+  pages: { url: string; title: string; chars: number }[];
+  warnings: string[];
+  stopped_by: "max_pages" | "time_budget" | null;
 }
 
 export interface ApiChunk {

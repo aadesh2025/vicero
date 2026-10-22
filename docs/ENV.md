@@ -525,3 +525,27 @@ to RRF ordering, logged, never an error and never an empty result set.
 | `INBOUND_HOOK_UNAUTH_RATE_PER_MINUTE` | `120` | Calls per minute from one IP to one hook before authentication, so strangers cannot use up the real sender's quota |
 | `INBOUND_HOOK_AGENT_TURN_TIMEOUT_S` | `25` | How long an `agent_turn` hook waits for the model before answering `504` |
 | `TOOL_MAX_CONCURRENCY_PER_ORG` | `5` | Outbound tool calls (API / MCP) one organization may have in flight at once per process; extra calls wait (docs/28 T4.6) |
+
+### Network resilience on a lossy host (ADR-138)
+
+The production VPS drops 10-22% of packets upstream (2026-10-21). These settings stop that from
+reaching visitors as `[Errno -3] Temporary failure in name resolution` and cut round trips per reply.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DNS_CACHE_ENABLED` | `true` | Process-wide DNS cache for public hostnames (`app/core/dnscache.py`). Dot-less Docker service names are never cached |
+| `DNS_CACHE_TTL_SECONDS` | `300` | A fresh answer is reused this long without a lookup |
+| `DNS_CACHE_STALE_SECONDS` | `86400` | When every lookup retry fails, an answer up to this old is used instead of failing the call |
+| `DNS_LOOKUP_RETRIES` | `2` | Extra lookups after a transient (`EAI_AGAIN`) failure |
+| `LLM_CONNECT_TIMEOUT_SECONDS` | `5` | Connect phase of a chat-provider call (the read timeout stays at the provider's 60 s) |
+| `LLM_CONNECT_RETRIES` | `1` | Retries when the connection could not be opened. Never retries a request that was sent |
+
+### Knowledge ingest: website crawl and embedding (ADR-139, ADR-140)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CRAWL_DEFAULT_MAX_PAGES` | `25` | Pages read by a whole-website import when the request names no limit |
+| `CRAWL_MAX_PAGES_LIMIT` | `100` | Hard cap on the pages one import may request |
+| `CRAWL_CONCURRENCY` | `4` | Pages fetched at once (it is usually the client's own, often small, hosting) |
+| `CRAWL_TIME_BUDGET_SECONDS` | `240` | The crawl stops here and keeps the pages read so far |
+| `EMBED_CONCURRENCY` | `2` | Embedding batches in flight during ingest. Only helps when the embedding server runs requests in parallel (Ollama `OLLAMA_NUM_PARALLEL>1`, or a hosted API) |

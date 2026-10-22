@@ -9,15 +9,18 @@ import {
   ArrowLeft,
   Eye,
   FileUp,
+  Globe,
   Link2,
   Loader2,
   RefreshCw,
   Trash2,
   Type,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PiiBadge, PiiSummary } from "@/components/knowledge/pii-flags";
 import { DeleteKnowledgeBase } from "@/components/knowledge/delete-kb";
+import { describeProgress, formatBytes, runLimited } from "@/components/knowledge/ingest-progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +32,7 @@ import type { ApiDocStatus, ApiDocument } from "@/lib/api/types";
 import {
   addTextDocument,
   addUrlDocument,
+  addWebsiteDocument,
   deleteDocument,
   getKnowledgeBase,
   listChunks,
@@ -47,7 +51,7 @@ const statusMeta: Record<ApiDocStatus, { label: string; variant: "success" | "in
 };
 
 function docType(doc: ApiDocument): DocType {
-  if (doc.source_type === "url") return "url";
+  if (doc.source_type === "url" || doc.source_type === "website") return "url";
   const name = (doc.filename ?? "").toLowerCase();
   if (name.endsWith(".pdf")) return "pdf";
   if (name.endsWith(".docx") || name.endsWith(".doc")) return "docx";
@@ -60,6 +64,19 @@ function docName(doc: ApiDocument): string {
   return doc.filename || doc.source_url || "document";
 }
 
+/** Files uploaded at once. Enough to fill a slow uplink, few enough not to starve each other. */
+const UPLOAD_CONCURRENCY = 3;
+const DEFAULT_MAX_PAGES = 25;
+const MAX_PAGES_LIMIT = 100;
+
+interface UploadRow {
+  key: string;
+  name: string;
+  loaded: number;
+  total: number;
+  error?: string;
+}
+
 export default function KnowledgeDetailPage() {
   const params = useParams<{ id: string }>();
   const kbId = params.id;
@@ -70,6 +87,9 @@ export default function KnowledgeDetailPage() {
   const [urlOpen, setUrlOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
   const [url, setUrl] = useState("");
+  const [urlMode, setUrlMode] = useState<"website" | "page">("website");
+  const [maxPages, setMaxPages] = useState(DEFAULT_MAX_PAGES);
+  const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [text, setText] = useState("");
   const [textName, setTextName] = useState("");
   const [chunksFor, setChunksFor] = useState<ApiDocument | null>(null);
@@ -96,12 +116,40 @@ export default function KnowledgeDetailPage() {
     qc.invalidateQueries({ queryKey: ["kb", kbId] });
   };
 
-  const upload = useMutation({
-    mutationFn: (file: File) => uploadDocument(kbId, file),
-    onSuccess: invalidate,
-  });
+  const patchUpload = (key: string, patch: Partial<UploadRow>) =>
+    setUploads((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+
+  // Several files at once, each with its own byte-level progress. Before, one file at a time behind
+  // a bare spinner: on a slow link a 2 MB PDF looked frozen for 40 s while it was still uploading.
+  const startUploads = async (files: File[]) => {
+    const rows = files.map((f, i) => ({
+      key: `${Date.now()}-${i}-${f.name}`,
+      name: f.name,
+      loaded: 0,
+      total: f.size,
+    }));
+    setUploads((prev) => [...prev.filter((r) => !r.error), ...rows]);
+    await runLimited(
+      files.map((file, i) => ({ file, key: rows[i].key })),
+      UPLOAD_CONCURRENCY,
+      async ({ file, key }) => {
+        try {
+          await uploadDocument(kbId, file, (loaded, total) => patchUpload(key, { loaded, total }));
+          setUploads((prev) => prev.filter((r) => r.key !== key));
+          invalidate();
+        } catch (err) {
+          patchUpload(key, { error: (err as Error).message || "Upload failed." });
+        }
+      },
+    );
+  };
+  const uploading = uploads.some((u) => !u.error);
+
   const addUrl = useMutation({
-    mutationFn: () => addUrlDocument(kbId, url),
+    mutationFn: () =>
+      urlMode === "website"
+        ? addWebsiteDocument(kbId, url, Math.min(Math.max(1, maxPages || 1), MAX_PAGES_LIMIT))
+        : addUrlDocument(kbId, url),
     onSuccess: () => {
       setUrl("");
       setUrlOpen(false);
@@ -159,35 +207,35 @@ export default function KnowledgeDetailPage() {
         <input
           ref={fileInput}
           type="file"
+          multiple
           className="hidden"
           accept=".pdf,.docx,.txt,.csv,.md,.markdown,.json,.html,.htm,.rst,.log,.yaml,.yml"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) upload.mutate(file);
+            const files = Array.from(e.target.files ?? []);
+            if (files.length) void startUploads(files);
             e.target.value = "";
           }}
         />
         <div className="grid gap-4 md:grid-cols-3">
           <button
             onClick={() => fileInput.current?.click()}
-            disabled={upload.isPending}
             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2/40 p-6 text-center transition-colors hover:border-accent/40 hover:bg-accent/[0.03] disabled:opacity-60"
           >
-            {upload.isPending ? (
+            {uploading ? (
               <Loader2 className="size-6 animate-spin text-accent" />
             ) : (
               <FileUp className="size-6 text-accent" />
             )}
-            <div className="text-sm font-medium text-text">Upload a file</div>
-            <div className="text-xs text-faint">PDF, DOCX, TXT, CSV, MD</div>
+            <div className="text-sm font-medium text-text">Upload files</div>
+            <div className="text-xs text-faint">PDF, DOCX, TXT, CSV, MD · several at once</div>
           </button>
           <button
             onClick={() => setUrlOpen(true)}
             className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-2/40 p-6 text-center transition-colors hover:border-accent/40 hover:bg-accent/[0.03]"
           >
-            <Link2 className="size-6 text-accent" />
-            <div className="text-sm font-medium text-text">Add a URL</div>
-            <div className="text-xs text-faint">Fetch a web page</div>
+            <Globe className="size-6 text-accent" />
+            <div className="text-sm font-medium text-text">Add a website</div>
+            <div className="text-xs text-faint">Whole site or one page</div>
           </button>
           <button
             onClick={() => setTextOpen(true)}
@@ -198,8 +246,48 @@ export default function KnowledgeDetailPage() {
             <div className="text-xs text-faint">Raw content</div>
           </button>
         </div>
-        {upload.isError && (
-          <p className="mt-3 text-sm text-error-text">{(upload.error as Error).message}</p>
+        {uploads.length > 0 && (
+          <ul className="mt-4 space-y-2" aria-label="Uploads in progress">
+            {uploads.map((u) => {
+              const pct = u.total > 0 ? Math.round((u.loaded / u.total) * 100) : 0;
+              return (
+                <li key={u.key} className="rounded-md border border-border bg-surface-2/40 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate font-medium text-text">{u.name}</span>
+                    {u.error ? (
+                      <button
+                        onClick={() => setUploads((rows) => rows.filter((r) => r.key !== u.key))}
+                        className="text-faint hover:text-text"
+                        aria-label={`Dismiss ${u.name}`}
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : (
+                      <span className="shrink-0 font-mono text-faint">
+                        {pct < 100
+                          ? `${formatBytes(u.loaded)} / ${formatBytes(u.total)}`
+                          : "Uploaded · saving"}
+                      </span>
+                    )}
+                  </div>
+                  {u.error ? (
+                    <p className="mt-1 text-xs text-error-text">{u.error}</p>
+                  ) : (
+                    <div
+                      className="mt-1.5 h-1 overflow-hidden rounded-full bg-border"
+                      role="progressbar"
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`Uploading ${u.name}`}
+                    >
+                      <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 
@@ -251,6 +339,9 @@ export default function KnowledgeDetailPage() {
                           <span className="max-w-[320px] truncate font-medium text-text">
                             {docName(doc)}
                           </span>
+                          {doc.source_type === "website" && doc.status === "ready" && doc.crawl && (
+                            <span className="text-xs text-faint">{doc.crawl.pages.length} pages read</span>
+                          )}
                           <PiiBadge flags={doc.pii_flags} />
                         </span>
                       </div>
@@ -264,7 +355,16 @@ export default function KnowledgeDetailPage() {
                             <AlertCircle className="size-3.5 text-error-text" />
                           </span>
                         )}
+                        {doc.status === "ready" && (doc.crawl?.warnings.length ?? 0) > 0 && (
+                          <span title={doc.crawl?.warnings.join("\n")}>
+                            <AlertCircle className="size-3.5 text-warn-text" />
+                          </span>
+                        )}
                       </div>
+                      {busy && <IngestProgressLine doc={doc} />}
+                      {doc.status === "failed" && doc.error_message && (
+                        <p className="mt-1 max-w-[280px] text-xs text-error-text">{doc.error_message}</p>
+                      )}
                     </td>
                     <td className="px-5 py-3 font-mono text-muted">{doc.chunk_count || "—"}</td>
                     <td className="px-5 py-3 text-faint">{relativeTime(doc.created_at)}</td>
@@ -316,7 +416,7 @@ export default function KnowledgeDetailPage() {
       <Dialog open={urlOpen} onOpenChange={setUrlOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add a URL</DialogTitle>
+            <DialogTitle>Add a website</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -328,13 +428,59 @@ export default function KnowledgeDetailPage() {
             <Input
               autoFocus
               type="url"
-              placeholder="https://example.com/docs"
+              placeholder="https://yourbusiness.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              aria-label="Website address"
             />
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="What to read">
+              {(
+                [
+                  ["website", Globe, "Whole website", "Follows the sitemap and links"],
+                  ["page", Link2, "This page only", "Just the address above"],
+                ] as const
+              ).map(([mode, Icon, title, hint]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={urlMode === mode}
+                  onClick={() => setUrlMode(mode)}
+                  className={`rounded-md border p-3 text-left transition-colors ${
+                    urlMode === mode
+                      ? "border-accent bg-accent/[0.06]"
+                      : "border-border hover:border-border-strong"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-sm font-medium text-text">
+                    <Icon className="size-4 text-accent" /> {title}
+                  </div>
+                  <div className="mt-0.5 text-xs text-faint">{hint}</div>
+                </button>
+              ))}
+            </div>
+            {urlMode === "website" && (
+              <label className="flex items-center justify-between gap-3 text-sm text-muted">
+                <span>Maximum pages</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={MAX_PAGES_LIMIT}
+                  value={maxPages}
+                  onChange={(e) => setMaxPages(Number(e.target.value))}
+                  className="w-24"
+                  aria-label="Maximum pages"
+                />
+              </label>
+            )}
+            <p className="text-xs text-faint">
+              Pages built entirely with JavaScript (some 3D or app-style sites) only expose their title and
+              description; paste their text instead for complete answers.
+            </p>
             {addUrl.isError && <p className="text-sm text-error-text">{(addUrl.error as Error).message}</p>}
             <Button type="submit" variant="primary" className="w-full" disabled={addUrl.isPending || !url.trim()}>
-              {addUrl.isPending && <Loader2 className="size-4 animate-spin" />} Fetch & ingest
+              {addUrl.isPending && <Loader2 className="size-4 animate-spin" />}{" "}
+              {urlMode === "website" ? "Crawl & ingest" : "Fetch & ingest"}
             </Button>
           </form>
         </DialogContent>
@@ -378,6 +524,27 @@ export default function KnowledgeDetailPage() {
   );
 }
 
+function IngestProgressLine({ doc }: { doc: ApiDocument }) {
+  const { label, percent } = describeProgress(doc.progress);
+  return (
+    <div className="mt-1.5 w-48">
+      <div className="text-xs text-faint">{label}</div>
+      {percent !== null && (
+        <div
+          className="mt-1 h-1 overflow-hidden rounded-full bg-border"
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={label}
+        >
+          <div className="h-full bg-info-text transition-[width]" style={{ width: `${percent}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChunkViewer({ doc, onClose }: { doc: ApiDocument | null; onClose: () => void }) {
   const { data: chunks, isLoading } = useQuery({
     queryKey: ["chunks", doc?.id],
@@ -399,6 +566,9 @@ function ChunkViewer({ doc, onClose }: { doc: ApiDocument | null; onClose: () =>
               <div className="mb-1.5 flex items-center gap-2 text-xs text-faint">
                 <span className="font-mono">#{c.ordinal}</span>
                 <span>· {c.token_count} tokens</span>
+                {typeof c.metadata?.source_url === "string" && doc?.source_type === "website" && (
+                  <span className="truncate">· {c.metadata.source_url}</span>
+                )}
               </div>
               <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted">{c.content}</p>
             </div>

@@ -16,6 +16,7 @@ from app.channels.meta_router import router as meta_router
 from app.channels.router import router as channels_router
 from app.chat import guard_models
 from app.core.config import settings
+from app.core.dnscache import install_from_settings as install_dns_cache
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
@@ -179,6 +180,7 @@ def _serve_schema() -> bool:
 
 def create_app() -> FastAPI:
     _init_sentry()
+    install_dns_cache()
     app = FastAPI(
         title="Vicero API",
         version=__version__,

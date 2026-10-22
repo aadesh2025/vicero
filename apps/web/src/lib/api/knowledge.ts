@@ -1,6 +1,6 @@
 "use client";
 
-import { api, apiForm } from "./client";
+import { api, apiForm, type UploadProgress } from "./client";
 import type {
   ApiChunk,
   ApiDocument,
@@ -55,10 +55,19 @@ export function addUrlDocument(kbId: string, url: string) {
   });
 }
 
-export function uploadDocument(kbId: string, file: File) {
+/** Crawl a whole site (sitemap + same-site links) into one document, one citation per page. */
+export function addWebsiteDocument(kbId: string, url: string, maxPages: number) {
+  return api<ApiDocument>(`/v1/knowledge/${kbId}/documents`, {
+    method: "POST",
+    orgScoped: true,
+    body: { source_type: "website", url, max_pages: maxPages },
+  });
+}
+
+export function uploadDocument(kbId: string, file: File, onProgress?: UploadProgress) {
   const form = new FormData();
   form.append("file", file);
-  return apiForm<ApiDocument>(`/v1/knowledge/${kbId}/documents/upload`, form);
+  return apiForm<ApiDocument>(`/v1/knowledge/${kbId}/documents/upload`, form, onProgress);
 }
 
 export function reingestDocument(documentId: string) {

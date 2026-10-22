@@ -2843,6 +2843,74 @@
         "title": "ConversationOut",
         "type": "object"
       },
+      "CrawlInfo": {
+        "description": "What a whole-website import read. `pages` is empty until the crawl has run.",
+        "properties": {
+          "max_pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages"
+          },
+          "pages": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CrawlPage"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "stopped_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped By"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "CrawlInfo",
+        "type": "object"
+      },
+      "CrawlPage": {
+        "properties": {
+          "chars": {
+            "default": 0,
+            "title": "Chars",
+            "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "CrawlPage",
+        "type": "object"
+      },
       "CreateAgentRequest": {
         "properties": {
           "description": {
@@ -3243,7 +3311,7 @@
         "type": "object"
       },
       "CreateDocumentRequest": {
-        "description": "Add a document from raw text or a URL (file uploads use the /upload endpoint).",
+        "description": "Add a document from raw text, one web page (`url`) or a whole website (`website`).\n\nFile uploads use the /upload endpoint. `max_pages` applies to `website` only and is capped\nserver-side by `CRAWL_MAX_PAGES_LIMIT`.",
         "properties": {
           "filename": {
             "anyOf": [
@@ -3257,8 +3325,21 @@
             ],
             "title": "Filename"
           },
+          "max_pages": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages"
+          },
           "source_type": {
-            "pattern": "^(text|url)$",
+            "pattern": "^(text|url|website)$",
             "title": "Source Type",
             "type": "string"
           },
@@ -4447,6 +4528,16 @@
             "title": "Chunk Count",
             "type": "integer"
           },
+          "crawl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrawlInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4508,6 +4599,16 @@
               }
             ],
             "title": "Pii Flags"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IngestProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "size_bytes": {
             "anyOf": [
@@ -5569,6 +5670,30 @@
           "handoff"
         ],
         "title": "InboxItemOut",
+        "type": "object"
+      },
+      "IngestProgress": {
+        "description": "Where a queued/processing document is right now (app/rag/progress.py).",
+        "properties": {
+          "done": {
+            "default": 0,
+            "title": "Done",
+            "type": "integer"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "IngestProgress",
         "type": "object"
       },
       "InvitationCreate": {

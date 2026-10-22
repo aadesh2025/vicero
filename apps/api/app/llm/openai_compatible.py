@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 import httpx
@@ -12,6 +13,8 @@ import httpx
 from app.core.config import settings
 from app.core.ssrf import is_blocked_destination
 from app.llm.base import ProviderError, parse_retry_after
+from app.llm.http import provider_client, with_connect_retry
+from app.llm.http import timeout as llm_timeout
 from app.llm.types import (
     ChatRequest,
     ChatResponse,
@@ -76,6 +79,15 @@ def build_openai_payload(req: ChatRequest, *, stream: bool) -> dict[str, Any]:
     return body
 
 
+@asynccontextmanager
+async def _closing(resp: httpx.Response) -> AsyncIterator[httpx.Response]:
+    """`client.send(stream=True)` hands back an open response; this closes it like `client.stream` did."""
+    try:
+        yield resp
+    finally:
+        await resp.aclose()
+
+
 class OpenAICompatibleProvider:
     name = "openai-compatible"
 
@@ -100,19 +112,20 @@ class OpenAICompatibleProvider:
         self._transport = transport
         self._timeout = timeout
 
-    def _client(self) -> httpx.AsyncClient:
+    def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
+    def _url(self, path: str) -> str:
+        return f"{self.base_url}{path}"
+
+    def _client(self) -> AbstractAsyncContextManager[httpx.AsyncClient]:
+        """A keep-alive client shared per event loop (app/llm/http.py), or a throwaway one when a
+        test transport is injected or the tenant-endpoint SSRF hook must run on every request."""
         hooks = {"request": [self._check_destination]} if self._guard_destination else None
-        return httpx.AsyncClient(
-            base_url=self.base_url,
-            headers=headers,
-            timeout=self._timeout,
-            transport=self._transport,
-            follow_redirects=False,
-            event_hooks=hooks,
-        )
+        return provider_client(transport=self._transport, event_hooks=hooks)
 
     async def _check_destination(self, request: httpx.Request) -> None:
         if await asyncio.to_thread(is_blocked_destination, request.url.host, settings.provider_private_hosts):
@@ -133,7 +146,16 @@ class OpenAICompatibleProvider:
     async def chat(self, req: ChatRequest) -> ChatResponse:
         async with self._client() as client:
             try:
-                resp = await client.post("/chat/completions", json=build_openai_payload(req, stream=False))
+                payload = build_openai_payload(req, stream=False)
+                resp = await with_connect_retry(
+                    lambda: client.post(
+                        self._url("/chat/completions"),
+                        json=payload,
+                        headers=self._headers(),
+                        timeout=llm_timeout(self._timeout),
+                    ),
+                    provider=self.name,
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"network error: {exc}") from exc
             self._raise_for_status(resp)
@@ -167,11 +189,22 @@ class OpenAICompatibleProvider:
         usage = Usage()
         finish_reason: str | None = None
 
+        request_body = build_openai_payload(req, stream=True)
         async with self._client() as client:
             try:
-                async with client.stream(
-                    "POST", "/chat/completions", json=build_openai_payload(req, stream=True)
-                ) as resp:
+                # The connect phase is retried; nothing after the response starts is (a token may
+                # already have reached the visitor).
+                request = client.build_request(
+                    "POST",
+                    self._url("/chat/completions"),
+                    json=request_body,
+                    headers=self._headers(),
+                    timeout=llm_timeout(self._timeout),
+                )
+                resp = await with_connect_retry(
+                    lambda: client.send(request, stream=True), provider=self.name
+                )
+                async with _closing(resp):
                     if resp.status_code >= 400:
                         # Must read the body before accessing text on a streaming response.
                         body = (await resp.aread()).decode(errors="replace")[:200]
@@ -241,7 +274,12 @@ class OpenAICompatibleProvider:
     async def list_models(self) -> list[ModelInfo]:
         async with self._client() as client:
             try:
-                resp = await client.get("/models")
+                resp = await with_connect_retry(
+                    lambda: client.get(
+                        self._url("/models"), headers=self._headers(), timeout=llm_timeout(self._timeout)
+                    ),
+                    provider=self.name,
+                )
             except httpx.HTTPError as exc:
                 raise ProviderError(f"network error: {exc}") from exc
             self._raise_for_status(resp)

@@ -6,6 +6,7 @@ test session. The Celery task in `app.worker.tasks` wraps it with its own commit
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -20,14 +21,14 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.llm.registry import build_embedding_provider
 from app.models import Chunk, Document, KnowledgeBase
-from app.rag import converters, loaders
+from app.rag import converters, crawler, loaders, progress
 from app.rag.chunking import TextChunk, chunk_text
 from app.rag.docling_chunking import DoclingChunkingUnavailable, chunk_docling_document
 from app.webhooks.dispatch import emit_event
 
 log = get_logger("rag.ingest")
 
-_EMBED_BATCH = 64
+_EMBED_BATCH = 32
 
 
 def _stored_bytes(storage_path: str) -> bytes:
@@ -73,6 +74,8 @@ async def _read_source(
     url_transport: httpx.AsyncBaseTransport | None,
     docling_transport: httpx.AsyncBaseTransport | None = None,
 ) -> converters.ConvertedDocument:
+    if document.source_type == "website":
+        return await _crawl_website(document, url_transport=url_transport)
     if document.source_type == "url":
         if not document.source_url:
             raise loaders.LoaderError("Document has no source URL.")
@@ -94,6 +97,82 @@ async def _read_source(
         mime_type=document.mime_type,
         transport=docling_transport,
     )
+
+
+async def _crawl_website(
+    document: Document, *, url_transport: httpx.AsyncBaseTransport | None
+) -> converters.ConvertedDocument:
+    """Crawl the site and return one section per page (app/rag/crawler.py, ADR-139)."""
+    if not document.source_url:
+        raise loaders.LoaderError("Document has no source URL.")
+    info = dict(document.crawl_info or {})
+    max_pages = int(info.get("max_pages") or settings.crawl_default_max_pages)
+
+    async def on_page(done: int, total: int) -> None:
+        await progress.report(document.id, "crawling", done, total)
+
+    await progress.report(document.id, "crawling", 0, max_pages)
+    try:
+        result = await crawler.crawl_site(
+            document.source_url, max_pages=max_pages, transport=url_transport, progress=on_page
+        )
+    except crawler.CrawlError as exc:
+        raise loaders.LoaderError(str(exc)) from exc
+    sections = [(p.url, p.title, p.text) for p in result.pages]
+    if result.shared:
+        # Header/footer text repeated on every page (address, phone, hours), kept exactly once.
+        sections.append((document.source_url, "Site-wide information", result.shared))
+    info.update(
+        max_pages=max_pages,
+        pages=[{"url": p.url, "title": p.title[:200], "chars": len(p.text)} for p in result.pages],
+        warnings=result.warnings,
+        stopped_by=result.stopped_by,
+        discovered=result.discovered,
+        failed=result.failed,
+    )
+    document.crawl_info = info
+    text = "\n\n".join(f"# {title or url}\nSource: {url}\n\n{body}" for url, title, body in sections)
+    return converters.ConvertedDocument(
+        text=text, backend=converters.BACKEND_LEGACY, sections=sections, info={"pages": len(result.pages)}
+    )
+
+
+async def _embed_all(
+    document: Document, embedder: Any, inputs: list[str]
+) -> list[list[float]]:
+    """Embed in batches, a few at a time, reporting progress after each batch.
+
+    Embedding is ~99% of ingest time (measured 2026-10-21: a 300 KB document, 511 chunks, 48 s on
+    a laptop GPU; reading and chunking took 0.5 s together). Concurrency buys a little when the
+    embedding server runs requests in parallel (Ollama with OLLAMA_NUM_PARALLEL > 1, or a hosted
+    API) and costs nothing when it does not; the progress report is what turns a silent minute
+    into a visible "Embedding 120 / 511".
+    """
+    batches = [inputs[i : i + _EMBED_BATCH] for i in range(0, len(inputs), _EMBED_BATCH)]
+    results: list[list[list[float]] | None] = [None] * len(batches)
+    sem = asyncio.Semaphore(max(1, settings.embed_concurrency))
+    done = 0
+
+    async def run(index: int, batch: list[str]) -> None:
+        nonlocal done
+        async with sem:
+            results[index] = await embedder.embed(batch)
+        done += len(batch)
+        await progress.report(document.id, "embedding", done, len(inputs))
+
+    await progress.report(document.id, "embedding", 0, len(inputs))
+    tasks = [asyncio.ensure_future(run(i, b)) for i, b in enumerate(batches)]
+    try:
+        await asyncio.gather(*tasks)
+    except BaseException:
+        # One failed batch fails the document; don't leave the others embedding into the void.
+        for task in tasks:
+            task.cancel()
+        raise
+    vectors: list[list[float]] = []
+    for part in results:
+        vectors.extend(part or [])
+    return vectors
 
 
 def _persist_docling_json(document: Document, payload: dict[str, Any]) -> str | None:
@@ -157,6 +236,29 @@ def _chunk(
     return chunk_text(text, kb.chunk_size, kb.chunk_overlap, metadata=metadata)
 
 
+def _chunk_sections(
+    sections: list[tuple[str, str, str]], kb: KnowledgeBase, document: Document
+) -> list[TextChunk]:
+    """One page at a time, so no chunk spans two pages and each cites its own URL."""
+    chunks: list[TextChunk] = []
+    for url, title, body in sections:
+        page_text = f"# {title}\n\n{body}" if title and not body.lstrip().startswith("#") else body
+        for chunk in chunk_text(
+            page_text,
+            kb.chunk_size,
+            kb.chunk_overlap,
+            metadata={
+                "filename": document.filename,
+                "source_url": url,
+                "page_title": title,
+                "backend": converters.BACKEND_LEGACY,
+            },
+        ):
+            chunk.ordinal = len(chunks)
+            chunks.append(chunk)
+    return chunks
+
+
 def _discard_docling_json(document: Document) -> None:
     """Delete a previously persisted `DoclingDocument`. Best-effort, never fails an ingest."""
     if not document.docling_json_path:
@@ -190,6 +292,7 @@ async def ingest_document(
     document.status = "processing"
     document.error_message = None
     await session.flush()
+    await progress.report(document.id, "fetching" if document.source_url else "reading")
 
     try:
         converted = await _read_source(
@@ -224,29 +327,31 @@ async def ingest_document(
                 flags=document.pii_flags,
             )
 
-        chunks = _chunk(
-            text,
-            kb,
-            structured=converted.document,
-            metadata={
-                "filename": document.filename,
-                "source_url": document.source_url,
-                # Provenance on the chunk itself, so a retrieved result can be traced to the
-                # extractor that produced it without a join back to `documents`.
-                "backend": converted.backend,
-            },
-        )
+        await progress.report(document.id, "chunking")
+        if converted.sections:
+            chunks = _chunk_sections(converted.sections, kb, document)
+        else:
+            chunks = _chunk(
+                text,
+                kb,
+                structured=converted.document,
+                metadata={
+                    "filename": document.filename,
+                    "source_url": document.source_url,
+                    # Provenance on the chunk itself, so a retrieved result can be traced to the
+                    # extractor that produced it without a join back to `documents`.
+                    "backend": converted.backend,
+                },
+            )
         if not chunks:
             raise loaders.LoaderError("Document produced no chunks.")
 
         embedder = build_embedding_provider(kb.embedding_provider, kb.embedding_model)
-        vectors: list[list[float]] = []
-        for i in range(0, len(chunks), _EMBED_BATCH):
-            # `embedding_input`, not `content` — on the Docling path these differ by the chunk's
-            # heading path (docs/14 §4.2). The enriched string improves the vector and is never
-            # persisted, so a citation still shows the visitor exactly what the document said.
-            batch = [c.embedding_input for c in chunks[i : i + _EMBED_BATCH]]
-            vectors.extend(await embedder.embed(batch))
+        # `embedding_input`, not `content` — on the Docling path these differ by the chunk's
+        # heading path (docs/14 §4.2). The enriched string improves the vector and is never
+        # persisted, so a citation still shows the visitor exactly what the document said.
+        vectors = await _embed_all(document, embedder, [c.embedding_input for c in chunks])
+        await progress.report(document.id, "saving", len(chunks), len(chunks))
 
         # Reingest: clear any prior chunks for this document.
         await session.execute(delete(Chunk).where(Chunk.document_id == document.id))
@@ -286,4 +391,5 @@ async def ingest_document(
             {"document_id": str(document.id), "error": str(exc)[:200]},
         )
         log.warning("document_ingest_failed", document_id=str(document.id), error=str(exc))
+    await progress.clear(document.id)
     return document

@@ -52,7 +52,7 @@ class Document(Base, UUIDPrimaryKey, TimestampMixin):
     organization_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), index=True
     )
-    source_type: Mapped[str] = mapped_column(String(16), nullable=False)  # file|url|text
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)  # file|url|text|website
     filename: Mapped[str | None] = mapped_column(String(512))
     mime_type: Mapped[str | None] = mapped_column(String(128))
     size_bytes: Mapped[int | None] = mapped_column(BigInteger)
@@ -80,6 +80,9 @@ class Document(Base, UUIDPrimaryKey, TimestampMixin):
     #: the chunker itself become parameters the eval harness can optimise, rather than a
     #: one-shot commitment paid for by re-converting every document in every org.
     docling_json_path: Mapped[str | None] = mapped_column(String(1024))
+    #: Whole-website imports only (`source_type="website"`, ADR-139): `{"max_pages": 25}` at creation;
+    #: after ingest also `pages` ([{url, title, chars}]), `warnings` and `stopped_by`. NULL otherwise.
+    crawl_info: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
 
 

@@ -323,8 +323,9 @@ def test_only_caddy_and_the_loopback_db_port_are_published(compose: dict[str, An
 
 #: 1.1.1.1 and 8.8.8.8 time out on UDP/53 from the Hetzner network; each uncached lookup then cost ~4 s.
 _DNS_SERVICES = ("api", "worker", "beat", "n8n")
-_GOOD_RESOLVERS = ["9.9.9.9", "1.0.0.1", "213.133.98.98"]
-_BAD_RESOLVERS = {"1.1.1.1", "8.8.8.8"}
+#: 213.133.98.98 refuses every query from the current host (measured 2026-10-21, ADR-138).
+_GOOD_RESOLVERS = ["9.9.9.9", "1.0.0.1", "149.112.112.112"]
+_BAD_RESOLVERS = {"1.1.1.1", "8.8.8.8", "213.133.98.98"}
 
 
 @pytest.mark.parametrize("name", _DNS_SERVICES)
@@ -332,4 +333,4 @@ def test_outbound_services_use_resolvers_that_answer(compose: dict[str, Any], na
     svc = _services(compose)[name]
     assert svc.get("dns") == _GOOD_RESOLVERS
     assert not _BAD_RESOLVERS & set(svc["dns"])
-    assert svc.get("dns_opt") == ["timeout:1", "attempts:2"]
+    assert svc.get("dns_opt") == ["timeout:1", "attempts:3"]

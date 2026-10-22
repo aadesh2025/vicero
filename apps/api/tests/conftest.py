@@ -50,6 +50,9 @@ settings.disposable_mx_check_enabled = False
 # And the automation registry rule for n8n tools: the suite binds ad-hoc webhooks. tests/test_automations*.py turn
 # it back on to pin the real rule.
 settings.n8n_require_registered_automation = False
+# And the process-wide DNS cache: it patches socket.getaddrinfo, and several tests stub that
+# themselves. `test_dnscache.py` installs and uninstalls it explicitly.
+settings.dns_cache_enabled = False
 
 
 @pytest.fixture

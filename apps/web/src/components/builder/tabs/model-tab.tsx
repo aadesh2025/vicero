@@ -72,6 +72,8 @@ export function ModelTab() {
   const shownModels = modelIds.includes(m.model)
     ? modelOptions
     : [...modelOptions, { id: m.model, label: `${m.model} (not offered)` }];
+  const selectedModel = modelOptions.find((model) => model.id === m.model);
+  const toolCapability = selectedModel?.tools ?? null;
 
   if (!isLoading && configured.length === 0) {
     return (
@@ -153,6 +155,9 @@ export function ModelTab() {
               Fallback: {m.fallbacks.map((f) => byName.get(f.provider)?.label ?? f.provider).join(" → ")}
             </Badge>
           ) : null}
+          {toolCapability === true ? <Badge variant="success">Tool calling supported</Badge> : null}
+          {toolCapability === false ? <Badge variant="error">Tool calling unsupported</Badge> : null}
+          {toolCapability === null ? <Badge variant="warn">Tool calling unverified</Badge> : null}
         </div>
 
         <Field
@@ -311,7 +316,11 @@ export function ModelTab() {
         <FeatureRow
           icon={<Wrench className="size-4" />}
           label="Tool calling"
-          desc="Let the agent call tools and automations."
+          desc={
+            toolCapability === true
+              ? "Let the agent call tools and automations."
+              : "This model is not verified for tool calling. Choose a compatible model before enabling tools."
+          }
           k="tools"
         />
         <FeatureRow

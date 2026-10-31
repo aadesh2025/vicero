@@ -246,7 +246,22 @@ class OpenAICompatibleProvider:
                 raise ProviderError(f"network error: {exc}") from exc
             self._raise_for_status(resp)
             data = resp.json()
-        return [ModelInfo(id=m["id"], provider=self.name) for m in data.get("data", [])]
+        models: list[ModelInfo] = []
+        for model in data.get("data", []):
+            capabilities = model.get("capabilities") or {}
+            tools = capabilities.get("tools")
+            if tools is None:
+                supported = model.get("supported_parameters")
+                if isinstance(supported, list) and supported:
+                    tools = "tools" in supported or "tool_choice" in supported
+            models.append(
+                ModelInfo(
+                    id=model["id"],
+                    provider=self.name,
+                    tools=tools if isinstance(tools, bool) else None,
+                )
+            )
+        return models
 
 
 class GroqProvider(OpenAICompatibleProvider):

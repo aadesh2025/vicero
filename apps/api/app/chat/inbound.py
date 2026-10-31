@@ -32,9 +32,11 @@ from app.chat.runtime import TurnResult, run_turn
 from app.core.audit import write_audit
 from app.core.catalog import CATALOG_INSTRUCTION, catalog_enabled
 from app.core.config import settings
+from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.core.ratelimit import limiter
 from app.llm.fake import RefusalProvider
+from app.llm.registry import tool_capability_for_config
 from app.llm.types import StreamEvent
 from app.models import Agent, AgentVersion, Contact, Conversation, Message, Organization
 from app.rag.agent_retrieval import retrieve_for_version
@@ -400,8 +402,18 @@ class InboundTurn:
                 blocks=self.result.blocks if block_flags is not None else None,
                 block_flags=block_flags,
             )
-            if specs and executor is not None and provider.supports_tools():
-                req.tools = specs
+            if specs and executor is not None:
+                capability = tool_capability_for_config(self.version.model_config_json or {})
+                if capability is not True:
+                    code = "llm.tools_unsupported" if capability is False else "llm.tools_capability_unknown"
+                    message = (
+                        "The selected model does not support tool calling. Choose a tool-capable "
+                        "model or disable tools."
+                        if capability is False
+                        else "Tool-calling support for the selected model could not be verified. "
+                        "Choose a catalogued compatible model or disable tools."
+                    )
+                    raise AppError(code, message, 400)
                 if (self.version.features or {}).get("tool_choice") == "required_first_turn" and not history:
                     req.tool_choice = "required"  # the first reply of a conversation must use a tool
             else:

@@ -27,7 +27,7 @@ from app.core.logging import get_logger
 from app.crm import capture_from_message
 from app.llm.base import ChatProvider
 from app.llm.fake import RefusalProvider
-from app.llm.registry import get_chat_provider, get_chat_provider_chain
+from app.llm.registry import get_chat_provider, get_chat_provider_chain, tool_capability_for_config
 from app.llm.types import ChatRequest, StreamEvent
 from app.llm.types import Message as LLMMessage
 from app.models import Agent, AgentVersion, Contact, Conversation, CrmContact, Message
@@ -353,7 +353,18 @@ async def _prepare_turn(
     specs, executor = await build_tooling(
         session, ctx.org.id, agent, version, conv.id, include_mcp=include_mcp
     )
-    if specs and executor is not None and provider.supports_tools():
+    if specs and executor is not None:
+        capability = tool_capability_for_config(version.model_config_json or {})
+        if capability is not True:
+            code = "llm.tools_unsupported" if capability is False else "llm.tools_capability_unknown"
+            message = (
+                "The selected model does not support tool calling. Choose a tool-capable "
+                "model or disable tools."
+                if capability is False
+                else "Tool-calling support for the selected model could not be verified. "
+                "Choose a catalogued compatible model or disable tools."
+            )
+            raise AppError(code, message, 400)
         req.tools = specs
     else:
         executor = None

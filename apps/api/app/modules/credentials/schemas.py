@@ -57,7 +57,7 @@ class ModelOut(BaseModel):
     id: str
     label: str
     context: int | None = None
-    tools: bool = True
+    tools: bool | None = None
     note: str | None = None
     #: False when no per-1K rate is published for this model, so a cost of $0 in analytics
     #: means "not tracked" rather than "free". Always True for free-tier providers.
@@ -97,3 +97,6 @@ class CredentialTestResult(BaseModel):
     ok: bool
     models: list[str] | None = None
     error: str | None = None
+    chat_ok: bool = False
+    tools_ok: bool | None = None
+    status: Literal["ok", "invalid_key", "unreachable", "chat_unavailable", "tools_unsupported"] | None = None

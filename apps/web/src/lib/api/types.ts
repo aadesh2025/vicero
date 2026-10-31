@@ -104,7 +104,8 @@ export interface ApiModelOption {
   id: string;
   label: string;
   context: number | null;
-  tools: boolean;
+  /** null means the provider did not establish tool support for this model. */
+  tools: boolean | null;
   note: string | null;
   /** False when no per-1K rate is published, so a $0 cost means "not tracked", not "free". */
   pricing_known: boolean;

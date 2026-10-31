@@ -28,7 +28,7 @@ from app.core.plans import plan_limit
 from app.db.templates import AGENT_TEMPLATES, get_template
 from app.llm.base import ChatProvider
 from app.llm.catalog import DEFAULT_CHAT_MODEL
-from app.llm.registry import get_chat_provider, get_chat_provider_chain
+from app.llm.registry import get_chat_provider, get_chat_provider_chain, tool_capability_for_config
 from app.llm.types import ChatRequest, Message, StreamEvent
 from app.models import PLAYGROUND_CHANNEL, Agent, AgentVersion, Conversation, WidgetConfig
 from app.models import Message as DBMessage
@@ -485,6 +485,14 @@ async def update_version(
         # The response carries the new (higher) version number so the client can re-target.
         version = await _draft_from_latest(session, agent_id, ctx.user.id)
         log.info("branch_on_edit", agent_id=str(agent_id), new_version=version.version)
+    model_config = data.llm_config if data.llm_config is not None else (version.model_config_json or {})
+    features = data.features if data.features is not None else (version.features or {})
+    if features.get("tools_enabled") and tool_capability_for_config(model_config) is False:
+        raise AppError(
+            "llm.tools_unsupported",
+            "The selected model does not support tool calling. Choose a tool-capable model or disable tools.",
+            400,
+        )
     _apply_version_patch(version, data)
     return _version_out(version)
 
@@ -684,7 +692,22 @@ async def _playground_tooling(
     specs, executor = await build_tooling(
         session, ctx.org.id, agent, version, None, include_mcp=include_mcp
     )
-    if specs and executor is not None and provider.supports_tools():
+    if specs and executor is not None:
+        capability = tool_capability_for_config(version.model_config_json or {})
+        if capability is not True:
+            if capability is False:
+                raise AppError(
+                    "llm.tools_unsupported",
+                    "The selected model does not support tool calling. Choose a tool-capable "
+                    "model or disable tools.",
+                    400,
+                )
+            raise AppError(
+                "llm.tools_capability_unknown",
+                "Tool-calling support for the selected model could not be verified. Choose a "
+                "catalogued compatible model or disable tools.",
+                400,
+            )
         return specs, executor
     return [], None
 

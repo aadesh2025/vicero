@@ -110,6 +110,33 @@ beforeEach(() => {
 });
 
 describe("ModelTab provider selection", () => {
+  it("marks live models without capability metadata as unverified", async () => {
+    listProviders.mockResolvedValue([
+      provider({
+        name: "groq",
+        configured: true,
+        key_source: "org",
+        free: true,
+        available_models: [
+          { id: "unknown-model", label: "Unknown model", context: null, tools: null, note: null, pricing_known: true },
+        ],
+      }),
+    ]);
+    listProviderModels.mockResolvedValue({
+      provider: "groq",
+      source: "live",
+      error: null,
+      models: [
+        { id: "unknown-model", label: "Unknown model", context: null, tools: null, note: null, pricing_known: true },
+      ],
+    });
+    seedDraft("groq", "unknown-model");
+    renderTab();
+
+    await screen.findByText(/tool calling unverified/i);
+    expect(screen.getByText(/not verified for tool calling/i)).toBeInTheDocument();
+  });
+
   it("offers only providers this org holds a key for", async () => {
     // Asserted through the fallback picker, whose options are the same filtered list: with
     // the only keyed provider already primary there is nothing left to add.

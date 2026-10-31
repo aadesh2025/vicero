@@ -43,6 +43,10 @@ Anthropic get dedicated adapters (translate messages/tools to their native shape
   key. If none and provider requires a key → return `llm.provider_unavailable` (and, during
   build, stub with a canned response + loud log so the build isn't blocked — see CLAUDE §7).
 - Encrypt all stored keys; never return them in full.
+- The effective source is logged only as `agent`, `organization`, `platform_env`, or `none`,
+  together with provider/org/agent/model identifiers and a boolean indicating key presence.
+  Keys, headers, decrypted values, and message content are never logged. An organization key
+  remains selected when it is invalid; the platform key is not used as a silent replacement.
 
 ### Fallback chain (NFR-4)
 Agent config may list `fallback_providers`. On timeout/5xx/rate-limit, try the next provider
@@ -122,6 +126,12 @@ Everything the UI exposes maps to `agent_versions`:
 - **Credentials**: choose org-default key or agent-specific BYO key, or custom endpoint.
 
 ## 5. Tool calling (`apps/api/tools/`)
+
+- Static catalog metadata is authoritative for model capabilities. Live `/models` discovery
+  marks tool support unknown when the provider does not publish it; unknown models are not sent
+  tool definitions. If an agent has tools enabled with an unsupported or unverified model, the
+  turn returns a configuration error and asks the operator to choose a compatible model or
+  disable tools.
 
 - **Built-in tools**: `knowledge_search` (query the agent's KB), `get_datetime`,
   `calculator`, `http_request` (guarded), `web_search` (stub/pluggable). Each declares a

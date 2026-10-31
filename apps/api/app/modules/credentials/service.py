@@ -19,6 +19,7 @@ from app.llm import catalog
 from app.llm.base import ProviderError
 from app.llm.catalog import ModelSpec, ProviderSpec
 from app.llm.registry import PROVIDER_CATALOG, build_chat_provider, env_key_for, resolve_credential
+from app.llm.types import ChatRequest, Message, ToolSpec
 from app.models import ProviderCredential
 from app.modules.credentials import schemas
 from app.modules.orgs.deps import OrgContext
@@ -279,9 +280,77 @@ async def test_credential(
     provider = build_chat_provider(cred.provider, api_key=api_key, base_url=cred.base_url)
     try:
         models = await provider.list_models()
-        return schemas.CredentialTestResult(ok=True, models=[m.id for m in models])
     except ProviderError as exc:
-        return schemas.CredentialTestResult(ok=False, error=str(exc))
+        status = "invalid_key" if exc.status in (401, 403) else (
+            "unreachable" if exc.status is None or exc.status >= 500 else "chat_unavailable"
+        )
+        return schemas.CredentialTestResult(
+            ok=False, error=_safe_error(exc), status=status
+        )
+
+    if not models:
+        return schemas.CredentialTestResult(
+            ok=False, models=[], error="Provider returned no chat models.", status="chat_unavailable"
+        )
+
+    chat_models = [model for model in models if _is_chat_model(model.id)]
+    if not chat_models:
+        return schemas.CredentialTestResult(
+            ok=False, models=[], error="Provider returned no chat models.", status="chat_unavailable"
+        )
+    model = chat_models[0]
+    request = ChatRequest(
+        model=model.id,
+        messages=[Message(role="user", content="Reply with OK.")],
+        max_tokens=8,
+    )
+    try:
+        await provider.chat(request)
+    except ProviderError as exc:
+        status = "invalid_key" if exc.status in (401, 403) else (
+            "unreachable" if exc.status is None or exc.status >= 500 else "chat_unavailable"
+        )
+        return schemas.CredentialTestResult(
+            ok=False, models=[m.id for m in chat_models], chat_ok=False,
+            error=_safe_error(exc), status=status,
+        )
+
+    tools_ok: bool | None = None
+    capability = catalog.tool_capability(cred.provider, model.id)
+    if model.tools is True or capability is True:
+        try:
+            await provider.chat(
+                request.model_copy(
+                    update={
+                        "tools": [
+                            ToolSpec(
+                                name="health_check",
+                                description="A no-op capability check.",
+                                parameters={"type": "object", "properties": {}},
+                            )
+                        ],
+                        "tool_choice": "none",
+                    }
+                )
+            )
+            tools_ok = True
+        except ProviderError as exc:
+            tools_ok = False
+            return schemas.CredentialTestResult(
+                ok=False,
+                models=[m.id for m in chat_models],
+                chat_ok=True,
+                tools_ok=False,
+                error=_safe_error(exc),
+                status="tools_unsupported",
+            )
+    return schemas.CredentialTestResult(
+        ok=True,
+        models=[m.id for m in chat_models],
+        chat_ok=True,
+        tools_ok=tools_ok,
+        status="ok",
+    )
 
 
 async def list_providers(session: AsyncSession, ctx: OrgContext) -> list[schemas.ProviderInfo]:
@@ -395,7 +464,10 @@ async def list_provider_models(
         )
 
     models = [
-        seed.get(m.id, schemas.ModelOut(id=m.id, label=m.id, pricing_known=spec.free))
+        seed.get(
+            m.id,
+            schemas.ModelOut(id=m.id, label=m.id, tools=m.tools, pricing_known=spec.free),
+        )
         for m in discovered
         if _is_chat_model(m.id)
     ]

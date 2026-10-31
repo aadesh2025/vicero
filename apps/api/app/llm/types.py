@@ -73,6 +73,8 @@ class ChatResponse(BaseModel):
 class ModelInfo(BaseModel):
     id: str
     provider: str
+    #: Provider-reported capability when available; otherwise unknown.
+    tools: bool | None = None
 
 
 StreamEventType = Literal[

@@ -43,7 +43,8 @@ class ModelSpec:
     id: str
     label: str
     context: int | None = None
-    tools: bool = True
+    #: ``None`` means the provider has not established tool support for this model.
+    tools: bool | None = True
     #: Accepts image input (the describe-first vision call, docs/26). False = text only or unknown.
     vision: bool = False
     prompt_micros: int | None = None
@@ -392,6 +393,19 @@ def find_model(provider: str, model: str) -> ModelSpec | None:
     if spec is None:
         return None
     return next((m for m in spec.models if m.id == model), None)
+
+
+def tool_capability(provider: str, model: str) -> bool | None:
+    """Return catalogued tool support, or ``None`` when the model is unknown.
+
+    Live provider discovery is intentionally not an implicit capability grant: most
+    OpenAI-compatible ``/models`` responses identify models but do not publish their
+    supported request features.
+    """
+    if provider == "fake":
+        return True
+    spec = find_model(provider, model)
+    return spec.tools if spec is not None else None
 
 
 def legacy_catalog() -> dict[str, dict[str, Any]]:

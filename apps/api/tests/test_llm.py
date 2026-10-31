@@ -8,12 +8,13 @@ import httpx
 import pytest
 
 from app.core.errors import AppError
+from app.llm import catalog
 from app.llm.anthropic import AnthropicProvider, to_anthropic_payload
 from app.llm.fake import FailingProvider, FakeChatProvider
 from app.llm.gemini import GeminiProvider, to_gemini_payload
 from app.llm.openai_compatible import GroqProvider
 from app.llm.pricing import compute_cost_micros, price_for
-from app.llm.registry import run_with_fallback
+from app.llm.registry import run_with_fallback, tool_capability_for_config
 from app.llm.types import ChatRequest, Message, Usage
 
 
@@ -157,6 +158,23 @@ async def test_openai_compatible_5xx_raises_provider_error() -> None:
     provider = GroqProvider("k", transport=_mock(handler))
     with pytest.raises(ProviderError):
         await provider.chat(_req())
+
+
+async def test_live_model_discovery_does_not_assume_tool_support() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"id": "retired-chat-model"}]})
+
+    provider = GroqProvider("k", transport=_mock(handler))
+    models = await provider.list_models()
+    assert models[0].tools is None
+
+
+def test_unknown_model_tool_capability_is_conservative() -> None:
+    assert catalog.tool_capability("groq", "openai/gpt-oss-120b") is True
+    assert catalog.tool_capability("groq", "retired-chat-model") is None
+    assert catalog.tool_capability("fake", "anything") is True
+    assert tool_capability_for_config({"provider": "groq", "model": "retired-chat-model"}) is None
+    assert tool_capability_for_config({"provider": "groq", "model": "openai/gpt-oss-120b"}) is True
 
 
 # ── Gemini / Anthropic translation ────────────────────────────────────────────

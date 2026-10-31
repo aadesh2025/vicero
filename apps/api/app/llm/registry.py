@@ -136,9 +136,54 @@ async def resolve_credential(
     chosen = _pick()
     if chosen is not None:
         api_key = decrypt(chosen.api_key_enc) if chosen.api_key_enc else None
+        log.info(
+            "llm_credential_resolved",
+            provider=provider,
+            organization_id=str(org_id),
+            agent_id=str(agent_id) if agent_id else None,
+            credential_source="agent" if chosen.agent_id is not None else "organization",
+            key_present=bool(api_key),
+        )
         return api_key, chosen.base_url
 
-    return env_key_for(provider), None
+    api_key = env_key_for(provider)
+    log.info(
+        "llm_credential_resolved",
+        provider=provider,
+        organization_id=str(org_id),
+        agent_id=str(agent_id) if agent_id else None,
+        credential_source="platform_env" if api_key else "none",
+        key_present=bool(api_key),
+    )
+    return api_key, None
+
+
+def tool_capability_for_config(model_config: dict[str, Any]) -> bool | None:
+    """Return whether every model in a primary/fallback chain supports tools.
+
+    ``None`` is deliberately conservative: a live-discovered model without authoritative
+    capability metadata must not receive tool definitions.
+    """
+    entries = [
+        (
+            str(model_config.get("provider") or ""),
+            str(model_config.get("model") or ""),
+        )
+    ]
+    entries.extend(
+        (
+            str(entry.get("provider") or ""),
+            str(entry.get("model") or ""),
+        )
+        for entry in model_config.get("fallbacks") or []
+        if isinstance(entry, dict)
+    )
+    capabilities = [catalog.tool_capability(provider, model) for provider, model in entries]
+    if any(capability is False for capability in capabilities):
+        return False
+    if any(capability is None for capability in capabilities):
+        return None
+    return True
 
 
 async def get_chat_provider(
@@ -222,6 +267,13 @@ async def get_chat_provider_chain(
     """
     lookup = resolve or get_chat_provider
     primary_name = str(model_config.get("provider") or "fake")
+    log.info(
+        "llm_provider_selected",
+        provider=primary_name,
+        organization_id=str(org_id),
+        agent_id=str(agent_id) if agent_id else None,
+        model=str(model_config.get("model") or ""),
+    )
     primary = await lookup(session, org_id, primary_name, agent_id=agent_id)
 
     chain: list[tuple[ChatProvider, str | None]] = []

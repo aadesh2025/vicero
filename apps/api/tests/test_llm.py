@@ -302,6 +302,18 @@ async def test_fallback_all_fail_raises() -> None:
         await run_with_fallback([FailingProvider(), FailingProvider()], _req("hi"))
 
 
+async def test_non_retryable_request_error_does_not_run_fallback() -> None:
+    from app.llm.base import ProviderError
+
+    class _BadRequest(FakeChatProvider):
+        async def chat(self, req: ChatRequest):
+            raise ProviderError("bad request", retryable=False, status=400)
+
+    backup = FakeChatProvider()
+    with pytest.raises(ProviderError):
+        await run_with_fallback([_BadRequest(), backup], _req("hi"))
+
+
 # ── Streaming fallback chain (NFR-4) ──────────────────────────────────────────
 class _StreamProvider:
     """Minimal ChatProvider: streams `tokens`, or raises before/after emitting."""

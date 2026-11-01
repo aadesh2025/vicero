@@ -68,7 +68,18 @@ def _log_llm_failure(provider: ChatProvider, req: ChatRequest, exc: ProviderErro
         kind=kind,
         retryable=exc.retryable,
         detail=detail,
+        credential_source=getattr(provider, "credential_source", None),
+        credential_identity=getattr(provider, "credential_identity", None),
+        **_request_sizes(req),
     )
+
+
+def _customer_provider_error(exc: ProviderError) -> str:
+    if exc.status == 429:
+        return "The selected model is temporarily rate-limited. Please try again shortly."
+    if exc.status is not None and exc.status >= 500:
+        return "The AI provider is temporarily unavailable. Please try again shortly."
+    return str(exc)
 
 # executor(call) -> {"output": dict, "status": str, "error": str|None}
 ToolExecutor = Callable[[ToolCall], Awaitable[dict[str, Any]]]
@@ -207,7 +218,7 @@ async def run_turn(
             if fallback_message and not result.content.strip():
                 result.content += fallback_message
                 yield StreamEvent(type="token", delta=fallback_message)
-            yield StreamEvent(type="error", error=str(exc))
+            yield StreamEvent(type="error", error=_customer_provider_error(exc))
             break
 
         iter_cost_usd = 0.0

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import select
@@ -115,6 +115,16 @@ async def resolve_credential(
     session: AsyncSession, org_id: uuid.UUID, provider: str, *, agent_id: uuid.UUID | None = None
 ) -> tuple[str | None, str | None]:
     """Key lookup order: agent-scoped credential → org default → platform env key."""
+    api_key, base_url, _source, _identity = await _resolve_credential_details(
+        session, org_id, provider, agent_id=agent_id
+    )
+    return api_key, base_url
+
+
+async def _resolve_credential_details(
+    session: AsyncSession, org_id: uuid.UUID, provider: str, *, agent_id: uuid.UUID | None = None
+) -> tuple[str | None, str | None, str, str | None]:
+    """Resolve a key and safe provenance metadata without exposing key material."""
     stmt = select(ProviderCredential).where(
         ProviderCredential.organization_id == org_id, ProviderCredential.provider == provider
     )
@@ -144,7 +154,8 @@ async def resolve_credential(
             credential_source="agent" if chosen.agent_id is not None else "organization",
             key_present=bool(api_key),
         )
-        return api_key, chosen.base_url
+        source = "agent" if chosen.agent_id is not None else "organization"
+        return api_key, chosen.base_url, source, str(chosen.id)
 
     api_key = env_key_for(provider)
     log.info(
@@ -155,7 +166,7 @@ async def resolve_credential(
         credential_source="platform_env" if api_key else "none",
         key_present=bool(api_key),
     )
-    return api_key, None
+    return api_key, None, "platform_env" if api_key else "none", f"platform_env:{provider}" if api_key else None
 
 
 def tool_capability_for_config(model_config: dict[str, Any]) -> bool | None:
@@ -204,7 +215,9 @@ async def get_chat_provider(
     # missing *real* key answer customers with `echo:`.
     if provider == "fake":
         return FakeChatProvider()
-    api_key, base_url = await resolve_credential(session, org_id, provider, agent_id=agent_id)
+    api_key, base_url, credential_source, credential_identity = await _resolve_credential_details(
+        session, org_id, provider, agent_id=agent_id
+    )
     meta = PROVIDER_CATALOG.get(provider, {})
     if meta.get("requires_key", True) and not api_key:
         raise AppError(
@@ -212,7 +225,14 @@ async def get_chat_provider(
             f"No API key configured for '{provider}'. Add one under provider credentials.",
             503,
         )
-    return build_chat_provider(provider, api_key=api_key, base_url=base_url, transport=transport)
+    resolved = build_chat_provider(provider, api_key=api_key, base_url=base_url, transport=transport)
+    # These are safe operational labels, never key material. Fallback diagnostics use them to
+    # distinguish a tenant credential from the platform key and to avoid retrying one credential
+    # and model repeatedly under multiple identical fallback entries.
+    resolved_meta = cast(Any, resolved)
+    resolved_meta.credential_source = credential_source
+    resolved_meta.credential_identity = credential_identity
+    return resolved
 
 
 def build_embedding_provider(
@@ -245,6 +265,8 @@ async def run_with_fallback(providers: list[ChatProvider], req: ChatRequest) -> 
             return await provider.chat(req)
         except ProviderError as exc:
             last_error = exc
+            if not exc.try_other_provider:
+                raise
     raise AppError("llm.provider_unavailable", f"All providers failed: {last_error}", 502)
 
 

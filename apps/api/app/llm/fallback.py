@@ -59,7 +59,7 @@ class FallbackChatProvider:
         Honours the provider's `Retry-After`; without one, a short default. A longer wait than
         `llm_retry_after_max_seconds` is not worth a customer's time, so the next model is tried instead.
         """
-        if already or exc.status != 429:
+        if already or not exc.retryable or exc.status != 429:
             return False
         wait = exc.retry_after if exc.retry_after is not None else settings.llm_retry_default_seconds
         if wait > settings.llm_retry_after_max_seconds:
@@ -69,8 +69,19 @@ class FallbackChatProvider:
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         last: ProviderError | None = None
+        attempted: set[tuple[str, str | None, str | None]] = set()
         for i in range(len(self._chain)):
             provider, model = self._set_active(i)
+            identity = (provider.name, model, getattr(provider, "credential_identity", None))
+            if identity in attempted:
+                log.info(
+                    "llm_fallback_skipped_duplicate",
+                    provider=provider.name,
+                    model=model,
+                    credential_source=getattr(provider, "credential_source", None),
+                )
+                continue
+            attempted.add(identity)
             retried = False
             while True:
                 try:
@@ -82,13 +93,32 @@ class FallbackChatProvider:
                         continue
                     if not exc.try_other_provider or i == len(self._chain) - 1:
                         raise
-                    log.warning("llm_fallback", failed=provider.name, model=model, status=exc.status)
+                    log.warning(
+                        "llm_fallback",
+                        failed=provider.name,
+                        model=model,
+                        status=exc.status,
+                        credential_source=getattr(provider, "credential_source", None),
+                        next_provider=self._chain[i + 1][0].name,
+                        next_model=self._chain[i + 1][1],
+                    )
                     break
         raise last or ProviderError("no providers available")
 
     async def stream(self, req: ChatRequest) -> AsyncIterator[StreamEvent]:
+        attempted: set[tuple[str, str | None, str | None]] = set()
         for i in range(len(self._chain)):
             provider, model = self._set_active(i)
+            identity = (provider.name, model, getattr(provider, "credential_identity", None))
+            if identity in attempted:
+                log.info(
+                    "llm_fallback_skipped_duplicate",
+                    provider=provider.name,
+                    model=model,
+                    credential_source=getattr(provider, "credential_source", None),
+                )
+                continue
+            attempted.add(identity)
             retried = False
             while True:
                 emitted = False
@@ -109,7 +139,15 @@ class FallbackChatProvider:
                         continue
                     if not exc.try_other_provider or is_last:
                         raise
-                    log.warning("llm_fallback", failed=provider.name, model=model, status=exc.status)
+                    log.warning(
+                        "llm_fallback",
+                        failed=provider.name,
+                        model=model,
+                        status=exc.status,
+                        credential_source=getattr(provider, "credential_source", None),
+                        next_provider=self._chain[i + 1][0].name,
+                        next_model=self._chain[i + 1][1],
+                    )
                     break
 
 

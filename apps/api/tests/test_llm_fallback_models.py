@@ -24,6 +24,8 @@ class _Provider:
         self.fail = fail
         self.text = text
         self.models_called: list[str | None] = []
+        self.credential_source = "organization"
+        self.credential_identity = "credential-1"
 
     async def chat(self, req: ChatRequest) -> Any:  # pragma: no cover - not used
         raise NotImplementedError
@@ -107,6 +109,56 @@ async def test_a_rate_limited_model_falls_back_to_the_second_model(monkeypatch: 
     assert "".join(e.delta or "" for e in events if e.type == "token") == "from the second model"
     assert p.models_called == ["openai/gpt-oss-120b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile"]
     assert chain.active_model == "llama-3.3-70b-versatile"
+
+
+async def test_duplicate_rate_limited_credential_and_model_is_not_retried_indefinitely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "llm_retry_default_seconds", 0.0)
+    limited = ProviderError("provider returned 429", status=429)
+    p = _Provider("groq", fail=limited)
+    chain = FallbackChatProvider(
+        [
+            (p, "openai/gpt-oss-120b"),
+            (p, "openai/gpt-oss-120b"),
+            (p, "llama-3.3-70b-versatile"),
+        ]
+    )
+    with pytest.raises(ProviderError):
+        _ = [e async for e in chain.stream(_req())]
+    assert p.models_called == [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-120b",
+        "llama-3.3-70b-versatile",
+        "llama-3.3-70b-versatile",
+    ]
+
+
+async def test_non_retryable_request_error_does_not_fall_back() -> None:
+    primary = _Provider("groq", fail=ProviderError("bad request", retryable=False, status=400))
+    backup = _Provider("gemini", text="backup")
+    chain = FallbackChatProvider([(primary, "m1"), (backup, "m2")])
+    with pytest.raises(ProviderError):
+        _ = [e async for e in chain.stream(_req())]
+    assert backup.models_called == []
+
+
+async def test_rate_limit_error_is_safe_for_customer_stream() -> None:
+    provider = _Provider("groq", fail=ProviderError("provider returned 429: secret detail", status=429))
+    result = TurnResult()
+    events = [
+        event
+        async for event in run_turn(
+            provider,
+            _req(),
+            [],
+            result,
+        )
+    ]
+    error_events = [event for event in events if event.type == "error"]
+    assert error_events and error_events[0].error == (
+        "The selected model is temporarily rate-limited. Please try again shortly."
+    )
 
 
 @pytest.mark.parametrize(

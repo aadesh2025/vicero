@@ -48,6 +48,15 @@ Anthropic get dedicated adapters (translate messages/tools to their native shape
   Keys, headers, decrypted values, and message content are never logged. An organization key
   remains selected when it is invalid; the platform key is not used as a silent replacement.
 
+### Streaming lifecycle
+- Chat streams use JSON SSE events. `done` is the authoritative turn-completion marker; clients
+  must stop loading state when it arrives rather than waiting for the HTTP body to close.
+- The Playground persists the completed turn after emitting `done`, so persistence latency must
+  not leave an assistant typing indicator active.
+- Provider errors are emitted as `error` events. Malformed SSE frames are surfaced as a safe
+  client error instead of being silently discarded, and a final event is parsed when the stream
+  closes without a trailing blank line.
+
 ### Fallback chain (NFR-4)
 Agent config may list `fallback_providers`. On timeout/5xx/rate-limit, try the next provider
 with the mapped equivalent model. Record which provider actually served the request in usage.

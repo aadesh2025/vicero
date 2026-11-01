@@ -173,22 +173,32 @@ export async function* apiStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  const parsePart = (part: string): Record<string, unknown> | null => {
+    const line = part.trim();
+    if (!line.startsWith("data:")) return null;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === "[DONE]") return null;
+    try {
+      return JSON.parse(payload) as Record<string, unknown>;
+    } catch {
+      return { type: "error", error: "The agent returned an invalid stream event." };
+    }
+  };
+
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      buffer += decoder.decode();
+      const event = parsePart(buffer);
+      if (event) yield event;
+      break;
+    }
     buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
     for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        yield JSON.parse(payload);
-      } catch {
-        /* skip malformed chunk */
-      }
+      const event = parsePart(part);
+      if (event) yield event;
     }
   }
 }

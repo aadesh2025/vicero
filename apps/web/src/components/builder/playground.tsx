@@ -134,13 +134,23 @@ export function Playground() {
               ),
             );
           }
-        } else if (type === "done" && event.finish_reason === "handoff") {
-          // The bot paused itself here — same trigger a real visitor's "talk to a human"
-          // hits in app/chat/inbound.py. Flag it so the transcript shows what actually
-          // happened instead of reading like an ordinary reply.
+        } else if (type === "done") {
+          // `done` is the protocol completion marker. The backend persists the turn after
+          // yielding it, so waiting for the HTTP body to close can leave the caret visible
+          // indefinitely when persistence is slow.
           setMessages((m) =>
             m.map((msg) =>
-              msg.id === botId ? { ...msg, handoff: true } : msg,
+              msg.id === botId
+                ? {
+                    ...msg,
+                    text:
+                      event.finish_reason === "error" && !msg.text
+                        ? "⚠ The agent stream ended unexpectedly."
+                        : msg.text,
+                    streaming: false,
+                    handoff: event.finish_reason === "handoff" ? true : msg.handoff,
+                  }
+                : msg,
             ),
           );
         } else if (type === "error") {

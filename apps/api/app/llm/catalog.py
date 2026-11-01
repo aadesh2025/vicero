@@ -99,6 +99,10 @@ _GROQ = ProviderSpec(
         ModelSpec(DEFAULT_CHAT_MODEL, "GPT-OSS 120B", 128_000),
         ModelSpec("openai/gpt-oss-20b", "GPT-OSS 20B", 128_000),
         ModelSpec("qwen/qwen3.8-27b", "Qwen 3.8 27B", 128_000),
+        # Groq's hosted-model tool-use documentation covers this model, while its `/models`
+        # response omits capability metadata. Keep the explicit catalog entry so discovery
+        # cannot downgrade a saved `allam-2-7b` agent to unknown capability.
+        ModelSpec("allam-2-7b", "ALLaM 2 7B"),
     ),
 )
 

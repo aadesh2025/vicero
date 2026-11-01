@@ -270,6 +270,30 @@ async def test_models_come_from_the_provider_when_a_key_exists(
     assert [m["id"] for m in body["models"]] == ["fake-1"]
 
 
+async def test_live_discovery_preserves_catalogued_tool_capability(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.llm.types import ModelInfo
+    from app.modules.credentials import service
+
+    class _Provider:
+        async def list_models(self) -> list[ModelInfo]:
+            return [
+                ModelInfo(id="allam-2-7b", provider="groq"),
+                ModelInfo(id="new-unknown-model", provider="groq"),
+            ]
+
+    headers = await _org_headers(client)
+    await client.put("/v1/credentials/providers/groq", json={"api_key": "gsk-x-7777"}, headers=headers)
+    monkeypatch.setattr(service, "build_chat_provider", lambda *a, **k: _Provider())
+
+    resp = await client.get("/v1/credentials/providers/groq/models", headers=headers)
+    assert resp.status_code == 200
+    models = {model["id"]: model for model in resp.json()["models"]}
+    assert models["allam-2-7b"]["tools"] is True
+    assert models["new-unknown-model"]["tools"] is None
+
+
 async def test_discovery_falls_back_to_the_catalog_instead_of_failing(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -171,10 +171,12 @@ async def test_live_model_discovery_does_not_assume_tool_support() -> None:
 
 def test_unknown_model_tool_capability_is_conservative() -> None:
     assert catalog.tool_capability("groq", "openai/gpt-oss-120b") is True
+    assert catalog.tool_capability("groq", "allam-2-7b") is True
     assert catalog.tool_capability("groq", "retired-chat-model") is None
     assert catalog.tool_capability("fake", "anything") is True
     assert tool_capability_for_config({"provider": "groq", "model": "retired-chat-model"}) is None
     assert tool_capability_for_config({"provider": "groq", "model": "openai/gpt-oss-120b"}) is True
+    assert tool_capability_for_config({"provider": "groq", "model": "allam-2-7b"}) is True
 
 
 # ── Gemini / Anthropic translation ────────────────────────────────────────────

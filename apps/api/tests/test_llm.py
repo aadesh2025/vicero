@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -12,10 +13,10 @@ from app.llm import catalog
 from app.llm.anthropic import AnthropicProvider, to_anthropic_payload
 from app.llm.fake import FailingProvider, FakeChatProvider
 from app.llm.gemini import GeminiProvider, to_gemini_payload
-from app.llm.openai_compatible import GroqProvider
+from app.llm.openai_compatible import GroqProvider, build_openai_payload
 from app.llm.pricing import compute_cost_micros, price_for
 from app.llm.registry import run_with_fallback, tool_capability_for_config
-from app.llm.types import ChatRequest, Message, Usage
+from app.llm.types import ChatRequest, Message, ToolSpec, Usage
 
 
 def _req(content: str = "hello world", **kw: object) -> ChatRequest:
@@ -171,12 +172,53 @@ async def test_live_model_discovery_does_not_assume_tool_support() -> None:
 
 def test_unknown_model_tool_capability_is_conservative() -> None:
     assert catalog.tool_capability("groq", "openai/gpt-oss-120b") is True
-    assert catalog.tool_capability("groq", "allam-2-7b") is True
+    assert catalog.tool_capability("groq", "allam-2-7b") is False
     assert catalog.tool_capability("groq", "retired-chat-model") is None
     assert catalog.tool_capability("fake", "anything") is True
     assert tool_capability_for_config({"provider": "groq", "model": "retired-chat-model"}) is None
     assert tool_capability_for_config({"provider": "groq", "model": "openai/gpt-oss-120b"}) is True
-    assert tool_capability_for_config({"provider": "groq", "model": "allam-2-7b"}) is True
+    assert tool_capability_for_config({"provider": "groq", "model": "allam-2-7b"}) is False
+
+
+def test_openai_payload_omits_tools_when_tools_are_disabled() -> None:
+    req = ChatRequest(model="allam-2-7b", messages=[Message(role="user", content="hi")])
+    payload = build_openai_payload(req, stream=False)
+    assert payload["model"] == "allam-2-7b"
+    assert "tools" not in payload
+    assert "tool_choice" not in payload
+
+
+def test_openai_payload_includes_tools_only_for_tool_enabled_requests() -> None:
+    req = ChatRequest(
+        model="openai/gpt-oss-120b",
+        messages=[Message(role="user", content="hi")],
+        tools=[ToolSpec(name="lookup", parameters={"type": "object"})],
+        tool_choice="required",
+    )
+    payload = build_openai_payload(req, stream=False)
+    assert payload["model"] == "openai/gpt-oss-120b"
+    assert payload["tools"][0]["function"]["name"] == "lookup"
+    assert payload["tool_choice"] == "required"
+
+
+async def test_playground_rejects_allam_before_provider_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.agents import service
+
+    async def _tools(*_args: object, **_kwargs: object) -> tuple[list[object], object]:
+        return [object()], object()
+
+    monkeypatch.setattr(service, "build_tooling", _tools)
+    ctx = SimpleNamespace(org=SimpleNamespace(id="org", agentic_loop_enabled=False))
+    version = SimpleNamespace(
+        model_config_json={"provider": "groq", "model": "allam-2-7b"}
+    )
+
+    with pytest.raises(AppError, match="does not support tool calling"):
+        await service._playground_tooling(
+            None, ctx, SimpleNamespace(), version, SimpleNamespace()
+        )
 
 
 # ── Gemini / Anthropic translation ────────────────────────────────────────────

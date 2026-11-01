@@ -290,7 +290,7 @@ async def test_live_discovery_preserves_catalogued_tool_capability(
     resp = await client.get("/v1/credentials/providers/groq/models", headers=headers)
     assert resp.status_code == 200
     models = {model["id"]: model for model in resp.json()["models"]}
-    assert models["allam-2-7b"]["tools"] is True
+    assert models["allam-2-7b"]["tools"] is False
     assert models["new-unknown-model"]["tools"] is None
 
 

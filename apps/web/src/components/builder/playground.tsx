@@ -92,6 +92,7 @@ export function Playground() {
       { id: botId, role: "assistant", text: "", streaming: true },
     ]);
 
+    let sawTerminalEvent = false;
     try {
       for await (const event of playgroundStream(
         agentId,
@@ -135,6 +136,7 @@ export function Playground() {
             );
           }
         } else if (type === "done") {
+          sawTerminalEvent = true;
           // `done` is the protocol completion marker. The backend persists the turn after
           // yielding it, so waiting for the HTTP body to close can leave the caret visible
           // indefinitely when persistence is slow.
@@ -154,6 +156,7 @@ export function Playground() {
             ),
           );
         } else if (type === "error") {
+          sawTerminalEvent = true;
           setMessages((m) =>
             m.map((msg) =>
               msg.id === botId
@@ -162,6 +165,19 @@ export function Playground() {
             ),
           );
         }
+      }
+      if (!sawTerminalEvent) {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === botId
+              ? {
+                  ...msg,
+                  text: msg.text || "⚠ The agent stream ended unexpectedly.",
+                  streaming: false,
+                }
+              : msg,
+          ),
+        );
       }
     } catch {
       setMessages((m) =>

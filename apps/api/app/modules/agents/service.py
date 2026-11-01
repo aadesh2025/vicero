@@ -731,6 +731,24 @@ async def check_playground_allowed(session: AsyncSession, ctx: OrgContext) -> No
 async def playground_stream(
     session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, data: schemas.PlaygroundRequest
 ) -> AsyncIterator[str]:
+    """Stream a Playground turn without allowing post-200 setup failures to become EOF."""
+    try:
+        async for event in _playground_stream_impl(session, ctx, agent_id, data):
+            yield event
+    except AppError as exc:
+        log.warning("playground_stream_failed", code=exc.code, status_code=exc.status_code)
+        yield f"data: {StreamEvent(type='error', error=exc.message).model_dump_json()}\n\n"
+        yield f"data: {StreamEvent(type='done', finish_reason='error').model_dump_json()}\n\n"
+    except Exception:
+        log.exception("playground_stream_failed")
+        message = "The agent could not complete this request."
+        yield f"data: {StreamEvent(type='error', error=message).model_dump_json()}\n\n"
+        yield f"data: {StreamEvent(type='done', finish_reason='error').model_dump_json()}\n\n"
+
+
+async def _playground_stream_impl(
+    session: AsyncSession, ctx: OrgContext, agent_id: uuid.UUID, data: schemas.PlaygroundRequest
+) -> AsyncIterator[str]:
     rbac.require_permission(ctx.role, rbac.AGENTS_WRITE)
     agent = await _get_agent(session, ctx, agent_id)
     version = await _latest_version(session, agent.id)

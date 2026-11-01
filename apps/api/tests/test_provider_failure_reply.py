@@ -41,6 +41,19 @@ class BrokenProvider:
         raise ProviderError("provider returned 400: API key not valid")
 
 
+class EmptyProvider:
+    name = "groq"
+
+    def supports_tools(self) -> bool:
+        return False
+
+    async def stream(self, req: ChatRequest) -> AsyncIterator[StreamEvent]:
+        yield StreamEvent(type="done", finish_reason="stop")
+
+    async def chat(self, req: ChatRequest) -> object:  # pragma: no cover - unused here
+        raise AssertionError("stream path expected")
+
+
 def _request() -> ChatRequest:
     return ChatRequest(
         model="gemini-1.5-flash",
@@ -76,9 +89,24 @@ async def test_the_real_error_is_still_recorded() -> None:
 
 
 async def test_the_playground_still_sees_a_bare_failure() -> None:
-    """No fallback passed (the operator-facing path) → behaviour is unchanged."""
+    """No fallback passed (the operator-facing path) still exposes the failure."""
     result, events = await _run()
-
     assert result.content == ""
     assert result.error is not None
-    assert not any(e.type == "token" for e in events)
+    assert any(e.type == "error" for e in events)
+
+
+async def test_empty_provider_completion_is_not_successful_eof() -> None:
+    result = TurnResult()
+    events = [
+        ev
+        async for ev in run_turn(
+            EmptyProvider(), _request(), [], result  # type: ignore[arg-type]
+        )
+    ]
+
+    assert result.content == ""
+    assert result.error == "The model returned no assistant text."
+    assert any(e.type == "error" for e in events)
+    assert events[-1].type == "done"
+    assert events[-1].finish_reason == "error"

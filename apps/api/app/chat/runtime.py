@@ -312,6 +312,11 @@ async def run_turn(
             "error": result.error,
         })
 
+    if not result.content.strip() and not result.error:
+        result.error = "The model returned no assistant text."
+        result.finish_reason = "error"
+        yield StreamEvent(type="error", error=result.error)
+
     # L5 output guard (docs/11 §4-L5). Runs on the accumulated reply, so a streaming client
     # has already rendered it — hence the `replace` event rather than pre-emptive suppression
     # (ADR-049). `result.content` is corrected here, which is what every non-streaming caller

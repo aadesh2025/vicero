@@ -95,4 +95,22 @@ describe("Playground stream lifecycle", () => {
     expect(await screen.findByText("⚠ provider unavailable")).toBeTruthy();
     expect(container.querySelector(".animate-caret-blink")).toBeNull();
   });
+
+  it("does not leave an empty assistant bubble on an unterminated stream", async () => {
+    async function* events() {
+      yield { type: "conversation", conversation_id: "conversation-1" };
+    }
+    playgroundStream.mockReturnValue(events());
+
+    const { container } = renderPlayground();
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText(/message the draft agent/i), {
+        target: { value: "hi" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+    });
+
+    expect(await screen.findByText("⚠ The agent stream ended unexpectedly.")).toBeTruthy();
+    expect(container.querySelector(".animate-caret-blink")).toBeNull();
+  });
 });

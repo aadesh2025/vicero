@@ -174,6 +174,36 @@ async def test_playground_streams(client: AsyncClient, monkeypatch: pytest.Monke
     assert '"type":"done"' in body
 
 
+async def test_playground_stream_surfaces_setup_errors_after_http_200(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.errors import AppError
+    from app.modules.agents import service
+
+    async def _fail_tooling(*_a: object, **_k: object) -> tuple[list[object], None]:
+        raise AppError(
+            "llm.tools_capability_unknown",
+            "Tool-calling support for the selected model could not be verified.",
+            400,
+        )
+
+    monkeypatch.setattr(service, "_playground_tooling", _fail_tooling)
+    headers, _ = await _headers(client)
+    agent = await _create_agent(client, headers)
+
+    resp = await client.post(
+        f"/v1/agents/{agent['id']}/playground/chat",
+        json={"message": "hello there", "stream": True},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert '"type":"error"' in resp.text
+    assert "capability could not be verified" in resp.text
+    assert '"type":"done"' in resp.text
+    assert '"finish_reason":"error"' in resp.text
+
+
 async def test_playground_non_stream(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.modules.agents import service
 

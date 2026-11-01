@@ -9,7 +9,7 @@
 | Item | Value |
 |---|---|
 | Host | Cloud on Fire (temporary, 1-2 months), 4 vCPU / ~3.9 GB RAM / 59 GB disk, 4 GB swap, Ubuntu 24.04 |
-| IP / SSH | `87.232.72.3`, user `root`, key-only (password login is off) |
+| IP / SSH | `87.232.72.88`, user `root`, key-only (password login is off) |
 | Web | https://viceroai.duckdns.org |
 | API | https://viceroai-api.duckdns.org (`/healthz`, `/readyz`) |
 | Code on server | `/opt/vicero`, a plain clone of https://github.com/aadesh2025/vicero (`master`, public HTTPS, read-only, **no token stored**) |
@@ -154,7 +154,7 @@ Run `ssh -t vicero /opt/vicero/set-env.sh NAME` and type the value at the hidden
 
 ```
 Host vicero
-    HostName 87.232.72.3
+    HostName 87.232.72.88
     User root
     IdentityFile ~/.ssh/vicero_hetzner
     IdentitiesOnly yes
@@ -183,7 +183,7 @@ owner login. `/webhook*`, `/webhook-test*`, forms and MCP are answered `404` pub
    the stack down. Back up first (the script does).
 4. Open the editor, pass the gate, create the **owner** account (you type its password), then
    Settings → n8n API → create a key and run `/opt/vicero/set-env.sh N8N_API_KEY`.
-5. Check from outside: only 22/80/443 answer (`nmap -Pn -p 22,80,443,5432,5678,6379,11434 87.232.72.3`).
+5. Check from outside: only 22/80/443 answer (`nmap -Pn -p 22,80,443,5432,5678,6379,11434 87.232.72.88`).
 
 **Reboot / health:** `status.sh` also reports the n8n container, the editor (`401` without the gate) and the public
 `/webhook/x` (`404`).
@@ -253,12 +253,12 @@ after every migration (no-op if the role does not exist); a table added later is
 **DBeaver on Windows**
 1. Database > New Database Connection > PostgreSQL > Next.
 2. Main tab: Host `localhost`, Port `5433`, Database `vicero`, Username `viewer`, Password = the one shown by the script. Tick Save password.
-3. SSH tab: tick Use SSH Tunnel. Host `87.232.72.3`, Port `22`, User `root`, Authentication Public Key,
+3. SSH tab: tick Use SSH Tunnel. Host `87.232.72.88`, Port `22`, User `root`, Authentication Public Key,
    Private key `C:\Users\user\.ssh\vicero_hetzner` (passphrase only if the key has one).
 4. Click Test tunnel configuration, then Test Connection (accept the host key the first time). Finish.
 5. Browse `vicero` > Schemas. Tables with secret columns appear under the `viewer` schema (safe columns only); the rest under `public`.
 
-**Check it is not public** (from any other computer): `nmap -Pn -p 5432,5433 87.232.72.3` must show both closed/filtered, and on the
+**Check it is not public** (from any other computer): `nmap -Pn -p 5432,5433 87.232.72.88` must show both closed/filtered, and on the
 server `ss -ltn | grep 5433` must show `127.0.0.1:5433` and nothing else. `tests/test_infra_prod_compose.py` fails if compose publishes
 anything but Caddy and that loopback port.
 
